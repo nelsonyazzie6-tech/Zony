@@ -1,98 +1,86 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import { useRouter } from 'expo-router';
+import { useState } from 'react';
+import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
-import { HelloWave } from '@/components/hello-wave';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Link } from 'expo-router';
+const sports = ['All', 'Basketball', 'Soccer', 'Volleyball', 'Football'];
+
+const tournaments = [
+  { id: '1', name: 'Gallup Summer Hoops', sport: 'Basketball', date: 'Jun 14', location: 'Gallup, NM', spots: 8 },
+  { id: '2', name: 'Mesa 5v5 Open', sport: 'Soccer', date: 'Jun 21', location: 'Mesa, AZ', spots: 4 },
+  { id: '3', name: 'ABQ Volleyball Classic', sport: 'Volleyball', date: 'Jun 28', location: 'Albuquerque, NM', spots: 12 },
+  { id: '4', name: 'Phoenix Flag Football', sport: 'Football', date: 'Jul 4', location: 'Phoenix, AZ', spots: 6 },
+];
 
 export default function HomeScreen() {
-  return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <Link href="/modal">
-          <Link.Trigger>
-            <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-          </Link.Trigger>
-          <Link.Preview />
-          <Link.Menu>
-            <Link.MenuAction title="Action" icon="cube" onPress={() => alert('Action pressed')} />
-            <Link.MenuAction
-              title="Share"
-              icon="square.and.arrow.up"
-              onPress={() => alert('Share pressed')}
-            />
-            <Link.Menu title="More" icon="ellipsis">
-              <Link.MenuAction
-                title="Delete"
-                icon="trash"
-                destructive
-                onPress={() => alert('Delete pressed')}
-              />
-            </Link.Menu>
-          </Link.Menu>
-        </Link>
+  const [sport, setSport] = useState('All');
+  const [search, setSearch] = useState('');
+  const router = useRouter();
 
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+  const filtered = tournaments
+    .filter(t => sport === 'All' || t.sport === sport)
+    .filter(t => t.name.toLowerCase().includes(search.toLowerCase()) || t.location.toLowerCase().includes(search.toLowerCase()));
+
+  return (
+    <View style={styles.container}>
+      <Text style={styles.header}>Zony</Text>
+      <Text style={styles.sub}>Tournaments near you</Text>
+
+      <TextInput
+        style={styles.search}
+        placeholder="Search by name or city..."
+        placeholderTextColor="#a89080"
+        value={search}
+        onChangeText={setSearch}
+      />
+
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterRow} contentContainerStyle={{ paddingHorizontal: 20 }}>
+        {sports.map((s) => (
+          <TouchableOpacity key={s} onPress={() => setSport(s)} style={[styles.filterBtn, sport === s && styles.filterActive]}>
+            <Text style={[styles.filterText, sport === s && styles.filterTextActive]}>{s}</Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+
+      <ScrollView style={styles.list}>
+        {filtered.length === 0 ? (
+          <Text style={styles.empty}>No tournaments found.</Text>
+        ) : (
+          filtered.map((t) => (
+            <TouchableOpacity
+              key={t.id}
+              style={styles.card}
+              onPress={() => router.push({ pathname: '/tournament', params: { name: t.name, sport: t.sport, date: t.date, location: t.location, spots: t.spots } })}
+            >
+              <View style={styles.cardTop}>
+                <Text style={styles.name}>{t.name}</Text>
+                <Text style={styles.sportBadge}>{t.sport}</Text>
+              </View>
+              <Text style={styles.detail}>📅 {t.date} · 📍 {t.location}</Text>
+              <Text style={styles.spots}>{t.spots} spots left</Text>
+            </TouchableOpacity>
+          ))
+        )}
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
-  },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
-  },
+  container: { flex: 1, backgroundColor: '#f5ede0', paddingTop: 60 },
+  header: { fontSize: 36, fontWeight: 'bold', color: '#1a0f0a', paddingHorizontal: 20 },
+  sub: { fontSize: 16, color: '#7a4a2a', paddingHorizontal: 20, marginBottom: 12 },
+  search: { marginHorizontal: 20, backgroundColor: '#fff', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 10, fontSize: 15, color: '#1a0f0a', marginBottom: 12 },
+  filterRow: { marginBottom: 16 },
+  filterBtn: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, backgroundColor: '#fff', marginRight: 8 },
+  filterActive: { backgroundColor: '#e8622a' },
+  filterText: { fontSize: 14, color: '#7a4a2a' },
+  filterTextActive: { color: '#fff', fontWeight: 'bold' },
+  list: { paddingHorizontal: 20 },
+  card: { backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 12, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
+  cardTop: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
+  name: { fontSize: 16, fontWeight: 'bold', color: '#1a0f0a', flex: 1 },
+  sportBadge: { fontSize: 13, color: '#fff', backgroundColor: '#e8622a', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8, overflow: 'hidden' },
+  detail: { fontSize: 14, color: '#7a4a2a', marginBottom: 4 },
+  spots: { fontSize: 13, color: '#e8622a', fontWeight: '600' },
+  empty: { textAlign: 'center', color: '#a89080', marginTop: 40, fontSize: 15 },
 });
