@@ -1,23 +1,47 @@
 import { useRouter } from 'expo-router';
-import { collection, onSnapshot } from 'firebase/firestore';
+import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { db } from '../../firebaseConfig';
+import Svg, { Path } from 'react-native-svg';
+import { auth, db } from '../../firebaseConfig';
 
 const sports = ['All', 'Basketball', 'Soccer', 'Volleyball', 'Football', 'Baseball', 'Tennis'];
+
+function BellIcon({ color, hasNew }: { color: string; hasNew: boolean }) {
+  return (
+    <View>
+      <Svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+        <Path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        <Path d="M13.73 21a2 2 0 01-3.46 0" stroke={color} strokeWidth="2" strokeLinecap="round" />
+      </Svg>
+      {hasNew && <View style={styles.bellDot} />}
+    </View>
+  );
+}
 
 export default function HomeScreen() {
   const [sport, setSport] = useState('All');
   const [search, setSearch] = useState('');
   const [tournaments, setTournaments] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [hasNewNotifications, setHasNewNotifications] = useState(false);
   const router = useRouter();
+  const user = auth.currentUser;
 
   useEffect(() => {
     const unsub = onSnapshot(collection(db, 'tournaments'), (snapshot) => {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setTournaments(data);
       setLoading(false);
+    });
+    return () => unsub();
+  }, []);
+
+  useEffect(() => {
+    if (!user) return;
+    const q = query(collection(db, 'notifications'), where('toUserId', '==', user.uid));
+    const unsub = onSnapshot(q, (snap) => {
+      setHasNewNotifications(snap.docs.length > 0);
     });
     return () => unsub();
   }, []);
@@ -33,6 +57,9 @@ export default function HomeScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.headerRow}>
+        <TouchableOpacity style={styles.bellBtn} onPress={() => router.push('/notifications')}>
+          <BellIcon color="#e8622a" hasNew={hasNewNotifications} />
+        </TouchableOpacity>
         <Text style={styles.header}>Zony</Text>
         <TouchableOpacity style={styles.mapBtn} onPress={() => router.push('/map')}>
           <Text style={styles.mapBtnText}>🗺 Map</Text>
@@ -101,6 +128,8 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f5ede0', paddingTop: 60 },
   headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 20, marginBottom: 4 },
   header: { fontSize: 36, fontWeight: 'bold', color: '#1a0f0a', textAlign: 'center' },
+  bellBtn: { position: 'absolute', left: 20 },
+  bellDot: { position: 'absolute', top: 0, right: 0, width: 8, height: 8, borderRadius: 4, backgroundColor: '#e8622a' },
   mapBtn: { position: 'absolute', right: 20, backgroundColor: '#fff', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 5 },
   mapBtnText: { fontSize: 13, color: '#e8622a', fontWeight: '600' },
   sub: { fontSize: 15, color: '#7a4a2a', textAlign: 'center', marginBottom: 12 },

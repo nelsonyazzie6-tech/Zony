@@ -8,6 +8,12 @@
     "scheme": "zony",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
+    "owner": "nelzony",
+    "extra": {
+      "eas": {
+        "projectId": "655aca0e-ce2d-4cfe-aa67-7a22d07cac85"
+      }
+    },
     "ios": {
       "supportsTablet": true
     },
