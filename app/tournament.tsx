@@ -1,7 +1,7 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { arrayUnion, deleteDoc, doc, getDoc, increment, updateDoc } from 'firebase/firestore';
+import { addDoc, arrayUnion, collection, deleteDoc, doc, getDoc, increment, onSnapshot, orderBy, query, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
-import { Alert, ScrollView, Share, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, KeyboardAvoidingView, Platform, ScrollView, Share, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { auth, db } from '../firebaseConfig';
 
 export default function TournamentScreen() {
@@ -10,6 +10,8 @@ export default function TournamentScreen() {
   const [tournament, setTournament] = useState<any>(null);
   const [joined, setJoined] = useState(false);
   const [spotsLeft, setSpotsLeft] = useState(0);
+  const [comments, setComments] = useState([]);
+  const [comment, setComment] = useState('');
   const user = auth.currentUser;
   const isOwner = user?.uid === postedBy;
 
@@ -25,6 +27,12 @@ export default function TournamentScreen() {
       }
     };
     load();
+
+    const commentsQuery = query(collection(db, 'tournaments', id as string, 'comments'), orderBy('createdAt', 'asc'));
+    const unsub = onSnapshot(commentsQuery, (snap) => {
+      setComments(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+    return () => unsub();
   }, []);
 
   const handleJoin = async () => {
@@ -76,93 +84,136 @@ export default function TournamentScreen() {
     }
   };
 
+  const handleComment = async () => {
+    if (!comment.trim() || !user) return;
+    try {
+      await addDoc(collection(db, 'tournaments', id as string, 'comments'), {
+        text: comment.trim(),
+        userEmail: user.email,
+        createdAt: serverTimestamp(),
+      });
+      setComment('');
+    } catch (e: any) {
+      Alert.alert('Error', e.message);
+    }
+  };
+
   if (!tournament) return null;
 
   return (
-    <ScrollView style={styles.container}>
-      <View style={styles.topRow}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.back}>
-          <Text style={styles.backText}>← Back</Text>
-        </TouchableOpacity>
-        <TouchableOpacity onPress={handleShare} style={styles.shareBtn}>
-          <Text style={styles.shareText}>Share ↗</Text>
-        </TouchableOpacity>
-      </View>
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <ScrollView style={styles.container}>
+        <View style={styles.topRow}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.back}>
+            <Text style={styles.backText}>← Back</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={handleShare} style={styles.shareBtn}>
+            <Text style={styles.shareText}>Share ↗</Text>
+          </TouchableOpacity>
+        </View>
 
-      <View style={styles.card}>
-        <Text style={styles.sportBadge}>{tournament.sport}</Text>
-        <Text style={styles.name}>{tournament.name}</Text>
+        <View style={styles.card}>
+          <Text style={styles.sportBadge}>{tournament.sport}</Text>
+          <Text style={styles.name}>{tournament.name}</Text>
 
-        <Text style={styles.sectionTitle}>📅 Date</Text>
-        <Text style={styles.detail}>{tournament.date}</Text>
+          <Text style={styles.sectionTitle}>📅 Date</Text>
+          <Text style={styles.detail}>{tournament.date}</Text>
 
-        <Text style={styles.sectionTitle}>📍 Location</Text>
-        {tournament.address ? <Text style={styles.detail}>{tournament.address}</Text> : null}
-        <Text style={styles.detail}>{tournament.city}, {tournament.state} {tournament.zip}</Text>
+          <Text style={styles.sectionTitle}>📍 Location</Text>
+          {tournament.address ? <Text style={styles.detail}>{tournament.address}</Text> : null}
+          <Text style={styles.detail}>{tournament.city}, {tournament.state} {tournament.zip}</Text>
 
-        {tournament.divisions?.length > 0 && (
-          <>
-            <Text style={styles.sectionTitle}>🏅 Divisions</Text>
-            <Text style={styles.detail}>{tournament.divisions.join(' · ')}</Text>
-          </>
+          {tournament.divisions?.length > 0 && (
+            <>
+              <Text style={styles.sectionTitle}>🏅 Divisions</Text>
+              <Text style={styles.detail}>{tournament.divisions.join(' · ')}</Text>
+            </>
+          )}
+
+          {tournament.entryFee ? (
+            <>
+              <Text style={styles.sectionTitle}>💵 Entry Fee</Text>
+              <Text style={styles.detail}>{tournament.entryFee} per team</Text>
+            </>
+          ) : null}
+
+          {tournament.spectatorFee ? (
+            <>
+              <Text style={styles.sectionTitle}>🎟 Spectator Fee</Text>
+              <Text style={styles.detail}>{tournament.spectatorFee} at the door</Text>
+            </>
+          ) : null}
+
+          {tournament.rosterSize ? (
+            <>
+              <Text style={styles.sectionTitle}>👥 Roster Size</Text>
+              <Text style={styles.detail}>{tournament.rosterSize} players</Text>
+            </>
+          ) : null}
+
+          {tournament.prizes ? (
+            <>
+              <Text style={styles.sectionTitle}>🏆 Prizes</Text>
+              <Text style={styles.detail}>{tournament.prizes}</Text>
+            </>
+          ) : null}
+
+          {tournament.depositAmount ? (
+            <>
+              <Text style={styles.sectionTitle}>💰 Deposit</Text>
+              <Text style={styles.detail}>{tournament.depositAmount}{tournament.depositDue ? ` due by ${tournament.depositDue}` : ''}</Text>
+            </>
+          ) : null}
+
+          {tournament.contactName || tournament.contactPhone ? (
+            <>
+              <Text style={styles.sectionTitle}>📞 Contact</Text>
+              {tournament.contactName ? <Text style={styles.detail}>{tournament.contactName}</Text> : null}
+              {tournament.contactPhone ? <Text style={styles.detail}>{tournament.contactPhone}</Text> : null}
+            </>
+          ) : null}
+
+          <Text style={styles.spots}>{spotsLeft} spots left</Text>
+        </View>
+
+        {isOwner ? (
+          <TouchableOpacity style={styles.deleteBtn} onPress={handleDelete}>
+            <Text style={styles.deleteText}>Delete Tournament</Text>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity style={[styles.joinBtn, joined && styles.joinedBtn]} onPress={handleJoin} disabled={joined || spotsLeft <= 0}>
+            <Text style={styles.joinText}>{joined ? 'Joined ✓' : spotsLeft <= 0 ? 'Full' : 'Join Tournament'}</Text>
+          </TouchableOpacity>
         )}
 
-        {tournament.entryFee ? (
-          <>
-            <Text style={styles.sectionTitle}>💵 Entry Fee</Text>
-            <Text style={styles.detail}>{tournament.entryFee} per team</Text>
-          </>
-        ) : null}
+        <View style={styles.commentsSection}>
+          <Text style={styles.commentsTitle}>Comments</Text>
+          {comments.length === 0 ? (
+            <Text style={styles.noComments}>No comments yet. Be the first!</Text>
+          ) : (
+            comments.map((c: any) => (
+              <View key={c.id} style={styles.commentCard}>
+                <Text style={styles.commentEmail}>{c.userEmail}</Text>
+                <Text style={styles.commentText}>{c.text}</Text>
+              </View>
+            ))
+          )}
 
-        {tournament.spectatorFee ? (
-          <>
-            <Text style={styles.sectionTitle}>🎟 Spectator Fee</Text>
-            <Text style={styles.detail}>{tournament.spectatorFee} at the door</Text>
-          </>
-        ) : null}
-
-        {tournament.rosterSize ? (
-          <>
-            <Text style={styles.sectionTitle}>👥 Roster Size</Text>
-            <Text style={styles.detail}>{tournament.rosterSize} players</Text>
-          </>
-        ) : null}
-
-        {tournament.prizes ? (
-          <>
-            <Text style={styles.sectionTitle}>🏆 Prizes</Text>
-            <Text style={styles.detail}>{tournament.prizes}</Text>
-          </>
-        ) : null}
-
-        {tournament.depositAmount ? (
-          <>
-            <Text style={styles.sectionTitle}>💰 Deposit</Text>
-            <Text style={styles.detail}>{tournament.depositAmount}{tournament.depositDue ? ` due by ${tournament.depositDue}` : ''}</Text>
-          </>
-        ) : null}
-
-        {tournament.contactName || tournament.contactPhone ? (
-          <>
-            <Text style={styles.sectionTitle}>📞 Contact</Text>
-            {tournament.contactName ? <Text style={styles.detail}>{tournament.contactName}</Text> : null}
-            {tournament.contactPhone ? <Text style={styles.detail}>{tournament.contactPhone}</Text> : null}
-          </>
-        ) : null}
-
-        <Text style={styles.spots}>{spotsLeft} spots left</Text>
-      </View>
-
-      {isOwner ? (
-        <TouchableOpacity style={styles.deleteBtn} onPress={handleDelete}>
-          <Text style={styles.deleteText}>Delete Tournament</Text>
-        </TouchableOpacity>
-      ) : (
-        <TouchableOpacity style={[styles.joinBtn, joined && styles.joinedBtn]} onPress={handleJoin} disabled={joined || spotsLeft <= 0}>
-          <Text style={styles.joinText}>{joined ? 'Joined ✓' : spotsLeft <= 0 ? 'Full' : 'Join Tournament'}</Text>
-        </TouchableOpacity>
-      )}
-    </ScrollView>
+          <View style={styles.commentInput}>
+            <TextInput
+              style={styles.input}
+              placeholder="Ask a question..."
+              placeholderTextColor="#a89080"
+              value={comment}
+              onChangeText={setComment}
+            />
+            <TouchableOpacity style={styles.sendBtn} onPress={handleComment}>
+              <Text style={styles.sendText}>Post</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -179,9 +230,19 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 13, fontWeight: '700', color: '#a89080', marginTop: 12, marginBottom: 2 },
   detail: { fontSize: 15, color: '#1a0f0a', marginBottom: 2 },
   spots: { fontSize: 15, color: '#e8622a', fontWeight: '600', marginTop: 16 },
-  joinBtn: { backgroundColor: '#e8622a', marginHorizontal: 20, borderRadius: 12, paddingVertical: 16, alignItems: 'center', marginBottom: 40 },
+  joinBtn: { backgroundColor: '#e8622a', marginHorizontal: 20, borderRadius: 12, paddingVertical: 16, alignItems: 'center', marginBottom: 20 },
   joinedBtn: { backgroundColor: '#a89080' },
   joinText: { color: '#fff', fontSize: 17, fontWeight: 'bold' },
-  deleteBtn: { backgroundColor: '#1a0f0a', marginHorizontal: 20, borderRadius: 12, paddingVertical: 16, alignItems: 'center', marginBottom: 40 },
+  deleteBtn: { backgroundColor: '#1a0f0a', marginHorizontal: 20, borderRadius: 12, paddingVertical: 16, alignItems: 'center', marginBottom: 20 },
   deleteText: { color: '#fff', fontSize: 17, fontWeight: 'bold' },
+  commentsSection: { marginHorizontal: 20, marginBottom: 40 },
+  commentsTitle: { fontSize: 18, fontWeight: 'bold', color: '#1a0f0a', marginBottom: 12 },
+  noComments: { fontSize: 14, color: '#a89080', marginBottom: 16 },
+  commentCard: { backgroundColor: '#fff', borderRadius: 12, padding: 12, marginBottom: 8 },
+  commentEmail: { fontSize: 12, color: '#a89080', marginBottom: 4 },
+  commentText: { fontSize: 14, color: '#1a0f0a' },
+  commentInput: { flexDirection: 'row', gap: 8, marginTop: 12 },
+  input: { flex: 1, backgroundColor: '#fff', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, fontSize: 14, color: '#1a0f0a' },
+  sendBtn: { backgroundColor: '#e8622a', borderRadius: 12, paddingHorizontal: 16, justifyContent: 'center' },
+  sendText: { color: '#fff', fontWeight: 'bold', fontSize: 14 },
 });
