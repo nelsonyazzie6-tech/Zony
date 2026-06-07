@@ -32,7 +32,12 @@ export default function HomeScreen() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.header}>Zony</Text>
+      <View style={styles.headerRow}>
+        <Text style={styles.header}>Zony</Text>
+        <TouchableOpacity style={styles.mapBtn} onPress={() => router.push('/map')}>
+          <Text style={styles.mapBtnText}>🗺 Map</Text>
+        </TouchableOpacity>
+      </View>
       <Text style={styles.sub}>Tournaments near you</Text>
 
       <TextInput
@@ -94,7 +99,10 @@ export default function HomeScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f5ede0', paddingTop: 60 },
+  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 20, marginBottom: 4 },
   header: { fontSize: 36, fontWeight: 'bold', color: '#1a0f0a', textAlign: 'center' },
+  mapBtn: { position: 'absolute', right: 20, backgroundColor: '#fff', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 5 },
+  mapBtnText: { fontSize: 13, color: '#e8622a', fontWeight: '600' },
   sub: { fontSize: 15, color: '#7a4a2a', textAlign: 'center', marginBottom: 12 },
   search: { marginHorizontal: 20, backgroundColor: '#fff', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 10, fontSize: 15, color: '#1a0f0a', marginBottom: 10 },
   filterRow: { flexGrow: 0, marginBottom: 8 },
@@ -110,7 +118,7 @@ const styles = StyleSheet.create({
   detail: { fontSize: 14, color: '#7a4a2a', marginBottom: 4 },
   fee: { fontSize: 13, color: '#2a7a2a', fontWeight: '600', marginBottom: 2 },
   spots: { fontSize: 13, color: '#e8622a', fontWeight: '600', marginTop: 4 },
-  emptyContainer: { alignItems: 'center', marginTop: 40 },
+  emptyContainer: { alignItems: 'center', marginTop: 60 },
   emptyIcon: { fontSize: 50, marginBottom: 12 },
   emptyTitle: { fontSize: 20, fontWeight: 'bold', color: '#1a0f0a', marginBottom: 8 },
   emptySub: { fontSize: 15, color: '#a89080', textAlign: 'center' },
