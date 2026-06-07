@@ -1,11 +1,12 @@
 import { useRouter } from 'expo-router';
 import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, FlatList, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, FlatList, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { auth, db } from '../../firebaseConfig';
 
 const sports = ['All', 'Basketball', 'Soccer', 'Volleyball', 'Football', 'Baseball', 'Tennis'];
+const states = ['All States', 'AZ', 'NM', 'CO', 'UT', 'TX', 'CA', 'NV', 'OK', 'AL', 'AK', 'AR', 'CT', 'DE', 'FL', 'GA', 'HI', 'ID', 'IL', 'IN', 'IA', 'KS', 'KY', 'LA', 'ME', 'MD', 'MA', 'MI', 'MN', 'MS', 'MO', 'MT', 'NE', 'NH', 'NJ', 'NY', 'NC', 'ND', 'OH', 'OR', 'PA', 'RI', 'SC', 'SD', 'TN', 'VT', 'VA', 'WA', 'WV', 'WI', 'WY'];
 
 function BellIcon({ color, hasNew }: { color: string; hasNew: boolean }) {
   return (
@@ -21,6 +22,8 @@ function BellIcon({ color, hasNew }: { color: string; hasNew: boolean }) {
 
 export default function HomeScreen() {
   const [sport, setSport] = useState('All');
+  const [stateFilter, setStateFilter] = useState('All States');
+  const [showStatePicker, setShowStatePicker] = useState(false);
   const [search, setSearch] = useState('');
   const [tournaments, setTournaments] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -48,6 +51,7 @@ export default function HomeScreen() {
 
   const filtered = tournaments
     .filter(t => sport === 'All' || t.sport === sport)
+    .filter(t => stateFilter === 'All States' || t.state === stateFilter)
     .filter(t =>
       t.name?.toLowerCase().includes(search.toLowerCase()) ||
       t.city?.toLowerCase().includes(search.toLowerCase()) ||
@@ -67,13 +71,18 @@ export default function HomeScreen() {
       </View>
       <Text style={styles.sub}>Tournaments near you</Text>
 
-      <TextInput
-        style={styles.search}
-        placeholder="Search by name, city, or state..."
-        placeholderTextColor="#a89080"
-        value={search}
-        onChangeText={setSearch}
-      />
+      <View style={styles.searchRow}>
+        <TextInput
+          style={styles.search}
+          placeholder="Search by name or city..."
+          placeholderTextColor="#a89080"
+          value={search}
+          onChangeText={setSearch}
+        />
+        <TouchableOpacity style={styles.stateBtn} onPress={() => setShowStatePicker(true)}>
+          <Text style={styles.stateBtnText}>{stateFilter === 'All States' ? '🌎' : stateFilter}</Text>
+        </TouchableOpacity>
+      </View>
 
       <FlatList
         horizontal
@@ -120,6 +129,24 @@ export default function HomeScreen() {
           )}
         />
       )}
+
+      <Modal visible={showStatePicker} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalBox}>
+            <Text style={styles.modalTitle}>Filter by State</Text>
+            <ScrollView>
+              {states.map(s => (
+                <TouchableOpacity key={s} style={styles.modalItem} onPress={() => { setStateFilter(s); setShowStatePicker(false); }}>
+                  <Text style={[styles.modalItemText, stateFilter === s && styles.modalItemActive]}>{s}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+            <TouchableOpacity style={styles.modalClose} onPress={() => setShowStatePicker(false)}>
+              <Text style={styles.modalCloseText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -133,7 +160,10 @@ const styles = StyleSheet.create({
   mapBtn: { position: 'absolute', right: 20, backgroundColor: '#fff', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 5 },
   mapBtnText: { fontSize: 13, color: '#e8622a', fontWeight: '600' },
   sub: { fontSize: 15, color: '#7a4a2a', textAlign: 'center', marginBottom: 12 },
-  search: { marginHorizontal: 20, backgroundColor: '#fff', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 10, fontSize: 15, color: '#1a0f0a', marginBottom: 10 },
+  searchRow: { flexDirection: 'row', marginHorizontal: 20, gap: 8, marginBottom: 10 },
+  search: { flex: 1, backgroundColor: '#fff', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 10, fontSize: 15, color: '#1a0f0a' },
+  stateBtn: { backgroundColor: '#fff', borderRadius: 12, paddingHorizontal: 14, justifyContent: 'center' },
+  stateBtnText: { fontSize: 14, color: '#e8622a', fontWeight: '600' },
   filterRow: { flexGrow: 0, marginBottom: 8 },
   filterBtn: { paddingHorizontal: 10, paddingVertical: 2, height: 28, borderRadius: 20, backgroundColor: '#fff', marginRight: 6, justifyContent: 'center' },
   filterActive: { backgroundColor: '#e8622a' },
@@ -151,4 +181,12 @@ const styles = StyleSheet.create({
   emptyIcon: { fontSize: 50, marginBottom: 12 },
   emptyTitle: { fontSize: 20, fontWeight: 'bold', color: '#1a0f0a', marginBottom: 8 },
   emptySub: { fontSize: 15, color: '#a89080', textAlign: 'center' },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
+  modalBox: { backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, maxHeight: '70%' },
+  modalTitle: { fontSize: 18, fontWeight: 'bold', color: '#1a0f0a', marginBottom: 12, textAlign: 'center' },
+  modalItem: { paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#f5ede0' },
+  modalItemText: { fontSize: 15, color: '#1a0f0a' },
+  modalItemActive: { color: '#e8622a', fontWeight: 'bold' },
+  modalClose: { backgroundColor: '#e8622a', borderRadius: 12, paddingVertical: 14, alignItems: 'center', marginTop: 12 },
+  modalCloseText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
 });
