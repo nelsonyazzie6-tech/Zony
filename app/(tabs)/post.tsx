@@ -1,6 +1,8 @@
 import { useRouter } from 'expo-router';
+import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { useState } from 'react';
 import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { db } from '../../firebaseConfig';
 
 export default function PostScreen() {
   const router = useRouter();
@@ -10,10 +12,25 @@ export default function PostScreen() {
   const [location, setLocation] = useState('');
   const [spots, setSpots] = useState('');
   const [submitted, setSubmitted] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!name || !sport || !date || !location || !spots) return;
-    setSubmitted(true);
+    setLoading(true);
+    try {
+      await addDoc(collection(db, 'tournaments'), {
+        name,
+        sport,
+        date,
+        location,
+        spots: parseInt(spots),
+        createdAt: serverTimestamp(),
+      });
+      setSubmitted(true);
+    } catch (e) {
+      console.error('Error posting tournament:', e);
+    }
+    setLoading(false);
   };
 
   if (submitted) {
@@ -50,8 +67,8 @@ export default function PostScreen() {
         <Text style={styles.label}>Available Spots</Text>
         <TextInput style={styles.input} placeholder="e.g. 8" placeholderTextColor="#a89080" value={spots} onChangeText={setSpots} keyboardType="numeric" />
 
-        <TouchableOpacity style={styles.submitBtn} onPress={handleSubmit}>
-          <Text style={styles.submitText}>Post Tournament</Text>
+        <TouchableOpacity style={styles.submitBtn} onPress={handleSubmit} disabled={loading}>
+          <Text style={styles.submitText}>{loading ? 'Posting...' : 'Post Tournament'}</Text>
         </TouchableOpacity>
       </View>
     </ScrollView>

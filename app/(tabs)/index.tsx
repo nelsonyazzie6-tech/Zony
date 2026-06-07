@@ -1,24 +1,31 @@
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { collection, onSnapshot } from 'firebase/firestore';
+import { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { db } from '../../firebaseConfig';
 
 const sports = ['All', 'Basketball', 'Soccer', 'Volleyball', 'Football'];
-
-const tournaments = [
-  { id: '1', name: 'Gallup Summer Hoops', sport: 'Basketball', date: 'Jun 14', location: 'Gallup, NM', spots: 8 },
-  { id: '2', name: 'Mesa 5v5 Open', sport: 'Soccer', date: 'Jun 21', location: 'Mesa, AZ', spots: 4 },
-  { id: '3', name: 'ABQ Volleyball Classic', sport: 'Volleyball', date: 'Jun 28', location: 'Albuquerque, NM', spots: 12 },
-  { id: '4', name: 'Phoenix Flag Football', sport: 'Football', date: 'Jul 4', location: 'Phoenix, AZ', spots: 6 },
-];
 
 export default function HomeScreen() {
   const [sport, setSport] = useState('All');
   const [search, setSearch] = useState('');
+  const [tournaments, setTournaments] = useState([]);
   const router = useRouter();
+
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db, 'tournaments'), (snapshot) => {
+      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setTournaments(data);
+    });
+    return () => unsub();
+  }, []);
 
   const filtered = tournaments
     .filter(t => sport === 'All' || t.sport === sport)
-    .filter(t => t.name.toLowerCase().includes(search.toLowerCase()) || t.location.toLowerCase().includes(search.toLowerCase()));
+    .filter(t =>
+      t.name?.toLowerCase().includes(search.toLowerCase()) ||
+      t.location?.toLowerCase().includes(search.toLowerCase())
+    );
 
   return (
     <View style={styles.container}>
