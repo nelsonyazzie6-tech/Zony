@@ -1,9 +1,30 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { arrayUnion, doc, updateDoc } from 'firebase/firestore';
+import { useState } from 'react';
+import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { auth, db } from '../firebaseConfig';
 
 export default function TournamentScreen() {
-  const { name, sport, date, location, spots } = useLocalSearchParams();
+  const { id, name, sport, date, location, spots } = useLocalSearchParams();
   const router = useRouter();
+  const [joined, setJoined] = useState(false);
+
+  const handleJoin = async () => {
+    const user = auth.currentUser;
+    if (!user) {
+      Alert.alert('Sign in required', 'You need to be logged in to join a tournament.');
+      return;
+    }
+    try {
+      await updateDoc(doc(db, 'tournaments', id as string), {
+        joinedUsers: arrayUnion(user.uid),
+      });
+      setJoined(true);
+      Alert.alert('Joined!', `You joined ${name}`);
+    } catch (e: any) {
+      Alert.alert('Error', e.message);
+    }
+  };
 
   return (
     <ScrollView style={styles.container}>
@@ -19,8 +40,8 @@ export default function TournamentScreen() {
         <Text style={styles.spots}>{spots} spots left</Text>
       </View>
 
-      <TouchableOpacity style={styles.joinBtn}>
-        <Text style={styles.joinText}>Join Tournament</Text>
+      <TouchableOpacity style={[styles.joinBtn, joined && styles.joinedBtn]} onPress={handleJoin} disabled={joined}>
+        <Text style={styles.joinText}>{joined ? 'Joined ✓' : 'Join Tournament'}</Text>
       </TouchableOpacity>
     </ScrollView>
   );
@@ -36,5 +57,6 @@ const styles = StyleSheet.create({
   detail: { fontSize: 16, color: '#7a4a2a', marginBottom: 8 },
   spots: { fontSize: 15, color: '#e8622a', fontWeight: '600', marginTop: 8 },
   joinBtn: { backgroundColor: '#e8622a', marginHorizontal: 20, borderRadius: 12, paddingVertical: 16, alignItems: 'center' },
+  joinedBtn: { backgroundColor: '#a89080' },
   joinText: { color: '#fff', fontSize: 17, fontWeight: 'bold' },
 });

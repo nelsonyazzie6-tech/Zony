@@ -56,7 +56,7 @@ export default function HomeScreen() {
             <TouchableOpacity
               key={t.id}
               style={styles.card}
-              onPress={() => router.push({ pathname: '/tournament', params: { name: t.name, sport: t.sport, date: t.date, location: t.location, spots: t.spots } })}
+              onPress={() => router.push({ pathname: '/tournament', params: { id: t.id, name: t.name, sport: t.sport, date: t.date, location: t.location, spots: t.spots } })}
             >
               <View style={styles.cardTop}>
                 <Text style={styles.name}>{t.name}</Text>
