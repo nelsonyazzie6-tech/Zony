@@ -1,7 +1,7 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { arrayUnion, deleteDoc, doc, getDoc, increment, updateDoc } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, ScrollView, Share, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { auth, db } from '../firebaseConfig';
 
 export default function TournamentScreen() {
@@ -65,13 +65,29 @@ export default function TournamentScreen() {
     ]);
   };
 
+  const handleShare = async () => {
+    if (!tournament) return;
+    try {
+      await Share.share({
+        message: `🏆 ${tournament.name}\n📅 ${tournament.date}\n📍 ${tournament.city}, ${tournament.state}${tournament.entryFee ? `\n💵 Entry: ${tournament.entryFee}` : ''}${tournament.contactPhone ? `\n📞 ${tournament.contactPhone}` : ''}\n\nFind this tournament on Zony!`,
+      });
+    } catch (e: any) {
+      Alert.alert('Error', e.message);
+    }
+  };
+
   if (!tournament) return null;
 
   return (
     <ScrollView style={styles.container}>
-      <TouchableOpacity onPress={() => router.back()} style={styles.back}>
-        <Text style={styles.backText}>← Back</Text>
-      </TouchableOpacity>
+      <View style={styles.topRow}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.back}>
+          <Text style={styles.backText}>← Back</Text>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={handleShare} style={styles.shareBtn}>
+          <Text style={styles.shareText}>Share ↗</Text>
+        </TouchableOpacity>
+      </View>
 
       <View style={styles.card}>
         <Text style={styles.sportBadge}>{tournament.sport}</Text>
@@ -152,8 +168,11 @@ export default function TournamentScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f5ede0', paddingTop: 60 },
-  back: { paddingHorizontal: 20, marginBottom: 16 },
+  topRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, marginBottom: 16 },
+  back: {},
   backText: { fontSize: 16, color: '#e8622a', fontWeight: '600' },
+  shareBtn: { backgroundColor: '#fff', borderRadius: 20, paddingHorizontal: 14, paddingVertical: 6 },
+  shareText: { fontSize: 14, color: '#e8622a', fontWeight: '600' },
   card: { backgroundColor: '#fff', marginHorizontal: 20, borderRadius: 16, padding: 24, marginBottom: 20 },
   sportBadge: { fontSize: 13, color: '#fff', backgroundColor: '#e8622a', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, overflow: 'hidden', alignSelf: 'flex-start', marginBottom: 12 },
   name: { fontSize: 26, fontWeight: 'bold', color: '#1a0f0a', marginBottom: 16 },

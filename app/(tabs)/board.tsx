@@ -1,14 +1,19 @@
 import { useRouter } from 'expo-router';
-import { collection, onSnapshot } from 'firebase/firestore';
+import { collection, deleteDoc, doc, onSnapshot } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { db } from '../../firebaseConfig';
+import { ActivityIndicator, Alert, FlatList, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { auth, db } from '../../firebaseConfig';
+
+const sports = ['All', 'Basketball', 'Soccer', 'Volleyball', 'Football', 'Baseball', 'Tennis'];
 
 export default function BoardScreen() {
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState('All');
+  const [typeFilter, setTypeFilter] = useState('All');
+  const [sportFilter, setSportFilter] = useState('All');
+  const [search, setSearch] = useState('');
   const router = useRouter();
+  const user = auth.currentUser;
 
   useEffect(() => {
     const unsub = onSnapshot(collection(db, 'board'), (snapshot) => {
@@ -19,22 +24,60 @@ export default function BoardScreen() {
     return () => unsub();
   }, []);
 
-  const filtered = posts.filter(p => filter === 'All' || p.type === filter);
+  const filtered = posts
+    .filter(p => typeFilter === 'All' || p.type === typeFilter)
+    .filter(p => sportFilter === 'All' || p.sport === sportFilter)
+    .filter(p =>
+      p.city?.toLowerCase().includes(search.toLowerCase()) ||
+      p.state?.toLowerCase().includes(search.toLowerCase()) ||
+      p.description?.toLowerCase().includes(search.toLowerCase())
+    );
+
+  const handleDelete = (id: string) => {
+    Alert.alert('Delete Post', 'Are you sure you want to delete this post?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete', style: 'destructive', onPress: async () => {
+          try {
+            await deleteDoc(doc(db, 'board', id));
+          } catch (e: any) {
+            Alert.alert('Error', e.message);
+          }
+        }
+      }
+    ]);
+  };
 
   return (
     <View style={styles.container}>
       <Text style={styles.header}>Player Board</Text>
       <Text style={styles.sub}>Find players or teams near you</Text>
 
-      <View style={styles.filterRow}>
+      <TextInput
+        style={styles.search}
+        placeholder="Search by city or state..."
+        placeholderTextColor="#a89080"
+        value={search}
+        onChangeText={setSearch}
+      />
+
+      <View style={styles.typeRow}>
         {['All', 'Player looking for team', 'Team looking for players'].map(f => (
-          <TouchableOpacity key={f} onPress={() => setFilter(f)} style={[styles.filterBtn, filter === f && styles.filterActive]}>
-            <Text style={[styles.filterText, filter === f && styles.filterTextActive]}>
+          <TouchableOpacity key={f} onPress={() => setTypeFilter(f)} style={[styles.typeBtn, typeFilter === f && styles.typeActive]}>
+            <Text style={[styles.typeText, typeFilter === f && styles.typeTextActive]}>
               {f === 'All' ? 'All' : f === 'Player looking for team' ? 'Players' : 'Teams'}
             </Text>
           </TouchableOpacity>
         ))}
       </View>
+
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.sportRow} contentContainerStyle={{ paddingHorizontal: 20 }}>
+        {sports.map(s => (
+          <TouchableOpacity key={s} onPress={() => setSportFilter(s)} style={[styles.sportBtn, sportFilter === s && styles.sportActive]}>
+            <Text style={[styles.sportText, sportFilter === s && styles.sportTextActive]}>{s}</Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
 
       {loading ? (
         <ActivityIndicator size="large" color="#e8622a" style={{ marginTop: 60 }} />
@@ -53,12 +96,17 @@ export default function BoardScreen() {
             <View style={styles.card}>
               <View style={styles.cardTop}>
                 <Text style={styles.typeBadge}>{p.type === 'Player looking for team' ? '🙋 Player' : '👥 Team'}</Text>
-                <Text style={styles.sport}>{p.sport}</Text>
+                <Text style={styles.sportBadge}>{p.sport}</Text>
               </View>
               <Text style={styles.division}>{p.division}</Text>
               <Text style={styles.detail}>📍 {p.city}, {p.state}</Text>
               {p.description ? <Text style={styles.description}>{p.description}</Text> : null}
               {p.contact ? <Text style={styles.contact}>📞 {p.contact}</Text> : null}
+              {user?.uid === p.postedBy && (
+                <TouchableOpacity style={styles.deleteBtn} onPress={() => handleDelete(p.id)}>
+                  <Text style={styles.deleteText}>Delete</Text>
+                </TouchableOpacity>
+              )}
             </View>
           )}
         />
@@ -74,21 +122,29 @@ export default function BoardScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f5ede0', paddingTop: 60 },
   header: { fontSize: 36, fontWeight: 'bold', color: '#1a0f0a', textAlign: 'center' },
-  sub: { fontSize: 15, color: '#7a4a2a', textAlign: 'center', marginBottom: 16 },
-  filterRow: { flexDirection: 'row', justifyContent: 'center', gap: 8, marginBottom: 12 },
-  filterBtn: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20, backgroundColor: '#fff' },
-  filterActive: { backgroundColor: '#e8622a' },
-  filterText: { fontSize: 13, color: '#7a4a2a' },
-  filterTextActive: { color: '#fff', fontWeight: 'bold' },
-  list: { paddingHorizontal: 20, paddingTop: 4 },
+  sub: { fontSize: 15, color: '#7a4a2a', textAlign: 'center', marginBottom: 12 },
+  search: { marginHorizontal: 20, backgroundColor: '#fff', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 10, fontSize: 15, color: '#1a0f0a', marginBottom: 10 },
+  typeRow: { flexDirection: 'row', justifyContent: 'center', gap: 8, marginBottom: 10 },
+  typeBtn: { paddingHorizontal: 14, paddingVertical: 5, borderRadius: 20, backgroundColor: '#fff' },
+  typeActive: { backgroundColor: '#e8622a' },
+  typeText: { fontSize: 12, color: '#7a4a2a' },
+  typeTextActive: { color: '#fff', fontWeight: 'bold' },
+  sportRow: { flexGrow: 0, marginBottom: 8 },
+  sportBtn: { paddingHorizontal: 10, paddingVertical: 2, height: 28, borderRadius: 20, backgroundColor: '#fff', marginRight: 6, justifyContent: 'center' },
+  sportActive: { backgroundColor: '#e8622a' },
+  sportText: { fontSize: 11, color: '#7a4a2a' },
+  sportTextActive: { color: '#fff', fontWeight: 'bold' },
+  list: { paddingHorizontal: 20, paddingTop: 4, paddingBottom: 80 },
   card: { backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 12, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
   cardTop: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
   typeBadge: { fontSize: 13, fontWeight: '600', color: '#e8622a' },
-  sport: { fontSize: 13, color: '#fff', backgroundColor: '#e8622a', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8, overflow: 'hidden' },
+  sportBadge: { fontSize: 13, color: '#fff', backgroundColor: '#e8622a', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8, overflow: 'hidden' },
   division: { fontSize: 15, fontWeight: 'bold', color: '#1a0f0a', marginBottom: 6 },
   detail: { fontSize: 14, color: '#7a4a2a', marginBottom: 4 },
   description: { fontSize: 14, color: '#1a0f0a', marginBottom: 4 },
   contact: { fontSize: 13, color: '#2a7a2a', fontWeight: '600', marginTop: 4 },
+  deleteBtn: { marginTop: 10, alignSelf: 'flex-end', backgroundColor: '#1a0f0a', borderRadius: 8, paddingVertical: 6, paddingHorizontal: 14 },
+  deleteText: { color: '#fff', fontSize: 13, fontWeight: 'bold' },
   emptyContainer: { alignItems: 'center', marginTop: 60 },
   emptyIcon: { fontSize: 50, marginBottom: 12 },
   emptyTitle: { fontSize: 20, fontWeight: 'bold', color: '#1a0f0a', marginBottom: 8 },
