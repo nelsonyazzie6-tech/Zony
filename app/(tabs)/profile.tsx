@@ -1,8 +1,9 @@
+import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { signOut } from 'firebase/auth';
-import { collection, onSnapshot, query, where } from 'firebase/firestore';
+import { collection, doc, getDoc, onSnapshot, query, setDoc, where } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { auth, db } from '../../firebaseConfig';
 
 export default function ProfileScreen() {
@@ -11,9 +12,18 @@ export default function ProfileScreen() {
   const initial = user?.email?.[0].toUpperCase() ?? 'Z';
   const [myPosted, setMyPosted] = useState([]);
   const [myJoined, setMyJoined] = useState([]);
+  const [photoURL, setPhotoURL] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) return;
+
+    const loadPhoto = async () => {
+      const snap = await getDoc(doc(db, 'users', user.uid));
+      if (snap.exists() && snap.data().photoURL) {
+        setPhotoURL(snap.data().photoURL);
+      }
+    };
+    loadPhoto();
 
     const postedQuery = query(collection(db, 'tournaments'), where('postedBy', '==', user.uid));
     const unsubPosted = onSnapshot(postedQuery, (snap) => {
@@ -28,6 +38,26 @@ export default function ProfileScreen() {
     return () => { unsubPosted(); unsubJoined(); };
   }, []);
 
+  const handlePickPhoto = async () => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert('Permission required', 'Please allow access to your photo library.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.5,
+      base64: true,
+    });
+    if (!result.canceled && result.assets[0].base64) {
+      const base64 = `data:image/jpeg;base64,${result.assets[0].base64}`;
+      setPhotoURL(base64);
+      await setDoc(doc(db, 'users', user!.uid), { photoURL: base64 }, { merge: true });
+    }
+  };
+
   const handleLogout = async () => {
     try {
       await signOut(auth);
@@ -39,9 +69,17 @@ export default function ProfileScreen() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <View style={styles.avatar}>
-        <Text style={styles.avatarText}>{initial}</Text>
-      </View>
+      <TouchableOpacity onPress={handlePickPhoto}>
+        {photoURL ? (
+          <Image source={{ uri: photoURL }} style={styles.avatarImg} />
+        ) : (
+          <View style={styles.avatar}>
+            <Text style={styles.avatarText}>{initial}</Text>
+          </View>
+        )}
+        <Text style={styles.changePhoto}>Change Photo</Text>
+      </TouchableOpacity>
+
       <Text style={styles.name}>{user?.email}</Text>
       <Text style={styles.sub}>Zony Member</Text>
 
@@ -83,8 +121,10 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f5ede0' },
   content: { paddingTop: 60, alignItems: 'center', paddingBottom: 40 },
-  avatar: { width: 90, height: 90, borderRadius: 45, backgroundColor: '#e8622a', alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
+  avatar: { width: 90, height: 90, borderRadius: 45, backgroundColor: '#e8622a', alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
+  avatarImg: { width: 90, height: 90, borderRadius: 45, marginBottom: 4 },
   avatarText: { fontSize: 40, color: '#fff', fontWeight: 'bold' },
+  changePhoto: { fontSize: 12, color: '#e8622a', textAlign: 'center', marginBottom: 12 },
   name: { fontSize: 18, fontWeight: 'bold', color: '#1a0f0a', marginBottom: 4 },
   sub: { fontSize: 16, color: '#7a4a2a', marginBottom: 24 },
   card: { backgroundColor: '#fff', borderRadius: 16, padding: 20, width: '90%', marginBottom: 16 },
