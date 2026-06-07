@@ -5,26 +5,26 @@ import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'rea
 import { auth, db } from '../firebaseConfig';
 
 export default function TournamentScreen() {
-  const { id, name, sport, date, location, spots, postedBy } = useLocalSearchParams();
+  const { id, postedBy } = useLocalSearchParams();
   const router = useRouter();
+  const [tournament, setTournament] = useState<any>(null);
   const [joined, setJoined] = useState(false);
-  const [spotsLeft, setSpotsLeft] = useState(Number(spots));
+  const [spotsLeft, setSpotsLeft] = useState(0);
   const user = auth.currentUser;
   const isOwner = user?.uid === postedBy;
 
   useEffect(() => {
-    const checkJoined = async () => {
-      if (!user) return;
+    const load = async () => {
+      if (!id) return;
       const snap = await getDoc(doc(db, 'tournaments', id as string));
       if (snap.exists()) {
         const data = snap.data();
+        setTournament(data);
         setSpotsLeft(data.spots);
-        if (data.joinedUsers?.includes(user.uid)) {
-          setJoined(true);
-        }
+        if (data.joinedUsers?.includes(user?.uid)) setJoined(true);
       }
     };
-    checkJoined();
+    load();
   }, []);
 
   const handleJoin = async () => {
@@ -43,7 +43,7 @@ export default function TournamentScreen() {
       });
       setJoined(true);
       setSpotsLeft(prev => prev - 1);
-      Alert.alert('Joined!', `You joined ${name}`);
+      Alert.alert('Joined!', `You joined ${tournament?.name}`);
     } catch (e: any) {
       Alert.alert('Error', e.message);
     }
@@ -65,6 +65,8 @@ export default function TournamentScreen() {
     ]);
   };
 
+  if (!tournament) return null;
+
   return (
     <ScrollView style={styles.container}>
       <TouchableOpacity onPress={() => router.back()} style={styles.back}>
@@ -72,10 +74,66 @@ export default function TournamentScreen() {
       </TouchableOpacity>
 
       <View style={styles.card}>
-        <Text style={styles.sportBadge}>{sport}</Text>
-        <Text style={styles.name}>{name}</Text>
-        <Text style={styles.detail}>📅 {date}</Text>
-        <Text style={styles.detail}>📍 {location}</Text>
+        <Text style={styles.sportBadge}>{tournament.sport}</Text>
+        <Text style={styles.name}>{tournament.name}</Text>
+
+        <Text style={styles.sectionTitle}>📅 Date</Text>
+        <Text style={styles.detail}>{tournament.date}</Text>
+
+        <Text style={styles.sectionTitle}>📍 Location</Text>
+        {tournament.address ? <Text style={styles.detail}>{tournament.address}</Text> : null}
+        <Text style={styles.detail}>{tournament.city}, {tournament.state} {tournament.zip}</Text>
+
+        {tournament.divisions?.length > 0 && (
+          <>
+            <Text style={styles.sectionTitle}>🏅 Divisions</Text>
+            <Text style={styles.detail}>{tournament.divisions.join(' · ')}</Text>
+          </>
+        )}
+
+        {tournament.entryFee ? (
+          <>
+            <Text style={styles.sectionTitle}>💵 Entry Fee</Text>
+            <Text style={styles.detail}>{tournament.entryFee} per team</Text>
+          </>
+        ) : null}
+
+        {tournament.spectatorFee ? (
+          <>
+            <Text style={styles.sectionTitle}>🎟 Spectator Fee</Text>
+            <Text style={styles.detail}>{tournament.spectatorFee} at the door</Text>
+          </>
+        ) : null}
+
+        {tournament.rosterSize ? (
+          <>
+            <Text style={styles.sectionTitle}>👥 Roster Size</Text>
+            <Text style={styles.detail}>{tournament.rosterSize} players</Text>
+          </>
+        ) : null}
+
+        {tournament.prizes ? (
+          <>
+            <Text style={styles.sectionTitle}>🏆 Prizes</Text>
+            <Text style={styles.detail}>{tournament.prizes}</Text>
+          </>
+        ) : null}
+
+        {tournament.depositAmount ? (
+          <>
+            <Text style={styles.sectionTitle}>💰 Deposit</Text>
+            <Text style={styles.detail}>{tournament.depositAmount}{tournament.depositDue ? ` due by ${tournament.depositDue}` : ''}</Text>
+          </>
+        ) : null}
+
+        {tournament.contactName || tournament.contactPhone ? (
+          <>
+            <Text style={styles.sectionTitle}>📞 Contact</Text>
+            {tournament.contactName ? <Text style={styles.detail}>{tournament.contactName}</Text> : null}
+            {tournament.contactPhone ? <Text style={styles.detail}>{tournament.contactPhone}</Text> : null}
+          </>
+        ) : null}
+
         <Text style={styles.spots}>{spotsLeft} spots left</Text>
       </View>
 
@@ -99,11 +157,12 @@ const styles = StyleSheet.create({
   card: { backgroundColor: '#fff', marginHorizontal: 20, borderRadius: 16, padding: 24, marginBottom: 20 },
   sportBadge: { fontSize: 13, color: '#fff', backgroundColor: '#e8622a', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, overflow: 'hidden', alignSelf: 'flex-start', marginBottom: 12 },
   name: { fontSize: 26, fontWeight: 'bold', color: '#1a0f0a', marginBottom: 16 },
-  detail: { fontSize: 16, color: '#7a4a2a', marginBottom: 8 },
-  spots: { fontSize: 15, color: '#e8622a', fontWeight: '600', marginTop: 8 },
-  joinBtn: { backgroundColor: '#e8622a', marginHorizontal: 20, borderRadius: 12, paddingVertical: 16, alignItems: 'center' },
+  sectionTitle: { fontSize: 13, fontWeight: '700', color: '#a89080', marginTop: 12, marginBottom: 2 },
+  detail: { fontSize: 15, color: '#1a0f0a', marginBottom: 2 },
+  spots: { fontSize: 15, color: '#e8622a', fontWeight: '600', marginTop: 16 },
+  joinBtn: { backgroundColor: '#e8622a', marginHorizontal: 20, borderRadius: 12, paddingVertical: 16, alignItems: 'center', marginBottom: 40 },
   joinedBtn: { backgroundColor: '#a89080' },
   joinText: { color: '#fff', fontSize: 17, fontWeight: 'bold' },
-  deleteBtn: { backgroundColor: '#1a0f0a', marginHorizontal: 20, borderRadius: 12, paddingVertical: 16, alignItems: 'center' },
+  deleteBtn: { backgroundColor: '#1a0f0a', marginHorizontal: 20, borderRadius: 12, paddingVertical: 16, alignItems: 'center', marginBottom: 40 },
   deleteText: { color: '#fff', fontSize: 17, fontWeight: 'bold' },
 });

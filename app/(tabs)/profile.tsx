@@ -1,12 +1,32 @@
 import { useRouter } from 'expo-router';
 import { signOut } from 'firebase/auth';
-import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { auth } from '../../firebaseConfig';
+import { collection, onSnapshot, query, where } from 'firebase/firestore';
+import { useEffect, useState } from 'react';
+import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { auth, db } from '../../firebaseConfig';
 
 export default function ProfileScreen() {
   const router = useRouter();
   const user = auth.currentUser;
   const initial = user?.email?.[0].toUpperCase() ?? 'Z';
+  const [myPosted, setMyPosted] = useState([]);
+  const [myJoined, setMyJoined] = useState([]);
+
+  useEffect(() => {
+    if (!user) return;
+
+    const postedQuery = query(collection(db, 'tournaments'), where('postedBy', '==', user.uid));
+    const unsubPosted = onSnapshot(postedQuery, (snap) => {
+      setMyPosted(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+
+    const joinedQuery = query(collection(db, 'tournaments'), where('joinedUsers', 'array-contains', user.uid));
+    const unsubJoined = onSnapshot(joinedQuery, (snap) => {
+      setMyJoined(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+
+    return () => { unsubPosted(); unsubJoined(); };
+  }, []);
 
   const handleLogout = async () => {
     try {
@@ -18,7 +38,7 @@ export default function ProfileScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <View style={styles.avatar}>
         <Text style={styles.avatarText}>{initial}</Text>
       </View>
@@ -26,26 +46,53 @@ export default function ProfileScreen() {
       <Text style={styles.sub}>Zony Member</Text>
 
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>My Tournaments</Text>
-        <Text style={styles.empty}>You haven't joined any tournaments yet.</Text>
+        <Text style={styles.cardTitle}>Tournaments I Posted</Text>
+        {myPosted.length === 0 ? (
+          <Text style={styles.empty}>You haven't posted any tournaments yet.</Text>
+        ) : (
+          myPosted.map(t => (
+            <TouchableOpacity key={t.id} style={styles.tourneyRow} onPress={() => router.push({ pathname: '/tournament', params: { id: t.id, postedBy: t.postedBy } })}>
+              <Text style={styles.tourneyName}>{t.name}</Text>
+              <Text style={styles.tourneyDetail}>{t.date} · {t.city}, {t.state}</Text>
+            </TouchableOpacity>
+          ))
+        )}
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Tournaments I Joined</Text>
+        {myJoined.length === 0 ? (
+          <Text style={styles.empty}>You haven't joined any tournaments yet.</Text>
+        ) : (
+          myJoined.map(t => (
+            <TouchableOpacity key={t.id} style={styles.tourneyRow} onPress={() => router.push({ pathname: '/tournament', params: { id: t.id, postedBy: t.postedBy } })}>
+              <Text style={styles.tourneyName}>{t.name}</Text>
+              <Text style={styles.tourneyDetail}>{t.date} · {t.city}, {t.state}</Text>
+            </TouchableOpacity>
+          ))
+        )}
       </View>
 
       <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
         <Text style={styles.logoutText}>Log Out</Text>
       </TouchableOpacity>
-    </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f5ede0', paddingTop: 60, alignItems: 'center' },
+  container: { flex: 1, backgroundColor: '#f5ede0' },
+  content: { paddingTop: 60, alignItems: 'center', paddingBottom: 40 },
   avatar: { width: 90, height: 90, borderRadius: 45, backgroundColor: '#e8622a', alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
   avatarText: { fontSize: 40, color: '#fff', fontWeight: 'bold' },
   name: { fontSize: 18, fontWeight: 'bold', color: '#1a0f0a', marginBottom: 4 },
   sub: { fontSize: 16, color: '#7a4a2a', marginBottom: 24 },
-  card: { backgroundColor: '#fff', borderRadius: 16, padding: 20, width: '90%', marginBottom: 20 },
-  cardTitle: { fontSize: 17, fontWeight: 'bold', color: '#1a0f0a', marginBottom: 10 },
+  card: { backgroundColor: '#fff', borderRadius: 16, padding: 20, width: '90%', marginBottom: 16 },
+  cardTitle: { fontSize: 17, fontWeight: 'bold', color: '#1a0f0a', marginBottom: 12 },
   empty: { fontSize: 14, color: '#a89080' },
-  logoutBtn: { backgroundColor: '#1a0f0a', borderRadius: 12, paddingVertical: 14, paddingHorizontal: 40 },
+  tourneyRow: { paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#f5ede0' },
+  tourneyName: { fontSize: 15, fontWeight: '600', color: '#1a0f0a' },
+  tourneyDetail: { fontSize: 13, color: '#7a4a2a', marginTop: 2 },
+  logoutBtn: { backgroundColor: '#1a0f0a', borderRadius: 12, paddingVertical: 14, paddingHorizontal: 40, marginTop: 8 },
   logoutText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
 });
