@@ -1,8 +1,8 @@
 import { useRouter } from 'expo-router';
 import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { useState } from 'react';
-import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { db } from '../../firebaseConfig';
+import { Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { auth, db } from '../../firebaseConfig';
 
 export default function PostScreen() {
   const router = useRouter();
@@ -16,6 +16,11 @@ export default function PostScreen() {
 
   const handleSubmit = async () => {
     if (!name || !sport || !date || !location || !spots) return;
+    const user = auth.currentUser;
+    if (!user) {
+      Alert.alert('Sign in required', 'You need to be logged in to post a tournament.');
+      return;
+    }
     setLoading(true);
     try {
       await addDoc(collection(db, 'tournaments'), {
@@ -25,6 +30,7 @@ export default function PostScreen() {
         location,
         spots: parseInt(spots),
         createdAt: serverTimestamp(),
+        postedBy: user.uid,
       });
       setSubmitted(true);
     } catch (e) {

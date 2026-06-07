@@ -1,7 +1,7 @@
 import { useRouter } from 'expo-router';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { db } from '../../firebaseConfig';
 
 const sports = ['All', 'Basketball', 'Soccer', 'Volleyball', 'Football'];
@@ -10,12 +10,14 @@ export default function HomeScreen() {
   const [sport, setSport] = useState('All');
   const [search, setSearch] = useState('');
   const [tournaments, setTournaments] = useState([]);
+  const [loading, setLoading] = useState(true);
   const router = useRouter();
 
   useEffect(() => {
     const unsub = onSnapshot(collection(db, 'tournaments'), (snapshot) => {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setTournaments(data);
+      setLoading(false);
     });
     return () => unsub();
   }, []);
@@ -49,14 +51,20 @@ export default function HomeScreen() {
       </ScrollView>
 
       <ScrollView style={styles.list}>
-        {filtered.length === 0 ? (
-          <Text style={styles.empty}>No tournaments found.</Text>
+        {loading ? (
+          <ActivityIndicator size="large" color="#e8622a" style={{ marginTop: 60 }} />
+        ) : filtered.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyIcon}>🏆</Text>
+            <Text style={styles.emptyTitle}>No tournaments found</Text>
+            <Text style={styles.emptySub}>Be the first to post one in your area.</Text>
+          </View>
         ) : (
           filtered.map((t) => (
             <TouchableOpacity
               key={t.id}
               style={styles.card}
-              onPress={() => router.push({ pathname: '/tournament', params: { id: t.id, name: t.name, sport: t.sport, date: t.date, location: t.location, spots: t.spots } })}
+              onPress={() => router.push({ pathname: '/tournament', params: { id: t.id, name: t.name, sport: t.sport, date: t.date, location: t.location, spots: t.spots, postedBy: t.postedBy } })}
             >
               <View style={styles.cardTop}>
                 <Text style={styles.name}>{t.name}</Text>
@@ -89,5 +97,8 @@ const styles = StyleSheet.create({
   sportBadge: { fontSize: 13, color: '#fff', backgroundColor: '#e8622a', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8, overflow: 'hidden' },
   detail: { fontSize: 14, color: '#7a4a2a', marginBottom: 4 },
   spots: { fontSize: 13, color: '#e8622a', fontWeight: '600' },
-  empty: { textAlign: 'center', color: '#a89080', marginTop: 40, fontSize: 15 },
+  emptyContainer: { alignItems: 'center', marginTop: 60 },
+  emptyIcon: { fontSize: 50, marginBottom: 12 },
+  emptyTitle: { fontSize: 20, fontWeight: 'bold', color: '#1a0f0a', marginBottom: 8 },
+  emptySub: { fontSize: 15, color: '#a89080', textAlign: 'center' },
 });
