@@ -14,6 +14,17 @@ function TrophyIcon({ color }: { color: string }) {
   );
 }
 
+function BoardIcon({ color }: { color: string }) {
+  return (
+    <Svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+      <Path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" stroke={color} strokeWidth="2" strokeLinecap="round" />
+      <Circle cx="9" cy="7" r="4" stroke={color} strokeWidth="2" />
+      <Path d="M23 21v-2a4 4 0 00-3-3.87" stroke={color} strokeWidth="2" strokeLinecap="round" />
+      <Path d="M16 3.13a4 4 0 010 7.75" stroke={color} strokeWidth="2" strokeLinecap="round" />
+    </Svg>
+  );
+}
+
 function PlusIcon({ color }: { color: string }) {
   return (
     <Svg width="24" height="24" viewBox="0 0 24 24" fill="none">
@@ -58,6 +69,14 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="board"
+        options={{
+          tabBarIcon: ({ focused }) => (
+            <TabItem icon={<BoardIcon color={focused ? '#e8622a' : '#a89080'} />} label="Board" focused={focused} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="post"
         options={{
           tabBarIcon: ({ focused }) => (
@@ -95,7 +114,6 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: '#a89080',
     textAlign: 'center',
-    width: 60,
   },
   tabLabelActive: {
     color: '#e8622a',
