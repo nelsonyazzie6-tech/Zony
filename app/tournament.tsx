@@ -52,6 +52,19 @@ export default function TournamentScreen() {
       setJoined(true);
       setSpotsLeft(prev => prev - 1);
       Alert.alert('Joined!', `You joined ${tournament?.name}`);
+
+      const ownerSnap = await getDoc(doc(db, 'users', postedBy as string));
+      if (ownerSnap.exists() && ownerSnap.data().pushToken) {
+        await fetch('https://exp.host/--/api/v2/push/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            to: ownerSnap.data().pushToken,
+            title: '🏆 Someone joined your tournament!',
+            body: `${user.email} joined ${tournament?.name}`,
+          }),
+        });
+      }
     } catch (e: any) {
       Alert.alert('Error', e.message);
     }
