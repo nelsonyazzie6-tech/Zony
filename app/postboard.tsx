@@ -14,6 +14,13 @@ const stateOptions = [
   'SD','TN','TX','UT','VT','VA','WA','WV','WI','WY'
 ];
 
+function formatPhone(val: string) {
+  const digits = val.replace(/\D/g, '').slice(0, 10);
+  if (digits.length <= 3) return digits;
+  if (digits.length <= 6) return `${digits.slice(0, 3)}-${digits.slice(3)}`;
+  return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}`;
+}
+
 export default function PostBoardScreen() {
   const router = useRouter();
   const [type, setType] = useState('');
@@ -125,7 +132,15 @@ export default function PostBoardScreen() {
         )}
 
         <Text style={styles.label}>Contact Phone (optional)</Text>
-        <TextInput style={styles.input} placeholder="e.g. (928) 555-1234" placeholderTextColor="#a0b8b8" value={contactPhone} onChangeText={setContactPhone} keyboardType="phone-pad" />
+        <TextInput
+          style={styles.input}
+          placeholder="e.g. 505-555-1234"
+          placeholderTextColor="#a0b8b8"
+          value={contactPhone}
+          onChangeText={v => setContactPhone(formatPhone(v))}
+          keyboardType="phone-pad"
+          maxLength={12}
+        />
 
         <Text style={styles.label}>Contact Email (optional)</Text>
         <TextInput style={styles.input} placeholder="e.g. john@email.com" placeholderTextColor="#a0b8b8" value={contactEmail} onChangeText={setContactEmail} keyboardType="email-address" autoCapitalize="none" />

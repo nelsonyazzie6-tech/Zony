@@ -2,9 +2,18 @@ import { useRouter } from 'expo-router';
 import { collection, deleteDoc, doc, onSnapshot } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, FlatList, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import Svg, { Polygon } from 'react-native-svg';
 import { auth, db } from '../../firebaseConfig';
 
 const sports = ['All', 'Basketball', 'Softball', 'Volleyball'];
+
+function formatPhone(val: string) {
+  if (!val) return '';
+  const digits = val.replace(/\D/g, '').slice(0, 10);
+  if (digits.length <= 3) return digits;
+  if (digits.length <= 6) return `${digits.slice(0, 3)}-${digits.slice(3)}`;
+  return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}`;
+}
 
 export default function BoardScreen() {
   const [posts, setPosts] = useState([]);
@@ -12,6 +21,7 @@ export default function BoardScreen() {
   const [typeFilter, setTypeFilter] = useState('All');
   const [sportFilter, setSportFilter] = useState('All');
   const [search, setSearch] = useState('');
+  const [headerHeight, setHeaderHeight] = useState(120);
   const router = useRouter();
   const user = auth.currentUser;
 
@@ -50,8 +60,18 @@ export default function BoardScreen() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.header}>Player Board</Text>
-      <Text style={styles.sub}>Find players or teams near you</Text>
+      {/* Header */}
+      <View style={styles.headerBlock} onLayout={e => setHeaderHeight(e.nativeEvent.layout.height)}>
+        <Svg style={StyleSheet.absoluteFill} width="100%" height={headerHeight} viewBox={`0 0 400 ${headerHeight}`}>
+          <Polygon points="0,0 80,0 0,80" fill="#f5ede0" opacity={0.10} />
+          <Polygon points="400,0 320,0 400,80" fill="#f5ede0" opacity={0.10} />
+          <Polygon points="160,0 240,0 200,60" fill="#f5ede0" opacity={0.08} />
+          <Polygon points={`0,${headerHeight} 60,${headerHeight} 0,${headerHeight - 60}`} fill="#7A1E1E" opacity={0.10} />
+          <Polygon points={`400,${headerHeight} 340,${headerHeight} 400,${headerHeight - 60}`} fill="#7A1E1E" opacity={0.10} />
+        </Svg>
+        <Text style={styles.header}>Player Board</Text>
+        <Text style={styles.sub}>Find players or teams near you</Text>
+      </View>
 
       <TextInput
         style={styles.search}
@@ -80,7 +100,7 @@ export default function BoardScreen() {
       </ScrollView>
 
       {loading ? (
-        <ActivityIndicator size="large" color="#008080" style={{ marginTop: 60 }} />
+        <ActivityIndicator size="large" color="#7A1E1E" style={{ marginTop: 60 }} />
       ) : filtered.length === 0 ? (
         <View style={styles.emptyContainer}>
           <Text style={styles.emptyIcon}>🏀</Text>
@@ -94,21 +114,23 @@ export default function BoardScreen() {
           contentContainerStyle={styles.list}
           renderItem={({ item: p }) => (
             <View style={styles.card}>
-              <View style={styles.cardTop}>
+              <View style={styles.cardHeader}>
                 <Text style={styles.typeBadge}>{p.type === 'Player looking for team' ? '🙋 Player' : '👥 Team'}</Text>
                 <Text style={styles.sportBadge}>{p.sport}</Text>
               </View>
-              <Text style={styles.division}>{p.division}</Text>
-              <Text style={styles.detail}>📍 {p.city}, {p.state}</Text>
-              {p.description ? <Text style={styles.description}>{p.description}</Text> : null}
-              {p.contact ? <Text style={styles.contact}>📞 {p.contact}</Text> : null}
-              {p.contactPhone ? <Text style={styles.contact}>📞 {p.contactPhone}</Text> : null}
-              {p.contactEmail ? <Text style={styles.contact}>✉️ {p.contactEmail}</Text> : null}
-              {user?.uid === p.postedBy && (
-                <TouchableOpacity style={styles.deleteBtn} onPress={() => handleDelete(p.id)}>
-                  <Text style={styles.deleteText}>Delete</Text>
-                </TouchableOpacity>
-              )}
+              <View style={styles.cardBody}>
+                <Text style={styles.division}>{p.division}</Text>
+                <Text style={styles.detail}>📍 {p.city}, {p.state}</Text>
+                {p.description ? <Text style={styles.description}>{p.description}</Text> : null}
+                {p.contact ? <Text style={styles.contact}>📞 {formatPhone(p.contact)}</Text> : null}
+                {p.contactPhone ? <Text style={styles.contact}>📞 {formatPhone(p.contactPhone)}</Text> : null}
+                {p.contactEmail ? <Text style={styles.contact}>✉️ {p.contactEmail}</Text> : null}
+                {user?.uid === p.postedBy && (
+                  <TouchableOpacity style={styles.deleteBtn} onPress={() => handleDelete(p.id)}>
+                    <Text style={styles.deleteText}>Delete</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
             </View>
           )}
         />
@@ -122,35 +144,37 @@ export default function BoardScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f5ede0', paddingTop: 60 },
-  header: { fontSize: 36, fontWeight: 'bold', color: '#003333', textAlign: 'center' },
-  sub: { fontSize: 15, color: '#5a7a7a', textAlign: 'center', marginBottom: 12 },
-  search: { marginHorizontal: 20, backgroundColor: '#fff', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 10, fontSize: 15, color: '#003333', marginBottom: 10, borderWidth: 1, borderColor: '#e0f0f0' },
+  container: { flex: 1, backgroundColor: '#f5ede0' },
+  headerBlock: { backgroundColor: '#008080', paddingTop: 60, paddingBottom: 16, paddingHorizontal: 0, marginBottom: 14 },
+  header: { fontSize: 32, fontWeight: 'bold', color: '#f5ede0', textAlign: 'center', letterSpacing: 2 },
+  sub: { fontSize: 14, color: '#e0f5f5', textAlign: 'center', letterSpacing: 1 },
+  search: { marginHorizontal: 20, backgroundColor: '#fff', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 10, fontSize: 15, color: '#003333', marginBottom: 10, borderWidth: 1, borderColor: '#e0d8c8' },
   typeRow: { flexDirection: 'row', justifyContent: 'center', gap: 8, marginBottom: 10 },
-  typeBtn: { paddingHorizontal: 14, paddingVertical: 5, borderRadius: 20, backgroundColor: '#fff', borderWidth: 1, borderColor: '#e0f0f0' },
-  typeActive: { backgroundColor: '#008080', borderColor: '#008080' },
+  typeBtn: { paddingHorizontal: 14, paddingVertical: 5, borderRadius: 20, backgroundColor: '#fff', borderWidth: 1, borderColor: '#e0d8c8' },
+  typeActive: { backgroundColor: '#7A1E1E', borderColor: '#7A1E1E' },
   typeText: { fontSize: 12, color: '#5a7a7a' },
   typeTextActive: { color: '#fff', fontWeight: 'bold' },
   sportRow: { flexGrow: 0, marginBottom: 8 },
-  sportBtn: { paddingHorizontal: 10, paddingVertical: 2, height: 28, borderRadius: 20, backgroundColor: '#fff', marginRight: 6, justifyContent: 'center', borderWidth: 1, borderColor: '#e0f0f0' },
+  sportBtn: { paddingHorizontal: 10, paddingVertical: 2, height: 28, borderRadius: 20, backgroundColor: '#fff', marginRight: 6, justifyContent: 'center', borderWidth: 1, borderColor: '#e0d8c8' },
   sportActive: { backgroundColor: '#008080', borderColor: '#008080' },
   sportText: { fontSize: 11, color: '#5a7a7a' },
   sportTextActive: { color: '#fff', fontWeight: 'bold' },
-  list: { paddingHorizontal: 20, paddingTop: 4, paddingBottom: 80 },
-  card: { backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 12, shadowColor: '#008080', shadowOpacity: 0.08, shadowRadius: 8, elevation: 2, borderWidth: 1, borderColor: '#e0f5f5' },
-  cardTop: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
-  typeBadge: { fontSize: 13, fontWeight: '600', color: '#008080' },
-  sportBadge: { fontSize: 13, color: '#fff', backgroundColor: '#008080', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8, overflow: 'hidden' },
+  list: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 80 },
+  card: { backgroundColor: '#fff', borderRadius: 12, marginBottom: 12, overflow: 'hidden', borderWidth: 1, borderColor: '#e0d8c8', elevation: 3, shadowColor: '#003333', shadowOpacity: 0.1, shadowRadius: 8 },
+  cardHeader: { backgroundColor: '#008080', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 10 },
+  cardBody: { paddingHorizontal: 14, paddingTop: 10, paddingBottom: 12 },
+  typeBadge: { fontSize: 13, fontWeight: '600', color: '#f5ede0' },
+  sportBadge: { fontSize: 11, color: '#008080', backgroundColor: '#f5ede0', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, overflow: 'hidden', fontWeight: 'bold' },
   division: { fontSize: 15, fontWeight: 'bold', color: '#003333', marginBottom: 6 },
   detail: { fontSize: 14, color: '#5a7a7a', marginBottom: 4 },
   description: { fontSize: 14, color: '#003333', marginBottom: 4 },
-  contact: { fontSize: 13, color: '#2a7a2a', fontWeight: '600', marginTop: 4 },
-  deleteBtn: { marginTop: 10, alignSelf: 'flex-end', backgroundColor: '#cc4444', borderRadius: 8, paddingVertical: 6, paddingHorizontal: 14 },
+  contact: { fontSize: 13, color: '#7A1E1E', fontWeight: '600', marginTop: 4 },
+  deleteBtn: { marginTop: 10, alignSelf: 'flex-end', backgroundColor: '#7A1E1E', borderRadius: 8, paddingVertical: 6, paddingHorizontal: 14 },
   deleteText: { color: '#fff', fontSize: 13, fontWeight: 'bold' },
   emptyContainer: { alignItems: 'center', marginTop: 60 },
   emptyIcon: { fontSize: 50, marginBottom: 12 },
-  emptyTitle: { fontSize: 20, fontWeight: 'bold', color: '#003333', marginBottom: 8 },
+  emptyTitle: { fontSize: 20, fontWeight: 'bold', color: '#008080', marginBottom: 8 },
   emptySub: { fontSize: 15, color: '#a0b8b8', textAlign: 'center' },
-  postBtn: { position: 'absolute', bottom: 24, alignSelf: 'center', backgroundColor: '#008080', borderRadius: 24, paddingVertical: 14, paddingHorizontal: 32, shadowColor: '#008080', shadowOpacity: 0.4, shadowRadius: 8, elevation: 8 },
+  postBtn: { position: 'absolute', bottom: 24, alignSelf: 'center', backgroundColor: '#7A1E1E', borderRadius: 24, paddingVertical: 14, paddingHorizontal: 32, shadowColor: '#7A1E1E', shadowOpacity: 0.4, shadowRadius: 8, elevation: 8 },
   postBtnText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
 });

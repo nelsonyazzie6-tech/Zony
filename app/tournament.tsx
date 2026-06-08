@@ -87,6 +87,31 @@ export default function TournamentScreen() {
     ]);
   };
 
+  const hasUnsavedTeamData = () => !!(teamName || contactName || contactInfo || teamDivision);
+
+  const tryCloseModal = () => {
+    if (hasUnsavedTeamData()) {
+      Alert.alert(
+        'Discard changes?',
+        'You have unsaved information. Are you sure you want to leave?',
+        [
+          { text: 'Keep Editing', style: 'cancel' },
+          {
+            text: 'Discard', style: 'destructive', onPress: () => {
+              setTeamName('');
+              setContactName('');
+              setContactInfo('');
+              setTeamDivision('');
+              setShowTeamModal(false);
+            }
+          },
+        ]
+      );
+    } else {
+      setShowTeamModal(false);
+    }
+  };
+
   const handleRegisterTeam = async () => {
     if (!teamName || !contactName || !contactInfo || !teamDivision) {
       Alert.alert('Missing info', 'Please fill out all fields.');
@@ -392,12 +417,19 @@ export default function TournamentScreen() {
         )}
       </View>
 
-      <Modal visible={showTeamModal} animationType="slide" transparent>
+      <Modal visible={showTeamModal} animationType="slide" transparent onRequestClose={tryCloseModal}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalBox}>
             <ScrollView keyboardShouldPersistTaps="handled">
-              <Text style={styles.modalTitle}>Register Your Team</Text>
-              <Text style={styles.modalSub}>{tournament.name}</Text>
+              <View style={styles.modalHeader}>
+                <View>
+                  <Text style={styles.modalTitle}>Register Your Team</Text>
+                  <Text style={styles.modalSub}>{tournament.name}</Text>
+                </View>
+                <TouchableOpacity onPress={tryCloseModal} style={styles.modalCloseBtn}>
+                  <Text style={styles.modalCloseText}>✕</Text>
+                </TouchableOpacity>
+              </View>
 
               <Text style={styles.modalLabel}>Team Name</Text>
               <TextInput style={styles.modalInput} placeholder="e.g. Gallup Ballers" placeholderTextColor="#a0b8b8" value={teamName} onChangeText={setTeamName} />
@@ -430,7 +462,7 @@ export default function TournamentScreen() {
               ) : null}
 
               <View style={styles.modalBtns}>
-                <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setShowTeamModal(false)}>
+                <TouchableOpacity style={styles.modalCancelBtn} onPress={tryCloseModal}>
                   <Text style={styles.modalCancelText}>Cancel</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.modalSubmitBtn} onPress={handleRegisterTeam} disabled={teamLoading}>
@@ -497,6 +529,9 @@ const styles = StyleSheet.create({
   sendText: { color: '#fff', fontWeight: 'bold', fontSize: 14 },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   modalBox: { backgroundColor: '#f0fafa', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, maxHeight: '90%' },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 },
+  modalCloseBtn: { padding: 4 },
+  modalCloseText: { fontSize: 22, color: '#5a7a7a', fontWeight: 'bold' },
   modalTitle: { fontSize: 24, fontWeight: 'bold', color: '#003333', marginBottom: 4 },
   modalSub: { fontSize: 14, color: '#5a7a7a', marginBottom: 20 },
   modalLabel: { fontSize: 14, fontWeight: '600', color: '#003333', marginBottom: 6, marginTop: 10 },
