@@ -15,7 +15,7 @@ export default function MapScreen() {
         const t = { id: doc.id, ...doc.data() };
         if (!t.city || !t.state) return null;
         try {
-          const res = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(`${t.address || ''} ${t.city} ${t.state}`)}&key=AIzaSyBKmkJq34y0ZdzacBcxq0--iQRXxIi6m9g`);
+          const res = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(`${t.address || ''} ${t.city.trim()} ${t.state.trim()}`)}&key=AIzaSyC9w_A1-1lPhvtTTuCFdIQejyfm9GOJXRc`);
           const json = await res.json();
           if (json.results[0]) {
             const { lat, lng } = json.results[0].geometry.location;

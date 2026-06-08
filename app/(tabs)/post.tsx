@@ -8,7 +8,7 @@ import { auth, db } from '../../firebaseConfig';
 
 const GOOGLE_API_KEY = 'AIzaSyC9w_A1-1lPhvtTTuCFdIQejyfm9GOJXRc';
 
-const sportOptions = ['Basketball', 'Soccer', 'Volleyball', 'Football', 'Baseball', 'Tennis', 'Other'];
+const sportOptions = ['Basketball', 'Volleyball', 'Softball'];
 
 const stateOptions = [
   'AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA',
@@ -19,7 +19,6 @@ const stateOptions = [
 ];
 
 const divisionOptions = ['8U','10U','12U','14U Boys','14U Girls','HS Boys','HS Girls','Adult Men','Adult Women','Adult Coed','Open'];
-
 const placeLabels = ['1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th'];
 
 export default function PostScreen() {
@@ -46,6 +45,7 @@ export default function PostScreen() {
   const [rosterSize, setRosterSize] = useState('');
   const [contactName, setContactName] = useState('');
   const [contactPhone, setContactPhone] = useState('');
+  const [contactEmail, setContactEmail] = useState('');
   const [prizeType, setPrizeType] = useState<'cash' | 'other'>('cash');
   const [prizeRows, setPrizeRows] = useState(['', '', '']);
   const [depositAmount, setDepositAmount] = useState('');
@@ -54,14 +54,13 @@ export default function PostScreen() {
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const cityRef = useRef<TextInput>(null);
-  const zipRef = useRef<TextInput>(null);
   const entryFeeRef = useRef<TextInput>(null);
   const spectatorFeeRef = useRef<TextInput>(null);
   const rosterSizeRef = useRef<TextInput>(null);
   const spotsRef = useRef<TextInput>(null);
   const contactNameRef = useRef<TextInput>(null);
   const contactPhoneRef = useRef<TextInput>(null);
+  const contactEmailRef = useRef<TextInput>(null);
   const depositAmountRef = useRef<TextInput>(null);
 
   const handlePlaceSelect = (data: any, details: any) => {
@@ -72,7 +71,6 @@ export default function PostScreen() {
     let cityVal = '';
     let stateVal = '';
     let zipVal = '';
-
     components.forEach((c: any) => {
       if (c.types.includes('street_number')) streetNumber = c.long_name;
       if (c.types.includes('route')) streetName = c.long_name;
@@ -80,7 +78,6 @@ export default function PostScreen() {
       if (c.types.includes('administrative_area_level_1')) stateVal = c.short_name;
       if (c.types.includes('postal_code')) zipVal = c.long_name;
     });
-
     setAddress(streetNumber ? `${streetNumber} ${streetName}` : streetName);
     setCity(cityVal);
     setState(stateVal);
@@ -147,7 +144,7 @@ export default function PostScreen() {
         spots: parseInt(spots),
         entryFee: entryFee ? `$${entryFee}` : '',
         spectatorFee: spectatorFee ? `$${spectatorFee}` : '',
-        divisions, rosterSize, contactName, contactPhone,
+        divisions, rosterSize, contactName, contactPhone, contactEmail,
         prizeType,
         prizes: prizesFormatted,
         depositAmount: depositAmount ? `$${depositAmount}` : '',
@@ -226,7 +223,7 @@ export default function PostScreen() {
             </TouchableOpacity>
             <TouchableOpacity style={[styles.doneBtn, !endDate && styles.doneBtnDim]} onPress={() => { if (endDate) setTimeout(() => scrollRef.current?.scrollTo({ y: 420, animated: true }), 300); }}><Text style={styles.doneBtnText}>✓</Text></TouchableOpacity>
           </View>
-          <DateTimePickerModal isVisible={showEndPicker} mode="date" onConfirm={(date) => { handleEndConfirm(date); setTimeout(() => { scrollRef.current?.scrollTo({ y: 420, animated: true }); }, 300); }} onCancel={() => setShowEndPicker(false)} />
+          <DateTimePickerModal isVisible={showEndPicker} mode="date" onConfirm={(date) => { handleEndConfirm(date); setTimeout(() => scrollRef.current?.scrollTo({ y: 420, animated: true }), 300); }} onCancel={() => setShowEndPicker(false)} />
 
           <Text style={styles.label}>Venue / Address</Text>
           <View style={styles.placesWrapper}>
@@ -236,31 +233,11 @@ export default function PostScreen() {
               fetchDetails={true}
               minLength={2}
               listViewDisplayed="auto"
-              query={{
-                key: GOOGLE_API_KEY,
-                language: 'en',
-                components: 'country:us',
-              }}
+              query={{ key: GOOGLE_API_KEY, language: 'en', components: 'country:us' }}
               styles={{
                 textInputContainer: { backgroundColor: 'transparent' },
-                textInput: {
-                  backgroundColor: '#fff',
-                  borderRadius: 12,
-                  paddingHorizontal: 16,
-                  paddingVertical: 12,
-                  fontSize: 15,
-                  color: '#1a0f0a',
-                  borderWidth: 1,
-                  borderColor: '#e0f0f0',
-                  height: 48,
-                },
-                listView: {
-                  backgroundColor: '#fff',
-                  borderRadius: 12,
-                  borderWidth: 1,
-                  borderColor: '#e0f0f0',
-                  marginTop: 4,
-                },
+                textInput: { backgroundColor: '#fff', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, fontSize: 15, color: '#1a0f0a', borderWidth: 1, borderColor: '#e0f0f0', height: 48 },
+                listView: { backgroundColor: '#fff', borderRadius: 12, borderWidth: 1, borderColor: '#e0f0f0', marginTop: 4 },
                 row: { paddingHorizontal: 16, paddingVertical: 12 },
                 description: { fontSize: 14, color: '#003333' },
               }}
@@ -328,9 +305,15 @@ export default function PostScreen() {
             <TouchableOpacity style={styles.doneBtn} onPress={() => contactPhoneRef.current?.focus()}><Text style={styles.doneBtnText}>✓</Text></TouchableOpacity>
           </View>
 
-          <Text style={styles.label}>Contact Phone</Text>
+          <Text style={styles.label}>Contact Phone (optional)</Text>
           <View style={styles.row}>
-            <TextInput ref={contactPhoneRef} style={[styles.input, { flex: 1, marginBottom: 0 }]} placeholder="e.g. (928) 555-1234" placeholderTextColor="#a0b8b8" value={contactPhone} onChangeText={setContactPhone} keyboardType="phone-pad" returnKeyType="next" blurOnSubmit={false} onSubmitEditing={() => Keyboard.dismiss()} />
+            <TextInput ref={contactPhoneRef} style={[styles.input, { flex: 1, marginBottom: 0 }]} placeholder="e.g. (928) 555-1234" placeholderTextColor="#a0b8b8" value={contactPhone} onChangeText={setContactPhone} keyboardType="phone-pad" returnKeyType="next" blurOnSubmit={false} onSubmitEditing={() => contactEmailRef.current?.focus()} />
+            <TouchableOpacity style={styles.doneBtn} onPress={() => contactEmailRef.current?.focus()}><Text style={styles.doneBtnText}>✓</Text></TouchableOpacity>
+          </View>
+
+          <Text style={styles.label}>Contact Email (optional)</Text>
+          <View style={styles.row}>
+            <TextInput ref={contactEmailRef} style={[styles.input, { flex: 1, marginBottom: 0 }]} placeholder="e.g. john@email.com" placeholderTextColor="#a0b8b8" value={contactEmail} onChangeText={setContactEmail} keyboardType="email-address" autoCapitalize="none" returnKeyType="next" blurOnSubmit={false} onSubmitEditing={() => Keyboard.dismiss()} />
             <TouchableOpacity style={styles.doneBtn} onPress={() => Keyboard.dismiss()}><Text style={styles.doneBtnText}>✓</Text></TouchableOpacity>
           </View>
 
@@ -355,7 +338,6 @@ export default function PostScreen() {
                 placeholderTextColor="#a0b8b8"
                 value={val}
                 onChangeText={(t) => updatePrizeRow(i, t)}
-                keyboardType="default"
                 returnKeyType="next"
                 blurOnSubmit={false}
                 onSubmitEditing={focusDeposit}

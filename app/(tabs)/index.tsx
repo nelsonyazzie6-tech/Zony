@@ -5,7 +5,7 @@ import { ActivityIndicator, FlatList, Modal, ScrollView, StyleSheet, Text, TextI
 import Svg, { Path } from 'react-native-svg';
 import { auth, db } from '../../firebaseConfig';
 
-const sports = ['All', 'Basketball', 'Soccer', 'Volleyball', 'Football', 'Baseball', 'Tennis'];
+const sports = ['All', 'Basketball', 'Volleyball', 'Softball'];
 const states = ['All States', 'AZ', 'NM', 'CO', 'UT', 'TX', 'CA', 'NV', 'OK', 'AL', 'AK', 'AR', 'CT', 'DE', 'FL', 'GA', 'HI', 'ID', 'IL', 'IN', 'IA', 'KS', 'KY', 'LA', 'ME', 'MD', 'MA', 'MI', 'MN', 'MS', 'MO', 'MT', 'NE', 'NH', 'NJ', 'NY', 'NC', 'ND', 'OH', 'OR', 'PA', 'RI', 'SC', 'SD', 'TN', 'VT', 'VA', 'WA', 'WV', 'WI', 'WY'];
 
 function BellIcon({ color, hasNew }: { color: string; hasNew: boolean }) {
@@ -65,9 +65,6 @@ export default function HomeScreen() {
           <BellIcon color="#008080" hasNew={hasNewNotifications} />
         </TouchableOpacity>
         <Text style={styles.header}>Zony</Text>
-        <TouchableOpacity style={styles.mapBtn} onPress={() => router.push('/map')}>
-          <Text style={styles.mapBtnText}>🗺 Map</Text>
-        </TouchableOpacity>
       </View>
       <Text style={styles.sub}>Tournaments near you</Text>
 
@@ -157,8 +154,6 @@ const styles = StyleSheet.create({
   header: { fontSize: 36, fontWeight: 'bold', color: '#003333', textAlign: 'center' },
   bellBtn: { position: 'absolute', left: 20 },
   bellDot: { position: 'absolute', top: 0, right: 0, width: 8, height: 8, borderRadius: 4, backgroundColor: '#cc4444' },
-  mapBtn: { position: 'absolute', right: 20, backgroundColor: '#e0f5f5', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 5 },
-  mapBtnText: { fontSize: 13, color: '#008080', fontWeight: '600' },
   sub: { fontSize: 15, color: '#5a7a7a', textAlign: 'center', marginBottom: 12 },
   searchRow: { flexDirection: 'row', marginHorizontal: 20, gap: 8, marginBottom: 10 },
   search: { flex: 1, backgroundColor: '#fff', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 10, fontSize: 15, color: '#003333', borderWidth: 1, borderColor: '#e0f0f0' },

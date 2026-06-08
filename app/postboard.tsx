@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { auth, db } from '../firebaseConfig';
 
-const sportOptions = ['Basketball', 'Soccer', 'Volleyball', 'Football', 'Baseball', 'Tennis', 'Other'];
+const sportOptions = ['Basketball', 'Softball', 'Volleyball'];
 const divisionOptions = ['8U', '10U', '12U', '14U Boys', '14U Girls', 'HS Boys', 'HS Girls', 'Adult Men', 'Adult Women', 'Adult Coed', 'Open'];
 const stateOptions = [
   'AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA',
@@ -25,7 +25,8 @@ export default function PostBoardScreen() {
   const [city, setCity] = useState('');
   const [state, setState] = useState('');
   const [showStatePicker, setShowStatePicker] = useState(false);
-  const [contact, setContact] = useState('');
+  const [contactPhone, setContactPhone] = useState('');
+  const [contactEmail, setContactEmail] = useState('');
   const [description, setDescription] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -39,13 +40,7 @@ export default function PostBoardScreen() {
     setLoading(true);
     try {
       await addDoc(collection(db, 'board'), {
-        type,
-        sport,
-        division,
-        city,
-        state,
-        contact,
-        description,
+        type, sport, division, city, state, contactPhone, contactEmail, description,
         postedBy: user.uid,
         createdAt: serverTimestamp(),
       });
@@ -65,6 +60,7 @@ export default function PostBoardScreen() {
       <Text style={styles.sub}>Let the community know</Text>
 
       <View style={styles.form}>
+
         <Text style={styles.label}>I am a...</Text>
         <TouchableOpacity style={styles.dropdown} onPress={() => { setShowTypePicker(!showTypePicker); setShowSportPicker(false); setShowDivisionPicker(false); setShowStatePicker(false); }}>
           <Text style={type ? styles.dropdownSelected : styles.dropdownPlaceholder}>{type || 'Select type...'}</Text>
@@ -111,7 +107,7 @@ export default function PostBoardScreen() {
         )}
 
         <Text style={styles.label}>City</Text>
-        <TextInput style={styles.input} placeholder="e.g. Gallup" placeholderTextColor="#a89080" value={city} onChangeText={setCity} />
+        <TextInput style={styles.input} placeholder="e.g. Gallup" placeholderTextColor="#a0b8b8" value={city} onChangeText={setCity} />
 
         <Text style={styles.label}>State</Text>
         <TouchableOpacity style={styles.dropdown} onPress={() => { setShowStatePicker(!showStatePicker); setShowTypePicker(false); setShowSportPicker(false); setShowDivisionPicker(false); }}>
@@ -128,15 +124,19 @@ export default function PostBoardScreen() {
           </ScrollView>
         )}
 
-        <Text style={styles.label}>Contact (phone or name)</Text>
-        <TextInput style={styles.input} placeholder="e.g. (928) 555-1234" placeholderTextColor="#a89080" value={contact} onChangeText={setContact} />
+        <Text style={styles.label}>Contact Phone (optional)</Text>
+        <TextInput style={styles.input} placeholder="e.g. (928) 555-1234" placeholderTextColor="#a0b8b8" value={contactPhone} onChangeText={setContactPhone} keyboardType="phone-pad" />
+
+        <Text style={styles.label}>Contact Email (optional)</Text>
+        <TextInput style={styles.input} placeholder="e.g. john@email.com" placeholderTextColor="#a0b8b8" value={contactEmail} onChangeText={setContactEmail} keyboardType="email-address" autoCapitalize="none" />
 
         <Text style={styles.label}>Description (optional)</Text>
-        <TextInput style={[styles.input, styles.textArea]} placeholder="e.g. Looking for 14U forward for this weekend at Hozho..." placeholderTextColor="#a89080" value={description} onChangeText={setDescription} multiline numberOfLines={4} />
+        <TextInput style={[styles.input, styles.textArea]} placeholder="e.g. Looking for 14U forward for this weekend at Hozho..." placeholderTextColor="#a0b8b8" value={description} onChangeText={setDescription} multiline numberOfLines={4} />
 
         <TouchableOpacity style={styles.submitBtn} onPress={handleSubmit} disabled={loading}>
           <Text style={styles.submitText}>{loading ? 'Posting...' : 'Post to Board'}</Text>
         </TouchableOpacity>
+
       </View>
     </ScrollView>
   );
@@ -145,22 +145,22 @@ export default function PostBoardScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f5ede0', paddingTop: 60 },
   back: { paddingHorizontal: 20, marginBottom: 8 },
-  backText: { fontSize: 16, color: '#e8622a', fontWeight: '600' },
-  header: { fontSize: 32, fontWeight: 'bold', color: '#1a0f0a', paddingHorizontal: 20 },
-  sub: { fontSize: 16, color: '#7a4a2a', paddingHorizontal: 20, marginBottom: 24 },
+  backText: { fontSize: 16, color: '#008080', fontWeight: '600' },
+  header: { fontSize: 32, fontWeight: 'bold', color: '#003333', paddingHorizontal: 20 },
+  sub: { fontSize: 16, color: '#5a7a7a', paddingHorizontal: 20, marginBottom: 24 },
   form: { paddingHorizontal: 20 },
-  label: { fontSize: 14, fontWeight: '600', color: '#1a0f0a', marginBottom: 6 },
-  input: { backgroundColor: '#fff', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, fontSize: 15, color: '#1a0f0a', marginBottom: 16 },
+  label: { fontSize: 14, fontWeight: '600', color: '#003333', marginBottom: 6, marginTop: 10 },
+  input: { backgroundColor: '#fff', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, fontSize: 15, color: '#1a0f0a', marginBottom: 16, borderWidth: 1, borderColor: '#e0f0f0' },
   textArea: { height: 100, textAlignVertical: 'top' },
-  dropdown: { backgroundColor: '#fff', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, marginBottom: 4, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  dropdownPlaceholder: { fontSize: 15, color: '#a89080' },
-  dropdownSelected: { fontSize: 15, color: '#1a0f0a' },
-  dropdownArrow: { fontSize: 12, color: '#7a4a2a' },
-  dropdownList: { backgroundColor: '#fff', borderRadius: 12, marginBottom: 16, overflow: 'hidden' },
-  stateList: { backgroundColor: '#fff', borderRadius: 12, marginBottom: 16, maxHeight: 200 },
-  dropdownItem: { paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#f5ede0' },
-  dropdownItemText: { fontSize: 15, color: '#1a0f0a' },
-  dropdownItemActive: { color: '#e8622a', fontWeight: 'bold' },
-  submitBtn: { backgroundColor: '#e8622a', borderRadius: 12, paddingVertical: 16, alignItems: 'center', marginTop: 8, marginBottom: 40 },
+  dropdown: { backgroundColor: '#fff', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, marginBottom: 4, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderWidth: 1, borderColor: '#e0f0f0' },
+  dropdownPlaceholder: { fontSize: 15, color: '#a0b8b8' },
+  dropdownSelected: { fontSize: 15, color: '#003333' },
+  dropdownArrow: { fontSize: 12, color: '#008080' },
+  dropdownList: { backgroundColor: '#fff', borderRadius: 12, marginBottom: 16, overflow: 'hidden', borderWidth: 1, borderColor: '#e0f0f0' },
+  stateList: { backgroundColor: '#fff', borderRadius: 12, marginBottom: 16, maxHeight: 200, borderWidth: 1, borderColor: '#e0f0f0' },
+  dropdownItem: { paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#f0fafa' },
+  dropdownItemText: { fontSize: 15, color: '#003333' },
+  dropdownItemActive: { color: '#008080', fontWeight: 'bold' },
+  submitBtn: { backgroundColor: '#008080', borderRadius: 12, paddingVertical: 16, alignItems: 'center', marginTop: 8, marginBottom: 40 },
   submitText: { color: '#fff', fontSize: 17, fontWeight: 'bold' },
 });
