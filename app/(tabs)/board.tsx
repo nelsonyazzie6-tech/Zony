@@ -56,7 +56,7 @@ export default function BoardScreen() {
       <TextInput
         style={styles.search}
         placeholder="Search by city or state..."
-        placeholderTextColor="#a89080"
+        placeholderTextColor="#a0b8b8"
         value={search}
         onChangeText={setSearch}
       />
@@ -80,7 +80,7 @@ export default function BoardScreen() {
       </ScrollView>
 
       {loading ? (
-        <ActivityIndicator size="large" color="#e8622a" style={{ marginTop: 60 }} />
+        <ActivityIndicator size="large" color="#008080" style={{ marginTop: 60 }} />
       ) : filtered.length === 0 ? (
         <View style={styles.emptyContainer}>
           <Text style={styles.emptyIcon}>🏀</Text>
@@ -121,34 +121,34 @@ export default function BoardScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f5ede0', paddingTop: 60 },
-  header: { fontSize: 36, fontWeight: 'bold', color: '#1a0f0a', textAlign: 'center' },
-  sub: { fontSize: 15, color: '#7a4a2a', textAlign: 'center', marginBottom: 12 },
-  search: { marginHorizontal: 20, backgroundColor: '#fff', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 10, fontSize: 15, color: '#1a0f0a', marginBottom: 10 },
+  header: { fontSize: 36, fontWeight: 'bold', color: '#003333', textAlign: 'center' },
+  sub: { fontSize: 15, color: '#5a7a7a', textAlign: 'center', marginBottom: 12 },
+  search: { marginHorizontal: 20, backgroundColor: '#fff', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 10, fontSize: 15, color: '#003333', marginBottom: 10, borderWidth: 1, borderColor: '#e0f0f0' },
   typeRow: { flexDirection: 'row', justifyContent: 'center', gap: 8, marginBottom: 10 },
-  typeBtn: { paddingHorizontal: 14, paddingVertical: 5, borderRadius: 20, backgroundColor: '#fff' },
-  typeActive: { backgroundColor: '#e8622a' },
-  typeText: { fontSize: 12, color: '#7a4a2a' },
+  typeBtn: { paddingHorizontal: 14, paddingVertical: 5, borderRadius: 20, backgroundColor: '#fff', borderWidth: 1, borderColor: '#e0f0f0' },
+  typeActive: { backgroundColor: '#008080', borderColor: '#008080' },
+  typeText: { fontSize: 12, color: '#5a7a7a' },
   typeTextActive: { color: '#fff', fontWeight: 'bold' },
   sportRow: { flexGrow: 0, marginBottom: 8 },
-  sportBtn: { paddingHorizontal: 10, paddingVertical: 2, height: 28, borderRadius: 20, backgroundColor: '#fff', marginRight: 6, justifyContent: 'center' },
-  sportActive: { backgroundColor: '#e8622a' },
-  sportText: { fontSize: 11, color: '#7a4a2a' },
+  sportBtn: { paddingHorizontal: 10, paddingVertical: 2, height: 28, borderRadius: 20, backgroundColor: '#fff', marginRight: 6, justifyContent: 'center', borderWidth: 1, borderColor: '#e0f0f0' },
+  sportActive: { backgroundColor: '#008080', borderColor: '#008080' },
+  sportText: { fontSize: 11, color: '#5a7a7a' },
   sportTextActive: { color: '#fff', fontWeight: 'bold' },
   list: { paddingHorizontal: 20, paddingTop: 4, paddingBottom: 80 },
-  card: { backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 12, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
+  card: { backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 12, shadowColor: '#008080', shadowOpacity: 0.08, shadowRadius: 8, elevation: 2, borderWidth: 1, borderColor: '#e0f5f5' },
   cardTop: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
-  typeBadge: { fontSize: 13, fontWeight: '600', color: '#e8622a' },
-  sportBadge: { fontSize: 13, color: '#fff', backgroundColor: '#e8622a', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8, overflow: 'hidden' },
-  division: { fontSize: 15, fontWeight: 'bold', color: '#1a0f0a', marginBottom: 6 },
-  detail: { fontSize: 14, color: '#7a4a2a', marginBottom: 4 },
-  description: { fontSize: 14, color: '#1a0f0a', marginBottom: 4 },
+  typeBadge: { fontSize: 13, fontWeight: '600', color: '#008080' },
+  sportBadge: { fontSize: 13, color: '#fff', backgroundColor: '#008080', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8, overflow: 'hidden' },
+  division: { fontSize: 15, fontWeight: 'bold', color: '#003333', marginBottom: 6 },
+  detail: { fontSize: 14, color: '#5a7a7a', marginBottom: 4 },
+  description: { fontSize: 14, color: '#003333', marginBottom: 4 },
   contact: { fontSize: 13, color: '#2a7a2a', fontWeight: '600', marginTop: 4 },
-  deleteBtn: { marginTop: 10, alignSelf: 'flex-end', backgroundColor: '#1a0f0a', borderRadius: 8, paddingVertical: 6, paddingHorizontal: 14 },
+  deleteBtn: { marginTop: 10, alignSelf: 'flex-end', backgroundColor: '#cc4444', borderRadius: 8, paddingVertical: 6, paddingHorizontal: 14 },
   deleteText: { color: '#fff', fontSize: 13, fontWeight: 'bold' },
   emptyContainer: { alignItems: 'center', marginTop: 60 },
   emptyIcon: { fontSize: 50, marginBottom: 12 },
-  emptyTitle: { fontSize: 20, fontWeight: 'bold', color: '#1a0f0a', marginBottom: 8 },
-  emptySub: { fontSize: 15, color: '#a89080', textAlign: 'center' },
-  postBtn: { position: 'absolute', bottom: 24, alignSelf: 'center', backgroundColor: '#e8622a', borderRadius: 24, paddingVertical: 14, paddingHorizontal: 32, shadowColor: '#e8622a', shadowOpacity: 0.4, shadowRadius: 8, elevation: 8 },
+  emptyTitle: { fontSize: 20, fontWeight: 'bold', color: '#003333', marginBottom: 8 },
+  emptySub: { fontSize: 15, color: '#a0b8b8', textAlign: 'center' },
+  postBtn: { position: 'absolute', bottom: 24, alignSelf: 'center', backgroundColor: '#008080', borderRadius: 24, paddingVertical: 14, paddingHorizontal: 32, shadowColor: '#008080', shadowOpacity: 0.4, shadowRadius: 8, elevation: 8 },
   postBtnText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
 });

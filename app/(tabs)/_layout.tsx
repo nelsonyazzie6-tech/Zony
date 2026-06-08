@@ -64,7 +64,7 @@ export default function TabLayout() {
         name="index"
         options={{
           tabBarIcon: ({ focused }) => (
-            <TabItem icon={<TrophyIcon color={focused ? '#e8622a' : '#a89080'} />} label="Tournaments" focused={focused} />
+            <TabItem icon={<TrophyIcon color={focused ? '#008080' : '#a0b8b8'} />} label="Tournaments" focused={focused} />
           ),
         }}
       />
@@ -72,7 +72,7 @@ export default function TabLayout() {
         name="board"
         options={{
           tabBarIcon: ({ focused }) => (
-            <TabItem icon={<BoardIcon color={focused ? '#e8622a' : '#a89080'} />} label="Board" focused={focused} />
+            <TabItem icon={<BoardIcon color={focused ? '#008080' : '#a0b8b8'} />} label="Board" focused={focused} />
           ),
         }}
       />
@@ -80,7 +80,7 @@ export default function TabLayout() {
         name="post"
         options={{
           tabBarIcon: ({ focused }) => (
-            <TabItem icon={<PlusIcon color={focused ? '#e8622a' : '#a89080'} />} label="Post" focused={focused} />
+            <TabItem icon={<PlusIcon color={focused ? '#008080' : '#a0b8b8'} />} label="Post" focused={focused} />
           ),
         }}
       />
@@ -92,7 +92,7 @@ export default function TabLayout() {
         name="profile"
         options={{
           tabBarIcon: ({ focused }) => (
-            <TabItem icon={<PersonIcon color={focused ? '#e8622a' : '#a89080'} />} label="Profile" focused={focused} />
+            <TabItem icon={<PersonIcon color={focused ? '#008080' : '#a0b8b8'} />} label="Profile" focused={focused} />
           ),
         }}
       />
@@ -104,7 +104,7 @@ const styles = StyleSheet.create({
   tabBar: {
     backgroundColor: '#fff',
     borderTopWidth: 1,
-    borderTopColor: '#f0e8e0',
+    borderTopColor: '#e0f0f0',
     height: 75,
     paddingBottom: 10,
     paddingTop: 8,
@@ -116,11 +116,11 @@ const styles = StyleSheet.create({
   },
   tabLabel: {
     fontSize: 10,
-    color: '#a89080',
+    color: '#a0b8b8',
     textAlign: 'center',
   },
   tabLabelActive: {
-    color: '#e8622a',
+    color: '#008080',
     fontWeight: '600',
   },
 });

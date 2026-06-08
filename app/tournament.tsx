@@ -86,6 +86,24 @@ export default function TournamentScreen() {
     ]);
   };
 
+  const handleCancelToggle = () => {
+    const isCanceled = tournament.status === 'canceled';
+    Alert.alert(
+      isCanceled ? 'Reactivate Tournament' : 'Cancel Tournament',
+      isCanceled ? 'Mark this tournament as active again?' : 'Mark this tournament as canceled?',
+      [
+        { text: 'No', style: 'cancel' },
+        {
+          text: 'Yes', onPress: async () => {
+            const newStatus = isCanceled ? 'active' : 'canceled';
+            await updateDoc(doc(db, 'tournaments', id as string), { status: newStatus });
+            setTournament((prev: any) => ({ ...prev, status: newStatus }));
+          }
+        }
+      ]
+    );
+  };
+
   const handleShare = async () => {
     if (!tournament) return;
     try {
@@ -113,17 +131,25 @@ export default function TournamentScreen() {
 
   if (!tournament) return null;
 
+  const isCanceled = tournament.status === 'canceled';
+
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView style={styles.container}>
         <View style={styles.topRow}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.back}>
+          <TouchableOpacity onPress={() => router.back()}>
             <Text style={styles.backText}>← Back</Text>
           </TouchableOpacity>
           <TouchableOpacity onPress={handleShare} style={styles.shareBtn}>
             <Text style={styles.shareText}>Share ↗</Text>
           </TouchableOpacity>
         </View>
+
+        {isCanceled && (
+          <View style={styles.canceledBanner}>
+            <Text style={styles.canceledBannerText}>⚠️ This tournament has been canceled</Text>
+          </View>
+        )}
 
         <View style={styles.card}>
           <Text style={styles.sportBadge}>{tournament.sport}</Text>
@@ -166,7 +192,7 @@ export default function TournamentScreen() {
 
           {tournament.prizes ? (
             <>
-              <Text style={styles.sectionTitle}>🏆 Prizes</Text>
+              <Text style={styles.sectionTitle}>{tournament.prizeType === 'other' ? '🏆 Prizes' : '💵 Prize Money'}</Text>
               <Text style={styles.detail}>{tournament.prizes}</Text>
             </>
           ) : null}
@@ -190,12 +216,17 @@ export default function TournamentScreen() {
         </View>
 
         {isOwner ? (
-          <TouchableOpacity style={styles.deleteBtn} onPress={handleDelete}>
-            <Text style={styles.deleteText}>Delete Tournament</Text>
-          </TouchableOpacity>
+          <View style={styles.ownerActions}>
+            <TouchableOpacity style={styles.cancelBtn} onPress={handleCancelToggle}>
+              <Text style={styles.cancelBtnText}>{isCanceled ? 'Mark as Active' : 'Cancel Tournament'}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.deleteBtn} onPress={handleDelete}>
+              <Text style={styles.deleteText}>Delete Tournament</Text>
+            </TouchableOpacity>
+          </View>
         ) : (
-          <TouchableOpacity style={[styles.joinBtn, joined && styles.joinedBtn]} onPress={handleJoin} disabled={joined || spotsLeft <= 0}>
-            <Text style={styles.joinText}>{joined ? 'Joined ✓' : spotsLeft <= 0 ? 'Full' : 'Join Tournament'}</Text>
+          <TouchableOpacity style={[styles.joinBtn, (joined || isCanceled) && styles.joinedBtn]} onPress={handleJoin} disabled={joined || spotsLeft <= 0 || isCanceled}>
+            <Text style={styles.joinText}>{isCanceled ? 'Canceled' : joined ? 'Joined ✓' : spotsLeft <= 0 ? 'Full' : 'Join Tournament'}</Text>
           </TouchableOpacity>
         )}
 
@@ -216,7 +247,7 @@ export default function TournamentScreen() {
             <TextInput
               style={styles.input}
               placeholder="Ask a question..."
-              placeholderTextColor="#a89080"
+              placeholderTextColor="#a0b8b8"
               value={comment}
               onChangeText={setComment}
             />
@@ -233,29 +264,33 @@ export default function TournamentScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f5ede0', paddingTop: 60 },
   topRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, marginBottom: 16 },
-  back: {},
-  backText: { fontSize: 16, color: '#e8622a', fontWeight: '600' },
-  shareBtn: { backgroundColor: '#fff', borderRadius: 20, paddingHorizontal: 14, paddingVertical: 6 },
-  shareText: { fontSize: 14, color: '#e8622a', fontWeight: '600' },
-  card: { backgroundColor: '#fff', marginHorizontal: 20, borderRadius: 16, padding: 24, marginBottom: 20 },
-  sportBadge: { fontSize: 13, color: '#fff', backgroundColor: '#e8622a', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, overflow: 'hidden', alignSelf: 'flex-start', marginBottom: 12 },
-  name: { fontSize: 26, fontWeight: 'bold', color: '#1a0f0a', marginBottom: 16 },
-  sectionTitle: { fontSize: 13, fontWeight: '700', color: '#a89080', marginTop: 12, marginBottom: 2 },
-  detail: { fontSize: 15, color: '#1a0f0a', marginBottom: 2 },
-  spots: { fontSize: 15, color: '#e8622a', fontWeight: '600', marginTop: 16 },
-  joinBtn: { backgroundColor: '#e8622a', marginHorizontal: 20, borderRadius: 12, paddingVertical: 16, alignItems: 'center', marginBottom: 20 },
-  joinedBtn: { backgroundColor: '#a89080' },
+  backText: { fontSize: 16, color: '#008080', fontWeight: '600' },
+  shareBtn: { backgroundColor: '#e0f5f5', borderRadius: 20, paddingHorizontal: 14, paddingVertical: 6 },
+  shareText: { fontSize: 14, color: '#008080', fontWeight: '600' },
+  canceledBanner: { backgroundColor: '#cc4444', marginHorizontal: 20, borderRadius: 10, paddingVertical: 10, paddingHorizontal: 16, marginBottom: 12 },
+  canceledBannerText: { color: '#fff', fontWeight: 'bold', fontSize: 14, textAlign: 'center' },
+  card: { backgroundColor: '#fff', marginHorizontal: 20, borderRadius: 16, padding: 24, marginBottom: 20, borderWidth: 1, borderColor: '#e0f5f5' },
+  sportBadge: { fontSize: 13, color: '#fff', backgroundColor: '#008080', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, overflow: 'hidden', alignSelf: 'flex-start', marginBottom: 12 },
+  name: { fontSize: 26, fontWeight: 'bold', color: '#003333', marginBottom: 16 },
+  sectionTitle: { fontSize: 13, fontWeight: '700', color: '#5a7a7a', marginTop: 12, marginBottom: 2 },
+  detail: { fontSize: 15, color: '#003333', marginBottom: 2 },
+  spots: { fontSize: 15, color: '#008080', fontWeight: '600', marginTop: 16 },
+  ownerActions: { marginHorizontal: 20, gap: 10, marginBottom: 20 },
+  cancelBtn: { backgroundColor: '#fff', borderRadius: 12, paddingVertical: 14, alignItems: 'center', borderWidth: 2, borderColor: '#cc4444' },
+  cancelBtnText: { color: '#cc4444', fontSize: 16, fontWeight: 'bold' },
+  joinBtn: { backgroundColor: '#008080', marginHorizontal: 20, borderRadius: 12, paddingVertical: 16, alignItems: 'center', marginBottom: 20 },
+  joinedBtn: { backgroundColor: '#a0b8b8' },
   joinText: { color: '#fff', fontSize: 17, fontWeight: 'bold' },
-  deleteBtn: { backgroundColor: '#1a0f0a', marginHorizontal: 20, borderRadius: 12, paddingVertical: 16, alignItems: 'center', marginBottom: 20 },
+  deleteBtn: { backgroundColor: '#003333', borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
   deleteText: { color: '#fff', fontSize: 17, fontWeight: 'bold' },
   commentsSection: { marginHorizontal: 20, marginBottom: 40 },
-  commentsTitle: { fontSize: 18, fontWeight: 'bold', color: '#1a0f0a', marginBottom: 12 },
-  noComments: { fontSize: 14, color: '#a89080', marginBottom: 16 },
-  commentCard: { backgroundColor: '#fff', borderRadius: 12, padding: 12, marginBottom: 8 },
-  commentEmail: { fontSize: 12, color: '#a89080', marginBottom: 4 },
-  commentText: { fontSize: 14, color: '#1a0f0a' },
+  commentsTitle: { fontSize: 18, fontWeight: 'bold', color: '#003333', marginBottom: 12 },
+  noComments: { fontSize: 14, color: '#a0b8b8', marginBottom: 16 },
+  commentCard: { backgroundColor: '#fff', borderRadius: 12, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: '#e0f5f5' },
+  commentEmail: { fontSize: 12, color: '#5a7a7a', marginBottom: 4 },
+  commentText: { fontSize: 14, color: '#003333' },
   commentInput: { flexDirection: 'row', gap: 8, marginTop: 12 },
-  input: { flex: 1, backgroundColor: '#fff', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, fontSize: 14, color: '#1a0f0a' },
-  sendBtn: { backgroundColor: '#e8622a', borderRadius: 12, paddingHorizontal: 16, justifyContent: 'center' },
+  input: { flex: 1, backgroundColor: '#fff', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, fontSize: 14, color: '#003333', borderWidth: 1, borderColor: '#e0f0f0' },
+  sendBtn: { backgroundColor: '#008080', borderRadius: 12, paddingHorizontal: 16, justifyContent: 'center' },
   sendText: { color: '#fff', fontWeight: 'bold', fontSize: 14 },
 });
