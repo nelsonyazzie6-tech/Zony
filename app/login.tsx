@@ -32,7 +32,7 @@ export default function LoginScreen() {
       <TextInput
         style={styles.input}
         placeholder="Email"
-        placeholderTextColor="#a89080"
+        placeholderTextColor="#a0b8b8"
         value={email}
         onChangeText={setEmail}
         autoCapitalize="none"
@@ -41,7 +41,7 @@ export default function LoginScreen() {
       <TextInput
         style={styles.input}
         placeholder="Password"
-        placeholderTextColor="#a89080"
+        placeholderTextColor="#a0b8b8"
         value={password}
         onChangeText={setPassword}
         secureTextEntry
@@ -61,11 +61,11 @@ export default function LoginScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f5ede0', justifyContent: 'center', padding: 32 },
-  header: { fontSize: 40, fontWeight: 'bold', color: '#1a0f0a', marginBottom: 4 },
-  sub: { fontSize: 18, color: '#7a4a2a', marginBottom: 32 },
-  input: { backgroundColor: '#fff', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 14, fontSize: 15, color: '#1a0f0a', marginBottom: 16 },
-  btn: { backgroundColor: '#e8622a', borderRadius: 12, paddingVertical: 16, alignItems: 'center', marginBottom: 16 },
+  container: { flex: 1, backgroundColor: '#f0fafa', justifyContent: 'center', padding: 32 },
+  header: { fontSize: 40, fontWeight: 'bold', color: '#003333', marginBottom: 4 },
+  sub: { fontSize: 18, color: '#5a7a7a', marginBottom: 32 },
+  input: { backgroundColor: '#fff', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 14, fontSize: 15, color: '#003333', marginBottom: 16 },
+  btn: { backgroundColor: '#008080', borderRadius: 12, paddingVertical: 16, alignItems: 'center', marginBottom: 16 },
   btnText: { color: '#fff', fontSize: 17, fontWeight: 'bold' },
-  toggle: { color: '#7a4a2a', textAlign: 'center', fontSize: 14 },
+  toggle: { color: '#5a7a7a', textAlign: 'center', fontSize: 14 },
 });

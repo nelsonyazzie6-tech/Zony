@@ -51,6 +51,13 @@ export default function TournamentScreen() {
       });
       setJoined(true);
       setSpotsLeft(prev => prev - 1);
+
+      await addDoc(collection(db, 'notifications'), {
+        toUserId: postedBy as string,
+        message: `${user.email} joined ${tournament?.name}`,
+        createdAt: serverTimestamp(),
+      });
+
       Alert.alert('Joined!', `You joined ${tournament?.name}`);
 
       const ownerSnap = await getDoc(doc(db, 'users', postedBy as string));
@@ -262,7 +269,7 @@ export default function TournamentScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f5ede0', paddingTop: 60 },
+  container: { flex: 1, backgroundColor: '#f0fafa', paddingTop: 60 },
   topRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, marginBottom: 16 },
   backText: { fontSize: 16, color: '#008080', fontWeight: '600' },
   shareBtn: { backgroundColor: '#e0f5f5', borderRadius: 20, paddingHorizontal: 14, paddingVertical: 6 },

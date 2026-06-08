@@ -1,4 +1,4 @@
-import { collection, onSnapshot, orderBy, query, where } from 'firebase/firestore';
+import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, StyleSheet, Text, View } from 'react-native';
 import { auth, db } from '../../firebaseConfig';
@@ -9,14 +9,21 @@ export default function NotificationsScreen() {
   const user = auth.currentUser;
 
   useEffect(() => {
-    if (!user) return;
+    if (!user) {
+      setLoading(false);
+      return;
+    }
     const q = query(
       collection(db, 'notifications'),
-      where('toUserId', '==', user.uid),
-      orderBy('createdAt', 'desc')
+      where('toUserId', '==', user.uid)
     );
     const unsub = onSnapshot(q, (snap) => {
-      setNotifications(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      const data = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      data.sort((a: any, b: any) => b.createdAt?.seconds - a.createdAt?.seconds);
+      setNotifications(data);
+      setLoading(false);
+    }, (error) => {
+      console.log('Notifications error:', error);
       setLoading(false);
     });
     return () => unsub();
@@ -27,7 +34,7 @@ export default function NotificationsScreen() {
       <Text style={styles.header}>Notifications</Text>
 
       {loading ? (
-        <ActivityIndicator size="large" color="#e8622a" style={{ marginTop: 60 }} />
+        <ActivityIndicator size="large" color="#008080" style={{ marginTop: 60 }} />
       ) : notifications.length === 0 ? (
         <View style={styles.emptyContainer}>
           <Text style={styles.emptyIcon}>🔔</Text>
@@ -52,14 +59,14 @@ export default function NotificationsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f5ede0', paddingTop: 60 },
-  header: { fontSize: 36, fontWeight: 'bold', color: '#1a0f0a', textAlign: 'center', marginBottom: 20 },
+  container: { flex: 1, backgroundColor: '#f0fafa', paddingTop: 60 },
+  header: { fontSize: 36, fontWeight: 'bold', color: '#003333', textAlign: 'center', marginBottom: 20 },
   list: { paddingHorizontal: 20, paddingTop: 4 },
-  card: { backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 10, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
-  message: { fontSize: 15, color: '#1a0f0a', marginBottom: 4 },
-  time: { fontSize: 12, color: '#a89080' },
+  card: { backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 10, shadowColor: '#008080', shadowOpacity: 0.08, shadowRadius: 8, elevation: 2, borderWidth: 1, borderColor: '#e0f5f5' },
+  message: { fontSize: 15, color: '#003333', marginBottom: 4 },
+  time: { fontSize: 12, color: '#5a7a7a' },
   emptyContainer: { alignItems: 'center', marginTop: 60 },
   emptyIcon: { fontSize: 50, marginBottom: 12 },
-  emptyTitle: { fontSize: 20, fontWeight: 'bold', color: '#1a0f0a', marginBottom: 8 },
-  emptySub: { fontSize: 15, color: '#a89080', textAlign: 'center', paddingHorizontal: 40 },
+  emptyTitle: { fontSize: 20, fontWeight: 'bold', color: '#003333', marginBottom: 8 },
+  emptySub: { fontSize: 15, color: '#a0b8b8', textAlign: 'center', paddingHorizontal: 40 },
 });

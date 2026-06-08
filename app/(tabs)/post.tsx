@@ -2,8 +2,11 @@ import { useRouter } from 'expo-router';
 import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { useRef, useState } from 'react';
 import { Alert, Keyboard, KeyboardAvoidingView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { GooglePlacesAutocomplete } from 'react-native-google-places-autocomplete';
 import DateTimePickerModal from 'react-native-modal-datetime-picker';
 import { auth, db } from '../../firebaseConfig';
+
+const GOOGLE_API_KEY = 'AIzaSyC9w_A1-1lPhvtTTuCFdIQejyfm9GOJXRc';
 
 const sportOptions = ['Basketball', 'Soccer', 'Volleyball', 'Football', 'Baseball', 'Tennis', 'Other'];
 
@@ -51,7 +54,6 @@ export default function PostScreen() {
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const addressRef = useRef<TextInput>(null);
   const cityRef = useRef<TextInput>(null);
   const zipRef = useRef<TextInput>(null);
   const entryFeeRef = useRef<TextInput>(null);
@@ -61,6 +63,29 @@ export default function PostScreen() {
   const contactNameRef = useRef<TextInput>(null);
   const contactPhoneRef = useRef<TextInput>(null);
   const depositAmountRef = useRef<TextInput>(null);
+
+  const handlePlaceSelect = (data: any, details: any) => {
+    if (!details) return;
+    const components = details.address_components;
+    let streetNumber = '';
+    let streetName = '';
+    let cityVal = '';
+    let stateVal = '';
+    let zipVal = '';
+
+    components.forEach((c: any) => {
+      if (c.types.includes('street_number')) streetNumber = c.long_name;
+      if (c.types.includes('route')) streetName = c.long_name;
+      if (c.types.includes('locality')) cityVal = c.long_name;
+      if (c.types.includes('administrative_area_level_1')) stateVal = c.short_name;
+      if (c.types.includes('postal_code')) zipVal = c.long_name;
+    });
+
+    setAddress(streetNumber ? `${streetNumber} ${streetName}` : streetName);
+    setCity(cityVal);
+    setState(stateVal);
+    setZip(zipVal);
+  };
 
   const toggleDivision = (d: string) => {
     setDivisions(prev => prev.includes(d) ? prev.filter(x => x !== d) : [...prev, d]);
@@ -199,45 +224,58 @@ export default function PostScreen() {
               <Text style={endDate ? styles.dropdownSelected : styles.dropdownPlaceholder}>{endDate || 'Select end date...'}</Text>
               <Text style={styles.dropdownArrow}>📅</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.doneBtn, !endDate && styles.doneBtnDim]} onPress={() => { if (endDate) setTimeout(() => addressRef.current?.focus(), 100); }}><Text style={styles.doneBtnText}>✓</Text></TouchableOpacity>
+            <TouchableOpacity style={[styles.doneBtn, !endDate && styles.doneBtnDim]} onPress={() => { if (endDate) setTimeout(() => scrollRef.current?.scrollTo({ y: 420, animated: true }), 300); }}><Text style={styles.doneBtnText}>✓</Text></TouchableOpacity>
           </View>
-          <DateTimePickerModal isVisible={showEndPicker} mode="date" onConfirm={(date) => { handleEndConfirm(date); setTimeout(() => { addressRef.current?.focus(); scrollRef.current?.scrollTo({ y: 420, animated: true }); }, 300); }} onCancel={() => setShowEndPicker(false)} />
+          <DateTimePickerModal isVisible={showEndPicker} mode="date" onConfirm={(date) => { handleEndConfirm(date); setTimeout(() => { scrollRef.current?.scrollTo({ y: 420, animated: true }); }, 300); }} onCancel={() => setShowEndPicker(false)} />
 
-          <Text style={styles.label}>Address</Text>
-          <View style={styles.row}>
-            <TextInput ref={addressRef} style={[styles.input, { flex: 1, marginBottom: 0 }]} placeholder="e.g. 123 Main St" placeholderTextColor="#a0b8b8" value={address} onChangeText={setAddress} returnKeyType="next" blurOnSubmit={false} onSubmitEditing={() => cityRef.current?.focus()} />
-            <TouchableOpacity style={styles.doneBtn} onPress={() => cityRef.current?.focus()}><Text style={styles.doneBtnText}>✓</Text></TouchableOpacity>
+          <Text style={styles.label}>Venue / Address</Text>
+          <View style={styles.placesWrapper}>
+            <GooglePlacesAutocomplete
+              placeholder="Search gym, school, or address..."
+              onPress={handlePlaceSelect}
+              fetchDetails={true}
+              minLength={2}
+              listViewDisplayed="auto"
+              query={{
+                key: GOOGLE_API_KEY,
+                language: 'en',
+                components: 'country:us',
+              }}
+              styles={{
+                textInputContainer: { backgroundColor: 'transparent' },
+                textInput: {
+                  backgroundColor: '#fff',
+                  borderRadius: 12,
+                  paddingHorizontal: 16,
+                  paddingVertical: 12,
+                  fontSize: 15,
+                  color: '#1a0f0a',
+                  borderWidth: 1,
+                  borderColor: '#e0f0f0',
+                  height: 48,
+                },
+                listView: {
+                  backgroundColor: '#fff',
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: '#e0f0f0',
+                  marginTop: 4,
+                },
+                row: { paddingHorizontal: 16, paddingVertical: 12 },
+                description: { fontSize: 14, color: '#003333' },
+              }}
+              enablePoweredByContainer={false}
+            />
           </View>
 
-          <Text style={styles.label}>City</Text>
-          <View style={styles.row}>
-            <TextInput ref={cityRef} style={[styles.input, { flex: 1, marginBottom: 0 }]} placeholder="e.g. Gallup" placeholderTextColor="#a0b8b8" value={city} onChangeText={setCity} returnKeyType="next" blurOnSubmit={false} onSubmitEditing={() => { Keyboard.dismiss(); setShowStatePicker(true); }} />
-            <TouchableOpacity style={styles.doneBtn} onPress={() => { Keyboard.dismiss(); setShowStatePicker(true); }}><Text style={styles.doneBtnText}>✓</Text></TouchableOpacity>
-          </View>
-
-          <Text style={styles.label}>State</Text>
-          <View style={styles.row}>
-            <TouchableOpacity style={[styles.dropdown, { flex: 1 }]} onPress={() => { Keyboard.dismiss(); setShowStatePicker(!showStatePicker); setShowSportPicker(false); setShowDivisionPicker(false); }}>
-              <Text style={state ? styles.dropdownSelected : styles.dropdownPlaceholder}>{state || 'Select a state...'}</Text>
-              <Text style={styles.dropdownArrow}>{showStatePicker ? '▲' : '▼'}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.doneBtn, !state && styles.doneBtnDim]} onPress={() => { if (state) { setShowStatePicker(false); setTimeout(() => zipRef.current?.focus(), 100); } }}><Text style={styles.doneBtnText}>✓</Text></TouchableOpacity>
-          </View>
-          {showStatePicker && (
-            <ScrollView style={styles.stateList} nestedScrollEnabled>
-              {stateOptions.map((s) => (
-                <TouchableOpacity key={s} style={styles.dropdownItem} onPress={() => { setState(s); setShowStatePicker(false); setTimeout(() => zipRef.current?.focus(), 100); }}>
-                  <Text style={[styles.dropdownItemText, state === s && styles.dropdownItemActive]}>{s}</Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          )}
-
-          <Text style={styles.label}>Zip Code</Text>
-          <View style={styles.row}>
-            <TextInput ref={zipRef} style={[styles.input, { flex: 1, marginBottom: 0 }]} placeholder="e.g. 87301" placeholderTextColor="#a0b8b8" value={zip} onChangeText={setZip} keyboardType="numeric" maxLength={5} returnKeyType="next" blurOnSubmit={false} onSubmitEditing={() => { Keyboard.dismiss(); setShowDivisionPicker(true); }} />
-            <TouchableOpacity style={styles.doneBtn} onPress={() => { Keyboard.dismiss(); setShowDivisionPicker(true); }}><Text style={styles.doneBtnText}>✓</Text></TouchableOpacity>
-          </View>
+          {(address || city || state) ? (
+            <View style={styles.autoFilledBox}>
+              <Text style={styles.autoFilledText}>📍 {[address, city, state, zip].filter(Boolean).join(', ')}</Text>
+              <TouchableOpacity onPress={() => { setAddress(''); setCity(''); setState(''); setZip(''); }}>
+                <Text style={styles.clearText}>Clear</Text>
+              </TouchableOpacity>
+            </View>
+          ) : null}
 
           <Text style={styles.label}>Divisions</Text>
           <View style={styles.row}>
@@ -397,4 +435,8 @@ const styles = StyleSheet.create({
   successSub: { fontSize: 16, color: '#5a7a7a', marginBottom: 32, textAlign: 'center' },
   backBtn: { backgroundColor: '#008080', borderRadius: 12, paddingVertical: 14, paddingHorizontal: 32 },
   backText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
+  placesWrapper: { marginBottom: 12, zIndex: 10 },
+  autoFilledBox: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#e0f5f5', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, marginBottom: 12 },
+  autoFilledText: { fontSize: 13, color: '#003333', flex: 1, marginRight: 8 },
+  clearText: { fontSize: 13, color: '#008080', fontWeight: 'bold' },
 });
