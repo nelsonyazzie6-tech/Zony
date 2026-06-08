@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, FlatList, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { auth, db } from '../../firebaseConfig';
 
-const sports = ['All', 'Basketball', 'Soccer', 'Volleyball', 'Football', 'Baseball', 'Tennis'];
+const sports = ['All', 'Basketball', 'Softball', 'Volleyball'];
 
 export default function BoardScreen() {
   const [posts, setPosts] = useState([]);
@@ -102,6 +102,8 @@ export default function BoardScreen() {
               <Text style={styles.detail}>📍 {p.city}, {p.state}</Text>
               {p.description ? <Text style={styles.description}>{p.description}</Text> : null}
               {p.contact ? <Text style={styles.contact}>📞 {p.contact}</Text> : null}
+              {p.contactPhone ? <Text style={styles.contact}>📞 {p.contactPhone}</Text> : null}
+              {p.contactEmail ? <Text style={styles.contact}>✉️ {p.contactEmail}</Text> : null}
               {user?.uid === p.postedBy && (
                 <TouchableOpacity style={styles.deleteBtn} onPress={() => handleDelete(p.id)}>
                   <Text style={styles.deleteText}>Delete</Text>

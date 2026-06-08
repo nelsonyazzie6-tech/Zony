@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { addDoc, arrayUnion, collection, deleteDoc, doc, getDoc, increment, onSnapshot, orderBy, query, serverTimestamp, updateDoc } from 'firebase/firestore';
+import { addDoc, arrayRemove, arrayUnion, collection, deleteDoc, doc, getDoc, getDocs, increment, onSnapshot, orderBy, query, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 import { Alert, Clipboard, KeyboardAvoidingView, Modal, Platform, ScrollView, Share, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { auth, db } from '../firebaseConfig';
@@ -22,6 +22,7 @@ export default function TournamentScreen() {
   const [teamDivision, setTeamDivision] = useState('');
   const [showDivisionPicker, setShowDivisionPicker] = useState(false);
   const [teamLoading, setTeamLoading] = useState(false);
+  const [currentUsername, setCurrentUsername] = useState('');
   const user = auth.currentUser;
   const isOwner = user?.uid === postedBy;
 
@@ -34,6 +35,10 @@ export default function TournamentScreen() {
         setTournament(data);
         setSpotsLeft(data.spots);
         if (data.joinedUsers?.includes(user?.uid)) setJoined(true);
+      }
+      if (user) {
+        const userSnap = await getDoc(doc(db, 'users', user.uid));
+        if (userSnap.exists()) setCurrentUsername(userSnap.data().username || user.email || '');
       }
     };
     load();
@@ -57,6 +62,29 @@ export default function TournamentScreen() {
     Clipboard.setString(parts.join(', '));
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleCancelRegistration = () => {
+    Alert.alert('Cancel Registration', 'Are you sure you want to cancel your registration?', [
+      { text: 'No', style: 'cancel' },
+      {
+        text: 'Yes', style: 'destructive', onPress: async () => {
+          try {
+            const teamsSnap = await getDocs(collection(db, 'tournaments', id as string, 'teams'));
+            const myTeam = teamsSnap.docs.find(d => d.data().registeredBy === user?.uid);
+            if (myTeam) await deleteDoc(doc(db, 'tournaments', id as string, 'teams', myTeam.id));
+            await updateDoc(doc(db, 'tournaments', id as string), {
+              joinedUsers: arrayRemove(user?.uid),
+              spots: increment(1),
+            });
+            setJoined(false);
+            setSpotsLeft(prev => prev + 1);
+          } catch (e: any) {
+            Alert.alert('Error', e.message);
+          }
+        }
+      }
+    ]);
   };
 
   const handleRegisterTeam = async () => {
@@ -174,6 +202,7 @@ export default function TournamentScreen() {
       await addDoc(collection(db, 'tournaments', id as string, 'comments'), {
         text: comment.trim(),
         userEmail: user.email,
+        username: currentUsername,
         createdAt: serverTimestamp(),
       });
       setComment('');
@@ -292,11 +321,12 @@ export default function TournamentScreen() {
                 </>
               ) : null}
 
-              {tournament.contactName || tournament.contactPhone ? (
+              {tournament.contactName || tournament.contactPhone || tournament.contactEmail ? (
                 <>
                   <Text style={styles.sectionTitle}>📞 Contact</Text>
                   {tournament.contactName ? <Text style={styles.detail}>{tournament.contactName}</Text> : null}
-                  {tournament.contactPhone ? <Text style={styles.detail}>{tournament.contactPhone}</Text> : null}
+                  {tournament.contactPhone ? <Text style={styles.detail}>📞 {tournament.contactPhone}</Text> : null}
+                  {tournament.contactEmail ? <Text style={styles.detail}>✉️ {tournament.contactEmail}</Text> : null}
                 </>
               ) : null}
 
@@ -305,6 +335,9 @@ export default function TournamentScreen() {
 
             {isOwner ? (
               <View style={styles.ownerActions}>
+                <TouchableOpacity style={styles.editBtn} onPress={() => router.push({ pathname: '/edit-tournament', params: { id } })}>
+                  <Text style={styles.editBtnText}>Edit Tournament</Text>
+                </TouchableOpacity>
                 <TouchableOpacity style={styles.cancelBtn} onPress={handleCancelToggle}>
                   <Text style={styles.cancelBtnText}>{isCanceled ? 'Mark as Active' : 'Cancel Tournament'}</Text>
                 </TouchableOpacity>
@@ -315,10 +348,18 @@ export default function TournamentScreen() {
             ) : (
               <TouchableOpacity
                 style={[styles.joinBtn, (joined || isCanceled) && styles.joinedBtn]}
-                onPress={() => { if (!joined && !isCanceled && spotsLeft > 0) setShowTeamModal(true); }}
-                disabled={joined || spotsLeft <= 0 || isCanceled}
+                onPress={() => {
+                  if (joined) {
+                    handleCancelRegistration();
+                  } else if (!isCanceled && spotsLeft > 0) {
+                    setShowTeamModal(true);
+                  }
+                }}
+                disabled={!joined && (spotsLeft <= 0 || isCanceled)}
               >
-                <Text style={styles.joinText}>{isCanceled ? 'Canceled' : joined ? 'Registered ✓' : spotsLeft <= 0 ? 'Full' : 'Register Team'}</Text>
+                <Text style={styles.joinText}>
+                  {isCanceled && !joined ? 'Canceled' : joined ? 'Registered ✓ (tap to cancel)' : spotsLeft <= 0 ? 'Full' : 'Register Team'}
+                </Text>
               </TouchableOpacity>
             )}
 
@@ -329,7 +370,7 @@ export default function TournamentScreen() {
               ) : (
                 comments.map((c: any) => (
                   <View key={c.id} style={styles.commentCard}>
-                    <Text style={styles.commentEmail}>{c.userEmail}</Text>
+                    <Text style={styles.commentEmail}>{c.username || c.userEmail}</Text>
                     <Text style={styles.commentText}>{c.text}</Text>
                   </View>
                 ))
@@ -435,6 +476,8 @@ const styles = StyleSheet.create({
   copyBtnText: { fontSize: 13, color: '#008080', fontWeight: '600' },
   spots: { fontSize: 15, color: '#008080', fontWeight: '600', marginTop: 16 },
   ownerActions: { marginHorizontal: 20, gap: 10, marginBottom: 20 },
+  editBtn: { backgroundColor: '#008080', borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
+  editBtnText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
   cancelBtn: { backgroundColor: '#fff', borderRadius: 12, paddingVertical: 14, alignItems: 'center', borderWidth: 2, borderColor: '#cc4444' },
   cancelBtnText: { color: '#cc4444', fontSize: 16, fontWeight: 'bold' },
   joinBtn: { backgroundColor: '#008080', marginHorizontal: 20, borderRadius: 12, paddingVertical: 16, alignItems: 'center', marginBottom: 20 },

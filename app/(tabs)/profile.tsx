@@ -9,21 +9,22 @@ import { auth, db } from '../../firebaseConfig';
 export default function ProfileScreen() {
   const router = useRouter();
   const user = auth.currentUser;
-  const initial = user?.email?.[0].toUpperCase() ?? 'Z';
   const [myPosted, setMyPosted] = useState([]);
   const [myJoined, setMyJoined] = useState([]);
   const [photoURL, setPhotoURL] = useState<string | null>(null);
+  const [username, setUsername] = useState('');
 
   useEffect(() => {
     if (!user) return;
 
-    const loadPhoto = async () => {
+    const loadUserData = async () => {
       const snap = await getDoc(doc(db, 'users', user.uid));
-      if (snap.exists() && snap.data().photoURL) {
-        setPhotoURL(snap.data().photoURL);
+      if (snap.exists()) {
+        if (snap.data().photoURL) setPhotoURL(snap.data().photoURL);
+        if (snap.data().username) setUsername(snap.data().username);
       }
     };
-    loadPhoto();
+    loadUserData();
 
     const postedQuery = query(collection(db, 'tournaments'), where('postedBy', '==', user.uid));
     const unsubPosted = onSnapshot(postedQuery, (snap) => {
@@ -67,6 +68,9 @@ export default function ProfileScreen() {
     }
   };
 
+  const displayName = username || user?.email || '';
+  const initial = displayName[0]?.toUpperCase() ?? 'Z';
+
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <TouchableOpacity onPress={handlePickPhoto}>
@@ -80,7 +84,7 @@ export default function ProfileScreen() {
         <Text style={styles.changePhoto}>Change Photo</Text>
       </TouchableOpacity>
 
-      <Text style={styles.name}>{user?.email}</Text>
+      <Text style={styles.name}>{displayName}</Text>
       <Text style={styles.sub}>Zony Member</Text>
 
       <View style={styles.card}>
