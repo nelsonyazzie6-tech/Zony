@@ -1,3 +1,4 @@
+import { Rajdhani_700Bold, useFonts } from '@expo-google-fonts/rajdhani';
 import { collection, deleteDoc, doc, onSnapshot, query, updateDoc, where } from 'firebase/firestore';
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Animated, FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
@@ -7,6 +8,7 @@ import { auth, db } from '../../firebaseConfig';
 export default function NotificationsScreen() {
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [fontsLoaded] = useFonts({ Rajdhani_700Bold });
   const user = auth.currentUser;
   const swipeRefs = useRef<{ [key: string]: Swipeable | null }>({});
 
@@ -40,6 +42,12 @@ export default function NotificationsScreen() {
     } catch (e: any) {
       console.log('Mark read error:', e.message);
     }
+  };
+
+  const handleMarkAllRead = () => {
+    notifications.forEach((n: any) => {
+      if (!n.read) handleMarkRead(n.id, false);
+    });
   };
 
   const handleClearAll = () => {
@@ -82,10 +90,17 @@ export default function NotificationsScreen() {
           onPress={() => handleMarkRead(n.id, isRead)}
           style={[styles.card, isRead && styles.cardRead]}
         >
+          <View style={styles.cardIcon}>
+            <Text style={styles.cardIconText}>🔔</Text>
+          </View>
+          <View style={styles.cardContent}>
+            <View style={styles.cardTopRow}>
+              <Text style={[styles.message, isRead && styles.messageRead]} numberOfLines={1}>{n.message}</Text>
+              <Text style={styles.time}>{n.createdAt?.toDate?.()?.toLocaleDateString()}</Text>
+            </View>
+            {n.body ? <Text style={styles.cardBody} numberOfLines={2}>{n.body}</Text> : null}
+          </View>
           {!isRead && <View style={styles.unreadDot} />}
-          <Text style={[styles.message, isRead && styles.messageRead]}>{n.message}</Text>
-          <Text style={styles.time}>{n.createdAt?.toDate?.()?.toLocaleDateString()}</Text>
-          {isRead && <Text style={styles.readLabel}>Read</Text>}
         </TouchableOpacity>
       </Swipeable>
     );
@@ -102,7 +117,18 @@ export default function NotificationsScreen() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.header}>Notifications</Text>
+
+      {/* Handle bar */}
+      <View style={styles.handleBar} />
+
+      {/* Header */}
+      <View style={styles.header}>
+        <Text style={[styles.headerTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>NOTIFICATIONS</Text>
+        <TouchableOpacity onPress={handleMarkAllRead}>
+          <Text style={styles.markAllRead}>Mark all read</Text>
+        </TouchableOpacity>
+      </View>
+
       {loading ? (
         <ActivityIndicator size="large" color="#008080" style={{ marginTop: 60 }} />
       ) : notifications.length === 0 ? (
@@ -125,31 +151,33 @@ export default function NotificationsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f0fafa', paddingTop: 60 },
-  header: { fontSize: 36, fontWeight: 'bold', color: '#003333', textAlign: 'center', marginBottom: 20 },
-  list: { paddingHorizontal: 20, paddingTop: 4, paddingBottom: 40 },
+  container: { flex: 1, backgroundColor: '#F5F0E8', paddingTop: 12 },
+  handleBar: { width: 40, height: 4, backgroundColor: '#ccc', borderRadius: 2, alignSelf: 'center', marginBottom: 12 },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.08)' },
+  headerTitle: { fontSize: 20, fontWeight: '900', color: '#111', letterSpacing: 2 },
+  markAllRead: { fontSize: 12, color: '#008080', fontWeight: '600' },
+  list: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 40 },
   card: {
-    backgroundColor: '#fff', borderRadius: 12, padding: 16,
-    shadowColor: '#008080', shadowOpacity: 0.08, shadowRadius: 8, elevation: 2,
-    borderWidth: 1, borderColor: '#e0f5f5', marginBottom: 10, position: 'relative',
+    flexDirection: 'row', alignItems: 'flex-start', gap: 10,
+    backgroundColor: '#fff', borderRadius: 16, padding: 12,
+    marginBottom: 4, shadowColor: '#000', shadowOpacity: 0.04,
+    shadowRadius: 4, elevation: 1,
   },
-  cardRead: { backgroundColor: '#f9f9f9', borderColor: '#ddd' },
-  unreadDot: {
-    position: 'absolute', top: 14, right: 14,
-    width: 9, height: 9, borderRadius: 5, backgroundColor: '#008080',
-  },
-  message: { fontSize: 15, color: '#003333', marginBottom: 4, paddingRight: 16 },
-  messageRead: { color: '#5a7a7a' },
-  readLabel: { fontSize: 11, color: '#a0b8b8', marginTop: 4 },
-  time: { fontSize: 12, color: '#5a7a7a' },
-  swipeDelete: { width: 80, marginBottom: 10 },
-  swipeDeleteInner: {
-    flex: 1, backgroundColor: '#cc4444',
-    justifyContent: 'center', alignItems: 'center', borderRadius: 12,
-  },
+  cardRead: { backgroundColor: 'transparent' },
+  cardIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(0,128,128,0.1)', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  cardIconText: { fontSize: 20 },
+  cardContent: { flex: 1 },
+  cardTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  message: { fontSize: 14, fontWeight: '700', color: '#111', flex: 1 },
+  messageRead: { fontWeight: '500', color: '#666' },
+  cardBody: { fontSize: 12, color: '#aaa', marginTop: 2, lineHeight: 16 },
+  time: { fontSize: 10, color: '#aaa', flexShrink: 0 },
+  unreadDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#8B1A1A', marginTop: 4, flexShrink: 0 },
+  swipeDelete: { width: 80, marginBottom: 4 },
+  swipeDeleteInner: { flex: 1, backgroundColor: '#cc4444', justifyContent: 'center', alignItems: 'center', borderRadius: 16 },
   swipeDeleteText: { color: '#fff', fontWeight: 'bold', fontSize: 14 },
   clearAllBtn: { alignSelf: 'center', marginTop: 16, paddingHorizontal: 20, paddingVertical: 10 },
-  clearAllText: { fontSize: 14, color: '#a0b8b8', fontWeight: '500' },
+  clearAllText: { fontSize: 13, color: '#aaa', fontWeight: '500' },
   emptyContainer: { alignItems: 'center', marginTop: 60 },
   emptyIcon: { fontSize: 50, marginBottom: 12 },
   emptyTitle: { fontSize: 20, fontWeight: 'bold', color: '#003333', marginBottom: 8 },

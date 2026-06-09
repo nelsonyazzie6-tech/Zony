@@ -1,5 +1,6 @@
+import { Rajdhani_700Bold, useFonts } from '@expo-google-fonts/rajdhani';
 import { useRouter } from 'expo-router';
-import { collection, onSnapshot, query, where } from 'firebase/firestore';
+import { collection, deleteDoc, doc, onSnapshot, query, updateDoc, where } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import Svg, { Path, Polygon } from 'react-native-svg';
@@ -11,9 +12,9 @@ const states = ['All States', 'AZ', 'NM', 'CO', 'UT', 'TX', 'CA', 'NV', 'OK', 'A
 function BellIcon({ color, hasNew }: { color: string; hasNew: boolean }) {
   return (
     <View>
-      <Svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-        <Path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-        <Path d="M13.73 21a2 2 0 01-3.46 0" stroke={color} strokeWidth="2" strokeLinecap="round" />
+      <Svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+        <Path d="M11 2a6 6 0 0 1 6 6v4l2 3H3l2-3V8a6 6 0 0 1 6-6Z" stroke={color} strokeWidth="1.5" strokeLinejoin="round" />
+        <Path d="M9 17a2 2 0 0 0 4 0" stroke={color} strokeWidth="1.5" />
       </Svg>
       {hasNew && <View style={styles.bellDot} />}
     </View>
@@ -29,8 +30,11 @@ export default function HomeScreen() {
   const [loading, setLoading] = useState(true);
   const [hasNewNotifications, setHasNewNotifications] = useState(false);
   const [headerHeight, setHeaderHeight] = useState(140);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [notifications, setNotifications] = useState([]);
   const router = useRouter();
   const user = auth.currentUser;
+  const [fontsLoaded] = useFonts({ Rajdhani_700Bold });
 
   useEffect(() => {
     const unsub = onSnapshot(collection(db, 'tournaments'), (snapshot) => {
@@ -45,10 +49,29 @@ export default function HomeScreen() {
     if (!user) return;
     const q = query(collection(db, 'notifications'), where('toUserId', '==', user.uid));
     const unsub = onSnapshot(q, (snap) => {
-      setHasNewNotifications(snap.docs.length > 0);
+      const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      data.sort((a: any, b: any) => b.createdAt?.seconds - a.createdAt?.seconds);
+      setNotifications(data);
+      setHasNewNotifications(data.some((n: any) => !n.read));
     });
     return () => unsub();
   }, []);
+
+  const handleMarkAllRead = async () => {
+    try {
+      await Promise.all(
+        notifications.filter((n: any) => !n.read).map((n: any) =>
+          updateDoc(doc(db, 'notifications', n.id), { read: true })
+        )
+      );
+    } catch (e) { console.log(e); }
+  };
+
+  const handleDeleteNotification = async (id: string) => {
+    try {
+      await deleteDoc(doc(db, 'notifications', id));
+    } catch (e) { console.log(e); }
+  };
 
   const filtered = tournaments
     .filter(t => sport === 'All' || t.sport === sport)
@@ -62,24 +85,31 @@ export default function HomeScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.headerBlock} onLayout={e => setHeaderHeight(e.nativeEvent.layout.height)}>
-        <Svg style={StyleSheet.absoluteFill} width="100%" height={headerHeight} viewBox={`0 0 400 ${headerHeight}`}>
-          <Polygon points="0,0 100,0 0,100" fill="#f5ede0" opacity={0.10} />
-          <Polygon points="400,0 300,0 400,100" fill="#f5ede0" opacity={0.10} />
-          <Polygon points="150,0 250,0 200,70" fill="#f5ede0" opacity={0.10} />
-          <Polygon points={`50,${headerHeight} 150,${headerHeight} 100,${headerHeight - 90}`} fill="#f5ede0" opacity={0.04} />
-          <Polygon points={`250,${headerHeight} 350,${headerHeight} 300,${headerHeight - 90}`} fill="#f5ede0" opacity={0.04} />
-          <Polygon points={`0,${headerHeight} 70,${headerHeight} 0,${headerHeight - 70}`} fill="#7A1E1E" opacity={0.1} />
-          <Polygon points={`400,${headerHeight} 330,${headerHeight} 400,${headerHeight - 70}`} fill="#7A1E1E" opacity={0.1} />
-          <Polygon points="180,0 220,0 200,30" fill="#7A1E1E" opacity={0.08} />
+        <Svg style={StyleSheet.absoluteFill} width="100%" height={headerHeight} viewBox="0 0 390 130" preserveAspectRatio="xMidYMid slice">
+          <Polygon points="0,0 80,30 40,80" fill="white" opacity={0.04} />
+          <Polygon points="80,30 160,10 120,70" fill="white" opacity={0.07} />
+          <Polygon points="40,80 120,70 80,130" fill="white" opacity={0.05} />
+          <Polygon points="160,10 260,50 180,90" fill="white" opacity={0.06} />
+          <Polygon points="120,70 180,90 100,130" fill="white" opacity={0.08} />
+          <Polygon points="260,50 330,20 310,80" fill="white" opacity={0.05} />
+          <Polygon points="180,90 310,80 240,130" fill="white" opacity={0.07} />
+          <Polygon points="330,20 390,0 390,60" fill="white" opacity={0.04} />
+          <Polygon points="310,80 390,60 390,130" fill="white" opacity={0.06} />
+          <Polygon points="0,60 40,80 0,130" fill="white" opacity={0.05} />
+          <Polygon points="0,0 40,0 80,30" fill="white" opacity={0.08} />
+          <Polygon points="160,10 260,0 260,50" fill="white" opacity={0.04} />
+          <Polygon points="260,0 330,20 390,0" fill="white" opacity={0.06} />
+          <Polygon points="240,130 310,80 390,130" fill="white" opacity={0.05} />
+          <Polygon points="80,130 180,90 240,130" fill="white" opacity={0.04} />
         </Svg>
         <View style={styles.headerRow}>
-          <TouchableOpacity style={styles.bellBtn} onPress={() => router.push('/notifications')}>
+          <TouchableOpacity style={styles.bellBtn} onPress={() => setShowNotifications(true)}>
             <BellIcon color="#f5ede0" hasNew={hasNewNotifications} />
           </TouchableOpacity>
-          <Text style={styles.header}>Zony</Text>
+          <Text style={[styles.header, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>ZONY</Text>
           <View style={{ width: 24 }} />
         </View>
-        <Text style={styles.sub}>Tournaments near you</Text>
+        <Text style={[styles.sub, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>Tournaments near you</Text>
       </View>
 
       <View style={styles.searchRow}>
@@ -97,9 +127,6 @@ export default function HomeScreen() {
               <Path d="M2 12h20" stroke="#f5ede0" strokeWidth="1.5" />
               <Path d="M12 2a15 15 0 010 20M12 2a15 15 0 000 20" stroke="#f5ede0" strokeWidth="1.5" />
               <Path d="M4.5 7h15M4.5 17h15" stroke="#f5ede0" strokeWidth="1" opacity={0.6} />
-              <Path d="M7 4.5c1 1.5 1 3.5 0 5" stroke="#f5ede0" strokeWidth="0.8" opacity={0.5} />
-              <Path d="M17 4.5c-1 1.5-1 3.5 0 5" stroke="#f5ede0" strokeWidth="0.8" opacity={0.5} />
-              <Path d="M9 2.5c0.5 2 0.5 4 0 6M15 2.5c-0.5 2-0.5 4 0 6" stroke="#f5ede0" strokeWidth="0.7" opacity={0.4} />
             </Svg>
           ) : <Text style={styles.stateBtnText}>{stateFilter}</Text>}
         </TouchableOpacity>
@@ -160,6 +187,7 @@ export default function HomeScreen() {
         />
       )}
 
+      {/* State filter modal */}
       <Modal visible={showStatePicker} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={styles.modalBox}>
@@ -177,6 +205,69 @@ export default function HomeScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Notifications bottom sheet */}
+      <Modal visible={showNotifications} transparent animationType="slide">
+        <View style={styles.sheetOverlay}>
+          <TouchableOpacity style={styles.sheetBackdrop} onPress={() => setShowNotifications(false)} />
+          <View style={styles.sheet}>
+            {/* Handle */}
+            <View style={styles.sheetHandle} />
+            {/* Header */}
+            <View style={styles.sheetHeader}>
+              <Text style={[styles.sheetTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>NOTIFICATIONS</Text>
+              <View style={styles.sheetHeaderRight}>
+                <TouchableOpacity onPress={handleMarkAllRead}>
+                  <Text style={styles.markAllRead}>Mark all read</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => setShowNotifications(false)} style={{ marginLeft: 16 }}>
+                  <Svg width={18} height={18} viewBox="0 0 18 18" fill="none">
+                    <Path d="M14 4L4 14M4 4l10 10" stroke="#111" strokeWidth="1.5" strokeLinecap="round" />
+                  </Svg>
+                </TouchableOpacity>
+              </View>
+            </View>
+            {/* List */}
+            {notifications.length === 0 ? (
+              <View style={styles.sheetEmpty}>
+                <Text style={styles.sheetEmptyIcon}>🔔</Text>
+                <Text style={styles.sheetEmptyTitle}>No notifications yet</Text>
+                <Text style={styles.sheetEmptySub}>You'll see activity here when someone joins your tournament.</Text>
+              </View>
+            ) : (
+              <FlatList
+                data={notifications}
+                keyExtractor={n => n.id}
+                contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 8 }}
+                renderItem={({ item: n }) => {
+                  const isRead = n.read === true;
+                  return (
+                    <TouchableOpacity
+                      style={[styles.notiCard, isRead && styles.notiCardRead]}
+                      onPress={() => updateDoc(doc(db, 'notifications', n.id), { read: true })}
+                    >
+                      <View style={styles.notiIcon}>
+                        <Text style={{ fontSize: 18 }}>🔔</Text>
+                      </View>
+                      <View style={styles.notiContent}>
+                        <View style={styles.notiTopRow}>
+                          <Text style={[styles.notiMessage, isRead && styles.notiMessageRead]} numberOfLines={1}>{n.message}</Text>
+                          <Text style={styles.notiTime}>{n.createdAt?.toDate?.()?.toLocaleDateString()}</Text>
+                        </View>
+                        {n.body ? <Text style={styles.notiBody} numberOfLines={2}>{n.body}</Text> : null}
+                      </View>
+                      {!isRead && <View style={styles.notiDot} />}
+                      <TouchableOpacity onPress={() => handleDeleteNotification(n.id)} style={styles.notiDelete}>
+                        <Text style={styles.notiDeleteText}>✕</Text>
+                      </TouchableOpacity>
+                    </TouchableOpacity>
+                  );
+                }}
+              />
+            )}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -185,10 +276,10 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f5ede0' },
   headerBlock: { backgroundColor: '#008080', paddingTop: 60, paddingBottom: 16, paddingHorizontal: 0 },
   headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 },
-  header: { fontSize: 36, fontWeight: 'bold', color: '#f5ede0', textAlign: 'center', letterSpacing: 2 },
+  header: { fontSize: 42, fontWeight: '900', color: '#f5ede0', textAlign: 'center', letterSpacing: 6 },
   bellBtn: { marginLeft: 10 },
-  bellDot: { position: 'absolute', top: 0, right: 0, width: 8, height: 8, borderRadius: 4, backgroundColor: '#7A1E1E' },
-  sub: { fontSize: 14, color: '#e0f5f5', textAlign: 'center', letterSpacing: 1 },
+  bellDot: { position: 'absolute', top: 0, right: 0, width: 10, height: 10, borderRadius: 5, backgroundColor: '#FF4444', borderWidth: 1.5, borderColor: '#fff' },
+  sub: { fontSize: 14, color: 'rgba(255,255,255,0.8)', textAlign: 'center', letterSpacing: 2 },
   searchRow: { flexDirection: 'row', marginHorizontal: 20, gap: 8, marginBottom: 10, marginTop: 14 },
   search: { flex: 1, backgroundColor: '#fff', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 10, fontSize: 15, color: '#003333', borderWidth: 1, borderColor: '#e0d8c8' },
   stateBtn: { backgroundColor: '#008080', borderRadius: 12, paddingHorizontal: 14, justifyContent: 'center', alignItems: 'center', minWidth: 44 },
@@ -222,4 +313,29 @@ const styles = StyleSheet.create({
   modalItemActive: { color: '#7A1E1E', fontWeight: 'bold' },
   modalClose: { backgroundColor: '#7A1E1E', borderRadius: 12, paddingVertical: 14, alignItems: 'center', marginTop: 12 },
   modalCloseText: { color: '#f5ede0', fontSize: 16, fontWeight: 'bold' },
+  // Notifications sheet
+  sheetOverlay: { flex: 1, justifyContent: 'flex-end' },
+  sheetBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.4)' },
+  sheet: { backgroundColor: '#F5F0E8', borderTopLeftRadius: 24, borderTopRightRadius: 24, height: '78%' },
+  sheetHandle: { width: 40, height: 4, backgroundColor: '#ccc', borderRadius: 2, alignSelf: 'center', marginTop: 12, marginBottom: 8 },
+  sheetHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.08)' },
+  sheetTitle: { fontSize: 20, fontWeight: '900', color: '#111', letterSpacing: 2 },
+  sheetHeaderRight: { flexDirection: 'row', alignItems: 'center' },
+  markAllRead: { fontSize: 12, color: '#008080', fontWeight: '600' },
+  sheetEmpty: { alignItems: 'center', marginTop: 60 },
+  sheetEmptyIcon: { fontSize: 50, marginBottom: 12 },
+  sheetEmptyTitle: { fontSize: 20, fontWeight: 'bold', color: '#003333', marginBottom: 8 },
+  sheetEmptySub: { fontSize: 14, color: '#a0b8b8', textAlign: 'center', paddingHorizontal: 40 },
+  notiCard: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, backgroundColor: '#fff', borderRadius: 16, padding: 12, marginBottom: 4, shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 4, elevation: 1 },
+  notiCardRead: { backgroundColor: 'transparent', shadowOpacity: 0, elevation: 0 },
+  notiIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(0,128,128,0.1)', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  notiContent: { flex: 1 },
+  notiTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  notiMessage: { fontSize: 13, fontWeight: '700', color: '#111', flex: 1 },
+  notiMessageRead: { fontWeight: '500', color: '#666' },
+  notiBody: { fontSize: 12, color: '#aaa', marginTop: 2, lineHeight: 16 },
+  notiTime: { fontSize: 10, color: '#aaa', flexShrink: 0 },
+  notiDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#8B1A1A', marginTop: 4, flexShrink: 0 },
+  notiDelete: { padding: 4 },
+  notiDeleteText: { fontSize: 12, color: '#ccc' },
 });
