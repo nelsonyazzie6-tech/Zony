@@ -6,7 +6,13 @@ import { ActivityIndicator, FlatList, Modal, ScrollView, StyleSheet, Text, TextI
 import Svg, { Path, Polygon } from 'react-native-svg';
 import { auth, db } from '../../firebaseConfig';
 
-const sports = ['All', 'Basketball', 'Volleyball', 'Softball'];
+const sportOptions = [
+  { label: 'All Sports', value: 'All' },
+  { label: 'Basketball', value: 'Basketball' },
+  { label: 'Volleyball', value: 'Volleyball' },
+  { label: 'Softball', value: 'Softball' },
+];
+
 const states = ['All States', 'AZ', 'NM', 'CO', 'UT', 'TX', 'CA', 'NV', 'OK', 'AL', 'AK', 'AR', 'CT', 'DE', 'FL', 'GA', 'HI', 'ID', 'IL', 'IN', 'IA', 'KS', 'KY', 'LA', 'ME', 'MD', 'MA', 'MI', 'MN', 'MS', 'MO', 'MT', 'NE', 'NH', 'NJ', 'NY', 'NC', 'ND', 'OH', 'OR', 'PA', 'RI', 'SC', 'SD', 'TN', 'VT', 'VA', 'WA', 'WV', 'WI', 'WY'];
 
 function BellIcon({ color, hasNew }: { color: string; hasNew: boolean }) {
@@ -23,6 +29,7 @@ function BellIcon({ color, hasNew }: { color: string; hasNew: boolean }) {
 
 export default function HomeScreen() {
   const [sport, setSport] = useState('All');
+  const [showSportPicker, setShowSportPicker] = useState(false);
   const [stateFilter, setStateFilter] = useState('All States');
   const [showStatePicker, setShowStatePicker] = useState(false);
   const [search, setSearch] = useState('');
@@ -72,6 +79,8 @@ export default function HomeScreen() {
       await deleteDoc(doc(db, 'notifications', id));
     } catch (e) { console.log(e); }
   };
+
+  const sportLabel = sportOptions.find(o => o.value === sport)?.label || 'All Sports';
 
   const filtered = tournaments
     .filter(t => sport === 'All' || t.sport === sport)
@@ -132,19 +141,29 @@ export default function HomeScreen() {
         </TouchableOpacity>
       </View>
 
-      <FlatList
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        data={sports}
-        keyExtractor={s => s}
-        style={styles.filterRow}
-        contentContainerStyle={{ paddingHorizontal: 20 }}
-        renderItem={({ item: s }) => (
-          <TouchableOpacity onPress={() => setSport(s)} style={[styles.filterBtn, sport === s && styles.filterActive]}>
-            <Text style={[styles.filterText, sport === s && styles.filterTextActive]}>{s}</Text>
+      <View style={styles.filterRow}>
+        <View style={styles.dropdownWrapper}>
+          <TouchableOpacity style={styles.dropdownSelect} onPress={() => setShowSportPicker(!showSportPicker)}>
+            <Text style={styles.dropdownSelectText}>{sportLabel}</Text>
+            <Svg width={12} height={12} viewBox="0 0 12 12" fill="none">
+              <Path d="M2 4l4 4 4-4" stroke="#888" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            </Svg>
           </TouchableOpacity>
-        )}
-      />
+          {showSportPicker && (
+            <View style={styles.inlineMenu}>
+              {sportOptions.map(o => (
+                <TouchableOpacity
+                  key={o.value}
+                  style={[styles.dropdownMenuItem, sport === o.value && styles.dropdownMenuItemActive]}
+                  onPress={() => { setSport(o.value); setShowSportPicker(false); }}
+                >
+                  <Text style={[styles.dropdownMenuText, sport === o.value && styles.dropdownMenuTextActive]}>{o.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+        </View>
+      </View>
 
       {loading ? (
         <ActivityIndicator size="large" color="#7A1E1E" style={{ marginTop: 60 }} />
@@ -165,7 +184,7 @@ export default function HomeScreen() {
               onPress={() => router.push({ pathname: '/tournament', params: { id: t.id, postedBy: t.postedBy } })}
             >
               <View style={styles.cardHeader}>
-                <Text style={styles.name}>{t.name}</Text>
+                <Text style={[styles.name, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>{t.name}</Text>
                 <Text style={styles.sportBadge}>{t.sport}</Text>
               </View>
               <View style={styles.cardBody}>
@@ -187,7 +206,6 @@ export default function HomeScreen() {
         />
       )}
 
-      {/* State filter modal */}
       <Modal visible={showStatePicker} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={styles.modalBox}>
@@ -206,14 +224,11 @@ export default function HomeScreen() {
         </View>
       </Modal>
 
-      {/* Notifications bottom sheet */}
       <Modal visible={showNotifications} transparent animationType="slide">
         <View style={styles.sheetOverlay}>
           <TouchableOpacity style={styles.sheetBackdrop} onPress={() => setShowNotifications(false)} />
           <View style={styles.sheet}>
-            {/* Handle */}
             <View style={styles.sheetHandle} />
-            {/* Header */}
             <View style={styles.sheetHeader}>
               <Text style={[styles.sheetTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>NOTIFICATIONS</Text>
               <View style={styles.sheetHeaderRight}>
@@ -227,7 +242,6 @@ export default function HomeScreen() {
                 </TouchableOpacity>
               </View>
             </View>
-            {/* List */}
             {notifications.length === 0 ? (
               <View style={styles.sheetEmpty}>
                 <Text style={styles.sheetEmptyIcon}>🔔</Text>
@@ -284,16 +298,20 @@ const styles = StyleSheet.create({
   search: { flex: 1, backgroundColor: '#fff', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 10, fontSize: 15, color: '#003333', borderWidth: 1, borderColor: '#e0d8c8' },
   stateBtn: { backgroundColor: '#008080', borderRadius: 12, paddingHorizontal: 14, justifyContent: 'center', alignItems: 'center', minWidth: 44 },
   stateBtnText: { fontSize: 14, color: '#f5ede0', fontWeight: '600' },
-  filterRow: { flexGrow: 0, marginBottom: 8 },
-  filterBtn: { paddingHorizontal: 14, paddingVertical: 4, height: 30, borderRadius: 20, backgroundColor: '#fff', marginRight: 6, justifyContent: 'center', borderWidth: 1, borderColor: '#e0d8c8' },
-  filterActive: { backgroundColor: '#7A1E1E', borderColor: '#7A1E1E' },
-  filterText: { fontSize: 12, color: '#5a7a7a' },
-  filterTextActive: { color: '#f5ede0', fontWeight: 'bold' },
+  filterRow: { paddingHorizontal: 20, paddingTop: 4, paddingBottom: 8, zIndex: 999 },
+  dropdownWrapper: { zIndex: 999 },
+  dropdownSelect: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#fff', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 10, borderWidth: 1, borderColor: '#e0d8c8', shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 4, elevation: 1 },
+  dropdownSelectText: { fontSize: 13, color: '#555', fontWeight: '500' },
+  inlineMenu: { position: 'absolute', top: 44, left: 0, right: 0, backgroundColor: '#fff', borderRadius: 14, borderWidth: 1, borderColor: '#e0d8c8', shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 8, elevation: 10, zIndex: 1000 },
+  dropdownMenuItem: { paddingVertical: 12, paddingHorizontal: 16 },
+  dropdownMenuItemActive: { backgroundColor: '#f0fafa' },
+  dropdownMenuText: { fontSize: 13, color: '#333' },
+  dropdownMenuTextActive: { color: '#008080', fontWeight: '700' },
   list: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 20 },
   card: { backgroundColor: '#fff', borderRadius: 12, marginBottom: 14, overflow: 'hidden', borderWidth: 1, borderColor: '#e0d8c8', elevation: 3, shadowColor: '#003333', shadowOpacity: 0.1, shadowRadius: 8 },
   cardHeader: { backgroundColor: '#008080', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 10 },
   cardBody: { paddingHorizontal: 14, paddingTop: 10, paddingBottom: 12 },
-  name: { fontSize: 15, fontWeight: 'bold', color: '#f5ede0', flex: 1, marginRight: 8 },
+  name: { fontSize: 17, fontWeight: 'bold', color: '#f5ede0', flex: 1, marginRight: 8, textTransform: 'uppercase', letterSpacing: 1.2 },
   sportBadge: { fontSize: 11, color: '#008080', backgroundColor: '#f5ede0', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, overflow: 'hidden', fontWeight: 'bold' },
   detail: { fontSize: 14, color: '#5a5a5a', marginBottom: 4 },
   fee: { fontSize: 13, color: '#7A1E1E', fontWeight: '600', marginBottom: 2 },
@@ -313,7 +331,6 @@ const styles = StyleSheet.create({
   modalItemActive: { color: '#7A1E1E', fontWeight: 'bold' },
   modalClose: { backgroundColor: '#7A1E1E', borderRadius: 12, paddingVertical: 14, alignItems: 'center', marginTop: 12 },
   modalCloseText: { color: '#f5ede0', fontSize: 16, fontWeight: 'bold' },
-  // Notifications sheet
   sheetOverlay: { flex: 1, justifyContent: 'flex-end' },
   sheetBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.4)' },
   sheet: { backgroundColor: '#F5F0E8', borderTopLeftRadius: 24, borderTopRightRadius: 24, height: '78%' },

@@ -1,3 +1,4 @@
+import { Rajdhani_700Bold, useFonts } from '@expo-google-fonts/rajdhani';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { addDoc, arrayRemove, arrayUnion, collection, deleteDoc, doc, getDoc, getDocs, increment, onSnapshot, orderBy, query, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
@@ -10,9 +11,6 @@ export default function TournamentScreen() {
   const [tournament, setTournament] = useState<any>(null);
   const [joined, setJoined] = useState(false);
   const [spotsLeft, setSpotsLeft] = useState(0);
-  const [comments, setComments] = useState([]);
-  const [comment, setComment] = useState('');
-  const [copied, setCopied] = useState(false);
   const [activeTab, setActiveTab] = useState<'details' | 'teams'>('details');
   const [teams, setTeams] = useState([]);
   const [showTeamModal, setShowTeamModal] = useState(false);
@@ -23,6 +21,8 @@ export default function TournamentScreen() {
   const [showDivisionPicker, setShowDivisionPicker] = useState(false);
   const [teamLoading, setTeamLoading] = useState(false);
   const [currentUsername, setCurrentUsername] = useState('');
+  const [copied, setCopied] = useState(false);
+  const [fontsLoaded] = useFonts({ Rajdhani_700Bold });
   const user = auth.currentUser;
   const isOwner = user?.uid === postedBy;
 
@@ -43,17 +43,12 @@ export default function TournamentScreen() {
     };
     load();
 
-    const commentsQuery = query(collection(db, 'tournaments', id as string, 'comments'), orderBy('createdAt', 'asc'));
-    const unsubComments = onSnapshot(commentsQuery, (snap) => {
-      setComments(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    });
-
     const teamsQuery = query(collection(db, 'tournaments', id as string, 'teams'), orderBy('createdAt', 'asc'));
     const unsubTeams = onSnapshot(teamsQuery, (snap) => {
       setTeams(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
 
-    return () => { unsubComments(); unsubTeams(); };
+    return () => { unsubTeams(); };
   }, []);
 
   const handleCopyAddress = () => {
@@ -79,9 +74,7 @@ export default function TournamentScreen() {
             });
             setJoined(false);
             setSpotsLeft(prev => prev + 1);
-          } catch (e: any) {
-            Alert.alert('Error', e.message);
-          }
+          } catch (e: any) { Alert.alert('Error', e.message); }
         }
       }
     ]);
@@ -91,22 +84,15 @@ export default function TournamentScreen() {
 
   const tryCloseModal = () => {
     if (hasUnsavedTeamData()) {
-      Alert.alert(
-        'Discard changes?',
-        'You have unsaved information. Are you sure you want to leave?',
-        [
-          { text: 'Keep Editing', style: 'cancel' },
-          {
-            text: 'Discard', style: 'destructive', onPress: () => {
-              setTeamName('');
-              setContactName('');
-              setContactInfo('');
-              setTeamDivision('');
-              setShowTeamModal(false);
-            }
-          },
-        ]
-      );
+      Alert.alert('Discard changes?', 'You have unsaved information. Are you sure you want to leave?', [
+        { text: 'Keep Editing', style: 'cancel' },
+        {
+          text: 'Discard', style: 'destructive', onPress: () => {
+            setTeamName(''); setContactName(''); setContactInfo(''); setTeamDivision('');
+            setShowTeamModal(false);
+          }
+        },
+      ]);
     } else {
       setShowTeamModal(false);
     }
@@ -117,14 +103,8 @@ export default function TournamentScreen() {
       Alert.alert('Missing info', 'Please fill out all fields.');
       return;
     }
-    if (!user) {
-      Alert.alert('Sign in required', 'You need to be logged in.');
-      return;
-    }
-    if (spotsLeft <= 0) {
-      Alert.alert('Full', 'This tournament is full.');
-      return;
-    }
+    if (!user) { Alert.alert('Sign in required', 'You need to be logged in.'); return; }
+    if (spotsLeft <= 0) { Alert.alert('Full', 'This tournament is full.'); return; }
     setTeamLoading(true);
     try {
       await updateDoc(doc(db, 'tournaments', id as string), {
@@ -170,9 +150,7 @@ export default function TournamentScreen() {
         : '';
 
       Alert.alert('Team Registered!', `${teamName} has been registered for ${tournament?.name}.${depositMsg}`);
-    } catch (e: any) {
-      Alert.alert('Error', e.message);
-    }
+    } catch (e: any) { Alert.alert('Error', e.message); }
     setTeamLoading(false);
   };
 
@@ -184,9 +162,7 @@ export default function TournamentScreen() {
           try {
             await deleteDoc(doc(db, 'tournaments', id as string));
             router.replace('/');
-          } catch (e: any) {
-            Alert.alert('Error', e.message);
-          }
+          } catch (e: any) { Alert.alert('Error', e.message); }
         }
       }
     ]);
@@ -216,24 +192,7 @@ export default function TournamentScreen() {
       await Share.share({
         message: `🏆 ${tournament.name}\n📅 ${tournament.date}\n📍 ${tournament.city}, ${tournament.state}${tournament.entryFee ? `\n💵 Entry: ${tournament.entryFee}` : ''}${tournament.contactPhone ? `\n📞 ${tournament.contactPhone}` : ''}\n\nFind this tournament on Zony!`,
       });
-    } catch (e: any) {
-      Alert.alert('Error', e.message);
-    }
-  };
-
-  const handleComment = async () => {
-    if (!comment.trim() || !user) return;
-    try {
-      await addDoc(collection(db, 'tournaments', id as string, 'comments'), {
-        text: comment.trim(),
-        userEmail: user.email,
-        username: currentUsername,
-        createdAt: serverTimestamp(),
-      });
-      setComment('');
-    } catch (e: any) {
-      Alert.alert('Error', e.message);
-    }
+    } catch (e: any) { Alert.alert('Error', e.message); }
   };
 
   if (!tournament) return null;
@@ -242,6 +201,7 @@ export default function TournamentScreen() {
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <View style={styles.container}>
+
         <View style={styles.topRow}>
           <TouchableOpacity onPress={() => router.back()}>
             <Text style={styles.backText}>← Back</Text>
@@ -269,7 +229,8 @@ export default function TournamentScreen() {
         )}
 
         {activeTab === 'teams' && isOwner ? (
-          <ScrollView contentContainerStyle={styles.teamsList}>
+          <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 40 }}>
+            <Text style={styles.teamsCount}>{teams.length} {teams.length === 1 ? 'team' : 'teams'} registered</Text>
             {teams.length === 0 ? (
               <View style={styles.emptyTeams}>
                 <Text style={styles.emptyTeamsIcon}>🏀</Text>
@@ -279,83 +240,133 @@ export default function TournamentScreen() {
               teams.map((t: any) => (
                 <View key={t.id} style={styles.teamCard}>
                   <View style={styles.teamCardTop}>
-                    <Text style={styles.teamName}>{t.teamName}</Text>
-                    <Text style={styles.teamDivisionBadge}>{t.division}</Text>
+                    <Text style={[styles.teamName, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>{t.teamName}</Text>
+                    <View style={styles.teamDivisionBadge}>
+                      <Text style={styles.teamDivisionText}>{t.division}</Text>
+                    </View>
                   </View>
-                  <Text style={styles.teamDetail}>👤 {t.contactName}</Text>
-                  <Text style={styles.teamDetail}>📞 {t.contactInfo}</Text>
+                  <View style={styles.divider} />
+                  <Text style={styles.submittedLabel}>Submitted by</Text>
+                  <Text style={styles.contactName}>{t.contactName}</Text>
+                  {t.contactInfo ? (
+                    <View style={styles.contactLine}>
+                      <Text style={styles.contactLineIcon}>📱</Text>
+                      <Text style={styles.contactLineText}>{t.contactInfo}</Text>
+                    </View>
+                  ) : null}
                 </View>
               ))
             )}
           </ScrollView>
         ) : (
-          <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
+          <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 40 }}>
+
             <View style={styles.card}>
-              <Text style={styles.sportBadge}>{tournament.sport}</Text>
-              <Text style={styles.name}>{tournament.name}</Text>
+              <View style={styles.sportBadge}>
+                <Text style={styles.sportBadgeText}>{tournament.sport}</Text>
+              </View>
+              <Text style={[styles.tournamentName, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>{tournament.name}</Text>
+              <View style={styles.divider} />
 
-              <Text style={styles.sectionTitle}>📅 Date</Text>
-              <Text style={styles.detail}>{tournament.date}</Text>
+              <View style={styles.row}>
+                <Text style={styles.rowIcon}>📅</Text>
+                <Text style={styles.rowLabel}>Date</Text>
+              </View>
+              <Text style={styles.rowValue}>{tournament.date}</Text>
 
-              <Text style={styles.sectionTitle}>📍 Location</Text>
-              {tournament.address ? <Text style={styles.detail}>{tournament.address}</Text> : null}
-              <Text style={styles.detail}>{tournament.city}, {tournament.state} {tournament.zip}</Text>
+              <View style={[styles.row, { marginTop: 16 }]}>
+                <Text style={styles.rowIcon}>📍</Text>
+                <Text style={styles.rowLabel}>Location</Text>
+              </View>
+              {tournament.address ? <Text style={styles.rowValue}>{tournament.address}</Text> : null}
+              <Text style={styles.rowValue}>{tournament.city}, {tournament.state} {tournament.zip}</Text>
               <TouchableOpacity style={styles.copyBtn} onPress={handleCopyAddress}>
                 <Text style={styles.copyBtnText}>{copied ? '✓ Copied!' : 'Copy Address'}</Text>
               </TouchableOpacity>
 
               {tournament.divisions?.length > 0 && (
                 <>
-                  <Text style={styles.sectionTitle}>🏅 Divisions</Text>
-                  <Text style={styles.detail}>{tournament.divisions.join(' · ')}</Text>
+                  <View style={[styles.row, { marginTop: 16 }]}>
+                    <Text style={styles.rowIcon}>🏅</Text>
+                    <Text style={styles.rowLabel}>Divisions</Text>
+                  </View>
+                  <Text style={styles.rowValue}>{tournament.divisions.join(' · ')}</Text>
                 </>
               )}
 
               {tournament.entryFee ? (
                 <>
-                  <Text style={styles.sectionTitle}>💵 Entry Fee</Text>
-                  <Text style={styles.detail}>{tournament.entryFee} per team</Text>
+                  <View style={[styles.row, { marginTop: 16 }]}>
+                    <Text style={styles.rowIcon}>💵</Text>
+                    <Text style={styles.rowLabel}>Entry Fee</Text>
+                  </View>
+                  <Text style={styles.rowValue}>{tournament.entryFee} per team</Text>
                 </>
               ) : null}
 
               {tournament.spectatorFee ? (
                 <>
-                  <Text style={styles.sectionTitle}>🎟 Spectator Fee</Text>
-                  <Text style={styles.detail}>{tournament.spectatorFee} at the door</Text>
+                  <View style={[styles.row, { marginTop: 16 }]}>
+                    <Text style={styles.rowIcon}>🎟️</Text>
+                    <Text style={styles.rowLabel}>Spectator Fee</Text>
+                  </View>
+                  <Text style={styles.rowValue}>{tournament.spectatorFee} at the door</Text>
                 </>
               ) : null}
 
               {tournament.rosterSize ? (
                 <>
-                  <Text style={styles.sectionTitle}>👥 Roster Size</Text>
-                  <Text style={styles.detail}>{tournament.rosterSize} players</Text>
+                  <View style={[styles.row, { marginTop: 16 }]}>
+                    <Text style={styles.rowIcon}>👥</Text>
+                    <Text style={styles.rowLabel}>Roster Size</Text>
+                  </View>
+                  <Text style={styles.rowValue}>{tournament.rosterSize} players</Text>
                 </>
               ) : null}
 
               {tournament.prizes ? (
                 <>
-                  <Text style={styles.sectionTitle}>{tournament.prizeType === 'other' ? '🏆 Prizes' : '💵 Prize Money'}</Text>
-                  <Text style={styles.detail}>{tournament.prizes}</Text>
+                  <View style={[styles.row, { marginTop: 16 }]}>
+                    <Text style={styles.rowIcon}>{tournament.prizeType === 'other' ? '🏆' : '💰'}</Text>
+                    <Text style={styles.rowLabel}>{tournament.prizeType === 'other' ? 'Prizes' : 'Prize Money'}</Text>
+                  </View>
+                  <Text style={styles.rowValue}>{tournament.prizes}</Text>
                 </>
               ) : null}
 
               {tournament.depositAmount ? (
                 <>
-                  <Text style={styles.sectionTitle}>💰 Deposit</Text>
-                  <Text style={styles.detail}>{tournament.depositAmount}{tournament.depositDue ? ` due by ${tournament.depositDue}` : ''}</Text>
+                  <View style={[styles.row, { marginTop: 16 }]}>
+                    <Text style={styles.rowIcon}>💳</Text>
+                    <Text style={styles.rowLabel}>Deposit</Text>
+                  </View>
+                  <Text style={styles.rowValue}>{tournament.depositAmount}{tournament.depositDue ? ` due by ${tournament.depositDue}` : ''}</Text>
                 </>
               ) : null}
 
-              {tournament.contactName || tournament.contactPhone || tournament.contactEmail ? (
+              {(tournament.contactName || tournament.contactPhone || tournament.contactEmail) ? (
                 <>
-                  <Text style={styles.sectionTitle}>📞 Contact</Text>
-                  {tournament.contactName ? <Text style={styles.detail}>{tournament.contactName}</Text> : null}
-                  {tournament.contactPhone ? <Text style={styles.detail}>📞 {tournament.contactPhone}</Text> : null}
-                  {tournament.contactEmail ? <Text style={styles.detail}>✉️ {tournament.contactEmail}</Text> : null}
+                  <View style={[styles.row, { marginTop: 16 }]}>
+                    <Text style={styles.rowIcon}>📞</Text>
+                    <Text style={styles.rowLabel}>Contact</Text>
+                  </View>
+                  {tournament.contactName ? <Text style={styles.rowValue}>{tournament.contactName}</Text> : null}
+                  {tournament.contactPhone ? (
+                    <View style={styles.contactLine}>
+                      <Text style={styles.contactLineIcon}>📱</Text>
+                      <Text style={styles.rowValue}>{tournament.contactPhone}</Text>
+                    </View>
+                  ) : null}
+                  {tournament.contactEmail ? (
+                    <View style={styles.contactLine}>
+                      <Text style={styles.contactLineIcon}>✉️</Text>
+                      <Text style={styles.rowValue}>{tournament.contactEmail}</Text>
+                    </View>
+                  ) : null}
                 </>
               ) : null}
 
-              <Text style={styles.spots}>{spotsLeft} spots left</Text>
+              <Text style={[styles.spotsText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>{spotsLeft} spots left</Text>
             </View>
 
             {isOwner ? (
@@ -367,18 +378,15 @@ export default function TournamentScreen() {
                   <Text style={styles.cancelBtnText}>{isCanceled ? 'Mark as Active' : 'Cancel Tournament'}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.deleteBtn} onPress={handleDelete}>
-                  <Text style={styles.deleteText}>Delete Tournament</Text>
+                  <Text style={styles.deleteBtnText}>Delete Tournament</Text>
                 </TouchableOpacity>
               </View>
             ) : (
               <TouchableOpacity
                 style={[styles.joinBtn, (joined || isCanceled) && styles.joinedBtn]}
                 onPress={() => {
-                  if (joined) {
-                    handleCancelRegistration();
-                  } else if (!isCanceled && spotsLeft > 0) {
-                    setShowTeamModal(true);
-                  }
+                  if (joined) { handleCancelRegistration(); }
+                  else if (!isCanceled && spotsLeft > 0) { setShowTeamModal(true); }
                 }}
                 disabled={!joined && (spotsLeft <= 0 || isCanceled)}
               >
@@ -388,31 +396,6 @@ export default function TournamentScreen() {
               </TouchableOpacity>
             )}
 
-            <View style={styles.commentsSection}>
-              <Text style={styles.commentsTitle}>Comments</Text>
-              {comments.length === 0 ? (
-                <Text style={styles.noComments}>No comments yet. Be the first!</Text>
-              ) : (
-                comments.map((c: any) => (
-                  <View key={c.id} style={styles.commentCard}>
-                    <Text style={styles.commentEmail}>{c.username || c.userEmail}</Text>
-                    <Text style={styles.commentText}>{c.text}</Text>
-                  </View>
-                ))
-              )}
-              <View style={styles.commentInput}>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Ask a question..."
-                  placeholderTextColor="#a0b8b8"
-                  value={comment}
-                  onChangeText={setComment}
-                />
-                <TouchableOpacity style={styles.sendBtn} onPress={handleComment}>
-                  <Text style={styles.sendText}>Post</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
           </ScrollView>
         )}
       </View>
@@ -478,7 +461,7 @@ export default function TournamentScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f0fafa', paddingTop: 60 },
+  container: { flex: 1, backgroundColor: '#f5ede0', paddingTop: 60 },
   topRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, marginBottom: 16 },
   backText: { fontSize: 16, color: '#008080', fontWeight: '600' },
   shareBtn: { backgroundColor: '#e0f5f5', borderRadius: 20, paddingHorizontal: 14, paddingVertical: 6 },
@@ -490,43 +473,42 @@ const styles = StyleSheet.create({
   tabActive: { backgroundColor: '#008080' },
   tabText: { fontSize: 14, fontWeight: '600', color: '#5a7a7a' },
   tabTextActive: { color: '#fff' },
-  teamsList: { paddingHorizontal: 20, paddingBottom: 40 },
+  teamsCount: { fontSize: 11, color: '#999', fontWeight: '600', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12, paddingLeft: 4 },
   emptyTeams: { alignItems: 'center', marginTop: 60 },
   emptyTeamsIcon: { fontSize: 50, marginBottom: 12 },
   emptyTeamsText: { fontSize: 16, color: '#a0b8b8' },
-  teamCard: { backgroundColor: '#fff', borderRadius: 12, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: '#e0f5f5' },
+  teamCard: { backgroundColor: '#fff', borderRadius: 16, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: '#f0f0f0', shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 4, elevation: 1 },
   teamCardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-  teamName: { fontSize: 16, fontWeight: 'bold', color: '#003333', flex: 1 },
-  teamDivisionBadge: { fontSize: 12, color: '#fff', backgroundColor: '#008080', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, overflow: 'hidden' },
-  teamDetail: { fontSize: 14, color: '#5a7a7a', marginTop: 2 },
-  card: { backgroundColor: '#fff', marginHorizontal: 20, borderRadius: 16, padding: 24, marginBottom: 20, borderWidth: 1, borderColor: '#e0f5f5' },
-  sportBadge: { fontSize: 13, color: '#fff', backgroundColor: '#008080', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, overflow: 'hidden', alignSelf: 'flex-start', marginBottom: 12 },
-  name: { fontSize: 26, fontWeight: 'bold', color: '#003333', marginBottom: 16 },
-  sectionTitle: { fontSize: 13, fontWeight: '700', color: '#5a7a7a', marginTop: 12, marginBottom: 2 },
-  detail: { fontSize: 15, color: '#003333', marginBottom: 2 },
-  copyBtn: { backgroundColor: '#e0f5f5', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6, alignSelf: 'flex-start', marginTop: 6 },
-  copyBtnText: { fontSize: 13, color: '#008080', fontWeight: '600' },
-  spots: { fontSize: 15, color: '#008080', fontWeight: '600', marginTop: 16 },
-  ownerActions: { marginHorizontal: 20, gap: 10, marginBottom: 20 },
-  editBtn: { backgroundColor: '#008080', borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
+  teamName: { fontSize: 17, fontWeight: '900', color: '#111', flex: 1 },
+  teamDivisionBadge: { backgroundColor: 'rgba(0,128,128,0.1)', borderRadius: 20, paddingHorizontal: 10, paddingVertical: 3 },
+  teamDivisionText: { fontSize: 12, color: '#008080', fontWeight: '600' },
+  submittedLabel: { fontSize: 10, color: '#aaa', fontWeight: '600', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 },
+  contactName: { fontSize: 14, fontWeight: '600', color: '#333', marginBottom: 4 },
+  contactLine: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 },
+  contactLineIcon: { fontSize: 12 },
+  contactLineText: { fontSize: 12, color: '#777' },
+  card: { backgroundColor: '#fff', borderRadius: 24, padding: 20, marginBottom: 16, shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 8, elevation: 2 },
+  sportBadge: { backgroundColor: '#008080', alignSelf: 'flex-start', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 4, marginBottom: 12 },
+  sportBadgeText: { color: '#fff', fontSize: 12, fontWeight: '700' },
+  tournamentName: { fontSize: 26, fontWeight: '900', color: '#111', marginBottom: 12, lineHeight: 30 },
+  divider: { height: 1, backgroundColor: '#f0f0f0', marginBottom: 12 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
+  rowIcon: { fontSize: 15 },
+  rowLabel: { fontSize: 13, fontWeight: '700', color: '#333' },
+  rowValue: { fontSize: 14, color: '#555', paddingLeft: 24, marginBottom: 2 },
+  copyBtn: { marginLeft: 24, marginTop: 8, backgroundColor: '#f5ede0', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6, alignSelf: 'flex-start' },
+  copyBtnText: { fontSize: 12, color: '#008080', fontWeight: '600' },
+  spotsText: { fontSize: 18, color: '#008080', fontWeight: '900', marginTop: 16 },
+  ownerActions: { gap: 10, marginBottom: 20 },
+  editBtn: { backgroundColor: '#008080', borderRadius: 16, paddingVertical: 16, alignItems: 'center' },
   editBtnText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
-  cancelBtn: { backgroundColor: '#fff', borderRadius: 12, paddingVertical: 14, alignItems: 'center', borderWidth: 2, borderColor: '#cc4444' },
-  cancelBtnText: { color: '#cc4444', fontSize: 16, fontWeight: 'bold' },
-  joinBtn: { backgroundColor: '#008080', marginHorizontal: 20, borderRadius: 12, paddingVertical: 16, alignItems: 'center', marginBottom: 20 },
+  cancelBtn: { backgroundColor: '#fff', borderRadius: 16, paddingVertical: 16, alignItems: 'center', borderWidth: 2, borderColor: '#8B1A1A' },
+  cancelBtnText: { color: '#8B1A1A', fontSize: 16, fontWeight: 'bold' },
+  deleteBtn: { backgroundColor: '#1a1a2e', borderRadius: 16, paddingVertical: 16, alignItems: 'center' },
+  deleteBtnText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
+  joinBtn: { backgroundColor: '#008080', borderRadius: 16, paddingVertical: 16, alignItems: 'center', marginBottom: 20 },
   joinedBtn: { backgroundColor: '#a0b8b8' },
   joinText: { color: '#fff', fontSize: 17, fontWeight: 'bold' },
-  deleteBtn: { backgroundColor: '#003333', borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
-  deleteText: { color: '#fff', fontSize: 17, fontWeight: 'bold' },
-  commentsSection: { marginHorizontal: 20, marginBottom: 40 },
-  commentsTitle: { fontSize: 18, fontWeight: 'bold', color: '#003333', marginBottom: 12 },
-  noComments: { fontSize: 14, color: '#a0b8b8', marginBottom: 16 },
-  commentCard: { backgroundColor: '#fff', borderRadius: 12, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: '#e0f5f5' },
-  commentEmail: { fontSize: 12, color: '#5a7a7a', marginBottom: 4 },
-  commentText: { fontSize: 14, color: '#003333' },
-  commentInput: { flexDirection: 'row', gap: 8, marginTop: 12 },
-  input: { flex: 1, backgroundColor: '#fff', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, fontSize: 14, color: '#003333', borderWidth: 1, borderColor: '#e0f0f0' },
-  sendBtn: { backgroundColor: '#008080', borderRadius: 12, paddingHorizontal: 16, justifyContent: 'center' },
-  sendText: { color: '#fff', fontWeight: 'bold', fontSize: 14 },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   modalBox: { backgroundColor: '#f0fafa', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, maxHeight: '90%' },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 },
