@@ -2,8 +2,8 @@ import { Rajdhani_700Bold, useFonts } from '@expo-google-fonts/rajdhani';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { deleteDoc, doc, getDoc } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import Svg, { Polygon } from 'react-native-svg';
+import { Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import Svg, { Path, Polygon } from 'react-native-svg';
 import { auth, db } from '../firebaseConfig';
 
 function getSportColor(sport: string) {
@@ -25,6 +25,8 @@ export default function BoardDetailScreen() {
   const [post, setPost] = useState<any>(null);
   const [fontsLoaded] = useFonts({ Rajdhani_700Bold });
   const [headerHeight, setHeaderHeight] = useState(160);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
   const user = auth.currentUser;
 
   useEffect(() => {
@@ -41,32 +43,34 @@ export default function BoardDetailScreen() {
   const isOwner = user?.uid === post.postedBy;
   const sportColor = getSportColor(post.sport);
   const lookingLabel = getLookingLabel(post.type, post.lookingFor);
-
   const initials = post.name
     ? post.name.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase()
     : post.type === 'Player' ? 'PL' : 'TM';
+  const postedDate = post.createdAt?.toDate?.()?.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) || '';
 
-  const postedDate = post.createdAt?.toDate?.()?.toLocaleDateString('en-US', {
-    month: 'long', day: 'numeric', year: 'numeric',
-  }) || '';
+  const handleDelete = async () => {
+    setDeleteLoading(true);
+    try {
+      await deleteDoc(doc(db, 'board', id as string));
+      router.replace('/(tabs)/board');
+    } catch (e: any) { console.log(e); }
+    setDeleteLoading(false);
+  };
 
-  const handleDelete = () => {
-    Alert.alert('Delete Post', 'Are you sure you want to delete this post?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete', style: 'destructive', onPress: async () => {
-          try {
-            await deleteDoc(doc(db, 'board', id as string));
-            router.replace('/(tabs)/board');
-          } catch (e: any) { Alert.alert('Error', e.message); }
-        }
-      }
-    ]);
+  const handleMessage = () => {
+    if (!post.postedBy) return;
+    router.push({
+      pathname: '/start-dm',
+      params: {
+        recipientId: post.postedBy,
+        recipientName: post.name || post.type || 'Player',
+        context: `Board: ${post.name || post.type || 'Post'}`,
+      },
+    });
   };
 
   return (
     <View style={styles.container}>
-
       <View style={[styles.headerBlock, { backgroundColor: sportColor }]} onLayout={e => setHeaderHeight(e.nativeEvent.layout.height)}>
         <Svg style={StyleSheet.absoluteFill} width="100%" height={headerHeight} viewBox="0 0 390 160" preserveAspectRatio="xMidYMid slice">
           <Polygon points="0,0 80,30 40,80" fill="white" opacity={0.04} />
@@ -85,44 +89,27 @@ export default function BoardDetailScreen() {
           <Polygon points="240,130 310,80 390,130" fill="white" opacity={0.05} />
           <Polygon points="80,130 180,90 240,130" fill="white" opacity={0.04} />
         </Svg>
-
         <TouchableOpacity onPress={() => router.back()} style={styles.back}>
           <Text style={styles.backText}>‹ Sports Board</Text>
         </TouchableOpacity>
-
         <View style={styles.heroInner}>
           <View style={styles.avatarLarge}>
-            <Text style={[styles.avatarLargeText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>
-              {initials}
-            </Text>
+            <Text style={[styles.avatarLargeText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>{initials}</Text>
           </View>
           <View style={styles.heroInfo}>
             <Text style={[styles.heroName, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>
               {post.name ? post.name.toUpperCase() : post.type?.toUpperCase()}
             </Text>
             <View style={styles.badgeRow}>
-              {post.sport ? (
-                <View style={styles.badge}>
-                  <Text style={styles.badgeText}>🏀 {post.sport}</Text>
-                </View>
-              ) : null}
-              {lookingLabel ? (
-                <View style={styles.badge}>
-                  <Text style={styles.badgeText}>{lookingLabel}</Text>
-                </View>
-              ) : null}
-              {post.city ? (
-                <View style={styles.badge}>
-                  <Text style={styles.badgeText}>📍 {post.city}, {post.state}</Text>
-                </View>
-              ) : null}
+              {post.sport ? <View style={styles.badge}><Text style={styles.badgeText}>🏀 {post.sport}</Text></View> : null}
+              {lookingLabel ? <View style={styles.badge}><Text style={styles.badgeText}>{lookingLabel}</Text></View> : null}
+              {post.city ? <View style={styles.badge}><Text style={styles.badgeText}>📍 {post.city}, {post.state}</Text></View> : null}
             </View>
           </View>
         </View>
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
-
         {post.description ? (
           <View style={styles.section}>
             <Text style={styles.sectionLabel}>ABOUT</Text>
@@ -131,80 +118,55 @@ export default function BoardDetailScreen() {
         ) : null}
 
         <View style={styles.infoCard}>
-          {post.division ? (
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Division</Text>
-              <Text style={styles.infoValue}>{post.division}</Text>
-            </View>
-          ) : null}
-          {post.gender ? (
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Gender</Text>
-              <Text style={styles.infoValue}>{post.gender}</Text>
-            </View>
-          ) : null}
-          {post.sport ? (
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Sport</Text>
-              <Text style={styles.infoValue}>{post.sport}</Text>
-            </View>
-          ) : null}
-          {post.forTournament ? (
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>For</Text>
-              <Text style={styles.infoValue}>{post.forTournament}</Text>
-            </View>
-          ) : null}
-          {post.city ? (
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Location</Text>
-              <Text style={styles.infoValue}>{post.city}, {post.state}</Text>
-            </View>
-          ) : null}
-          <View style={[styles.infoRow, { borderBottomWidth: 0 }]}>
-            <Text style={styles.infoLabel}>Looking</Text>
-            <Text style={styles.infoValue}>{lookingLabel}</Text>
-          </View>
+          {post.division ? <View style={styles.infoRow}><Text style={styles.infoLabel}>Division</Text><Text style={styles.infoValue}>{post.division}</Text></View> : null}
+          {post.gender ? <View style={styles.infoRow}><Text style={styles.infoLabel}>Gender</Text><Text style={styles.infoValue}>{post.gender}</Text></View> : null}
+          {post.sport ? <View style={styles.infoRow}><Text style={styles.infoLabel}>Sport</Text><Text style={styles.infoValue}>{post.sport}</Text></View> : null}
+          {post.forTournament ? <View style={styles.infoRow}><Text style={styles.infoLabel}>For</Text><Text style={styles.infoValue}>{post.forTournament}</Text></View> : null}
+          {post.city ? <View style={styles.infoRow}><Text style={styles.infoLabel}>Location</Text><Text style={styles.infoValue}>{post.city}, {post.state}</Text></View> : null}
+          <View style={[styles.infoRow, { borderBottomWidth: 0 }]}><Text style={styles.infoLabel}>Looking</Text><Text style={styles.infoValue}>{lookingLabel}</Text></View>
         </View>
 
-        {(post.contactPhone || post.contactEmail) ? (
-          <View style={styles.infoCard}>
-            <Text style={[styles.sectionLabel, { paddingTop: 14 }]}>CONTACT</Text>
-            {post.contactPhone ? (
-              <View style={styles.infoRow}>
-                <Text style={styles.infoLabel}>Phone</Text>
-                <Text style={[styles.infoValueTeal, { color: sportColor }]}>{post.contactPhone}</Text>
-              </View>
-            ) : null}
-            {post.contactEmail ? (
-              <View style={[styles.infoRow, { borderBottomWidth: 0 }]}>
-                <Text style={styles.infoLabel}>Email</Text>
-                <Text style={[styles.infoValueTeal, { color: sportColor }]}>{post.contactEmail}</Text>
-              </View>
-            ) : null}
-          </View>
-        ) : null}
+        {postedDate ? <Text style={styles.postedDate}>Posted {postedDate}</Text> : null}
 
-        {postedDate ? (
-          <Text style={styles.postedDate}>Posted {postedDate}</Text>
+        {!isOwner && post.postedBy ? (
+          <TouchableOpacity style={[styles.messageBtn, { backgroundColor: sportColor }]} onPress={handleMessage} activeOpacity={0.85}>
+            <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" style={{ marginRight: 8 }}>
+              <Path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+            </Svg>
+            <Text style={[styles.messageBtnText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>MESSAGE</Text>
+          </TouchableOpacity>
         ) : null}
 
         {isOwner ? (
           <View style={styles.ownerActions}>
-            <TouchableOpacity
-              style={styles.editBtn}
-              onPress={() => router.push({ pathname: '/edit-board', params: { id } })}
-              activeOpacity={0.85}
-            >
+            <TouchableOpacity style={styles.editBtn} onPress={() => router.push({ pathname: '/edit-board', params: { id } })} activeOpacity={0.85}>
               <Text style={[styles.editBtnText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>EDIT POST</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.deleteBtn} onPress={handleDelete} activeOpacity={0.85}>
+            <TouchableOpacity style={styles.deleteBtn} onPress={() => setShowDeleteModal(true)} activeOpacity={0.85}>
               <Text style={[styles.deleteBtnText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>DELETE POST</Text>
             </TouchableOpacity>
           </View>
         ) : null}
 
+        <View style={{ height: 20 }} />
       </ScrollView>
+
+      <Modal visible={showDeleteModal} animationType="fade" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalBox}>
+            <Text style={[styles.modalTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>DELETE POST</Text>
+            <Text style={styles.modalMsg}>Are you sure you want to delete this post? This cannot be undone.</Text>
+            <View style={styles.modalBtns}>
+              <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setShowDeleteModal(false)} activeOpacity={0.85}>
+                <Text style={[styles.modalCancelText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>KEEP IT</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.modalDeleteBtn} onPress={handleDelete} disabled={deleteLoading} activeOpacity={0.85}>
+                <Text style={[styles.modalDeleteText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>{deleteLoading ? 'DELETING...' : 'DELETE'}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -230,11 +192,21 @@ const styles = StyleSheet.create({
   infoRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#f5f5f5' },
   infoLabel: { fontSize: 13, color: '#a0b8b8', fontWeight: '500' },
   infoValue: { fontSize: 13, color: '#111', fontWeight: '600' },
-  infoValueTeal: { fontSize: 13, fontWeight: '600' },
   postedDate: { fontSize: 12, color: '#a0b8b8', textAlign: 'center', marginBottom: 16 },
+  messageBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderRadius: 14, paddingVertical: 16, marginBottom: 12, shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 8, shadowOffset: { width: 0, height: 4 }, elevation: 4 },
+  messageBtnText: { color: '#fff', fontSize: 18, letterSpacing: 1 },
   ownerActions: { gap: 10 },
   editBtn: { backgroundColor: '#008080', borderRadius: 12, paddingVertical: 16, alignItems: 'center', shadowColor: '#008080', shadowOpacity: 0.3, shadowRadius: 8, shadowOffset: { width: 0, height: 4 }, elevation: 4 },
   editBtnText: { color: '#fff', fontSize: 18, letterSpacing: 1 },
   deleteBtn: { backgroundColor: '#1a1a2e', borderRadius: 12, paddingVertical: 16, alignItems: 'center' },
   deleteBtnText: { color: '#fff', fontSize: 18, letterSpacing: 1 },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 },
+  modalBox: { backgroundColor: '#f5ede0', borderRadius: 24, padding: 28, alignItems: 'center', width: '100%', shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 16, elevation: 8 },
+  modalTitle: { fontSize: 26, color: '#1a1a2e', letterSpacing: 2, marginBottom: 12, textAlign: 'center' },
+  modalMsg: { fontSize: 15, color: '#555', textAlign: 'center', lineHeight: 22, marginBottom: 24 },
+  modalBtns: { flexDirection: 'row', gap: 12, width: '100%' },
+  modalCancelBtn: { flex: 1, backgroundColor: '#fff', borderRadius: 14, paddingVertical: 14, alignItems: 'center', borderWidth: 1, borderColor: '#e0d8c8' },
+  modalCancelText: { fontSize: 16, color: '#555', letterSpacing: 1 },
+  modalDeleteBtn: { flex: 1, backgroundColor: '#1a1a2e', borderRadius: 14, paddingVertical: 14, alignItems: 'center' },
+  modalDeleteText: { color: '#fff', fontSize: 16, letterSpacing: 1 },
 });

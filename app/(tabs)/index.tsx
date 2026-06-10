@@ -34,6 +34,17 @@ function BellIcon({ color, hasNew }: { color: string; hasNew: boolean }) {
   );
 }
 
+function MessageIcon({ color, hasNew }: { color: string; hasNew: boolean }) {
+  return (
+    <View>
+      <Svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+        <Path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      </Svg>
+      {hasNew && <View style={styles.bellDot} />}
+    </View>
+  );
+}
+
 function SadFace() {
   return (
     <Svg width={64} height={64} viewBox="0 0 64 64" fill="none">
@@ -100,6 +111,7 @@ export default function HomeScreen() {
   const [tournaments, setTournaments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [hasNewNotifications, setHasNewNotifications] = useState(false);
+  const [hasUnreadMessages, setHasUnreadMessages] = useState(false);
   const [headerHeight, setHeaderHeight] = useState(140);
   const [showNotifications, setShowNotifications] = useState(false);
   const [notifications, setNotifications] = useState([]);
@@ -124,6 +136,20 @@ export default function HomeScreen() {
       data.sort((a: any, b: any) => b.createdAt?.seconds - a.createdAt?.seconds);
       setNotifications(data);
       setHasNewNotifications(data.some((n: any) => !n.read));
+    });
+    return () => unsub();
+  }, []);
+
+  // Watch for unread messages
+  useEffect(() => {
+    if (!user) return;
+    const q = query(collection(db, 'messages'), where('participants', 'array-contains', user.uid));
+    const unsub = onSnapshot(q, (snap) => {
+      const hasUnread = snap.docs.some(d => {
+        const data = d.data();
+        return (data.unreadCount?.[user.uid] || 0) > 0;
+      });
+      setHasUnreadMessages(hasUnread);
     });
     return () => unsub();
   }, []);
@@ -180,7 +206,9 @@ export default function HomeScreen() {
             <BellIcon color="#f5ede0" hasNew={hasNewNotifications} />
           </TouchableOpacity>
           <Text style={[styles.header, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>ZONY</Text>
-          <View style={{ width: 24 }} />
+          <TouchableOpacity style={styles.msgBtn} onPress={() => router.push('/messages')}>
+            <MessageIcon color="#f5ede0" hasNew={hasUnreadMessages} />
+          </TouchableOpacity>
         </View>
         <Text style={[styles.sub, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>Tournaments near you</Text>
       </View>
@@ -361,9 +389,10 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f5ede0' },
   headerBlock: { backgroundColor: '#008080', paddingTop: 60, paddingBottom: 16, paddingHorizontal: 0 },
-  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 },
+  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4, paddingHorizontal: 16 },
   header: { fontSize: 42, fontWeight: '900', color: '#f5ede0', textAlign: 'center', letterSpacing: 6 },
-  bellBtn: { marginLeft: 10 },
+  bellBtn: { padding: 4 },
+  msgBtn: { padding: 4 },
   bellDot: { position: 'absolute', top: 0, right: 0, width: 10, height: 10, borderRadius: 5, backgroundColor: '#FF4444', borderWidth: 1.5, borderColor: '#fff' },
   sub: { fontSize: 14, color: 'rgba(255,255,255,0.8)', textAlign: 'center', letterSpacing: 2 },
   searchRow: { flexDirection: 'row', marginHorizontal: 20, gap: 8, marginBottom: 10, marginTop: 14 },

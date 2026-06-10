@@ -1,10 +1,12 @@
 import { Rajdhani_700Bold, useFonts } from '@expo-google-fonts/rajdhani';
+import * as ImageManipulator from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { signOut } from 'firebase/auth';
 import { collection, doc, getDoc, onSnapshot, query, setDoc, where } from 'firebase/firestore';
+import { getDownloadURL, getStorage, ref, uploadBytes } from 'firebase/storage';
 import { useEffect, useMemo, useState } from 'react';
-import { Alert, Image, Linking, Modal, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, Linking, Modal, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
 import { auth, db } from '../../firebaseConfig';
 
@@ -25,9 +27,9 @@ export default function ProfileScreen() {
   const [myJoined, setMyJoined] = useState([]);
   const [photoURL, setPhotoURL] = useState<string | null>(null);
   const [fullName, setFullName] = useState('');
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [fontsLoaded] = useFonts({ Rajdhani_700Bold });
 
-  // Modals
   const [showNameModal, setShowNameModal] = useState(false);
   const [nameInput, setNameInput] = useState('');
   const [showNotifModal, setShowNotifModal] = useState(false);
@@ -35,7 +37,6 @@ export default function ProfileScreen() {
   const [showHelpModal, setShowHelpModal] = useState(false);
   const [expandedFaq, setExpandedFaq] = useState<number | null>(null);
 
-  // Settings
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [showFullName, setShowFullName] = useState(true);
 
@@ -58,13 +59,13 @@ export default function ProfileScreen() {
     loadUserData();
 
     const postedQuery = query(collection(db, 'tournaments'), where('postedBy', '==', user.uid));
-    const unsubPosted = onSnapshot(postedQuery, (snap) => {
-      setMyPosted(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    const unsubPosted = onSnapshot(postedQuery, snap => {
+      setMyPosted(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     });
 
     const joinedQuery = query(collection(db, 'tournaments'), where('joinedUsers', 'array-contains', user.uid));
-    const unsubJoined = onSnapshot(joinedQuery, (snap) => {
-      setMyJoined(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    const unsubJoined = onSnapshot(joinedQuery, snap => {
+      setMyJoined(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     });
 
     return () => { unsubPosted(); unsubJoined(); };
@@ -80,14 +81,34 @@ export default function ProfileScreen() {
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
       aspect: [1, 1],
-      quality: 0.5,
-      base64: true,
+      quality: 1,
     });
-    if (!result.canceled && result.assets[0].base64) {
-      const base64 = `data:image/jpeg;base64,${result.assets[0].base64}`;
-      setPhotoURL(base64);
-      await setDoc(doc(db, 'users', user!.uid), { photoURL: base64 }, { merge: true });
+    if (result.canceled) return;
+
+    setUploadingPhoto(true);
+    try {
+      // Compress to 400x400 and 60% quality
+      const compressed = await ImageManipulator.manipulateAsync(
+        result.assets[0].uri,
+        [{ resize: { width: 400, height: 400 } }],
+        { compress: 0.6, format: ImageManipulator.SaveFormat.JPEG }
+      );
+
+      // Upload to Firebase Storage
+      const response = await fetch(compressed.uri);
+      const blob = await response.blob();
+      const storage = getStorage();
+      const storageRef = ref(storage, `profilePhotos/${user!.uid}.jpg`);
+      await uploadBytes(storageRef, blob);
+      const downloadURL = await getDownloadURL(storageRef);
+
+      // Save URL to Firestore
+      setPhotoURL(downloadURL);
+      await setDoc(doc(db, 'users', user!.uid), { photoURL: downloadURL }, { merge: true });
+    } catch (e: any) {
+      Alert.alert('Upload failed', e.message);
     }
+    setUploadingPhoto(false);
   };
 
   const handleSaveName = async () => {
@@ -126,10 +147,13 @@ export default function ProfileScreen() {
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
 
-      {/* Avatar */}
       <View style={styles.avatarSection}>
-        <TouchableOpacity onPress={handlePickPhoto}>
-          {photoURL ? (
+        <TouchableOpacity onPress={handlePickPhoto} disabled={uploadingPhoto}>
+          {uploadingPhoto ? (
+            <View style={[styles.avatar, { backgroundColor: avatarColor }]}>
+              <ActivityIndicator color="#fff" />
+            </View>
+          ) : photoURL ? (
             <Image source={{ uri: photoURL }} style={styles.avatarImg} />
           ) : (
             <View style={[styles.avatar, { backgroundColor: avatarColor }]}>
@@ -141,12 +165,11 @@ export default function ProfileScreen() {
           {displayName ? displayName.toUpperCase() : 'SET YOUR NAME'}
         </Text>
         <Text style={styles.email}>{user?.email || ''}</Text>
-        <TouchableOpacity style={styles.editBtn} onPress={handlePickPhoto}>
-          <Text style={styles.editBtnText}>Edit Profile Photo</Text>
+        <TouchableOpacity style={styles.editBtn} onPress={handlePickPhoto} disabled={uploadingPhoto}>
+          <Text style={styles.editBtnText}>{uploadingPhoto ? 'Uploading...' : 'Edit Profile Photo'}</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Info card */}
       <View style={styles.card}>
         <TouchableOpacity style={styles.infoRow} onPress={() => { setNameInput(fullName); setShowNameModal(true); }}>
           <Svg width={16} height={16} viewBox="0 0 16 16" fill="none">
@@ -173,7 +196,6 @@ export default function ProfileScreen() {
         </View>
       </View>
 
-      {/* Settings card */}
       <View style={styles.card}>
         <TouchableOpacity style={styles.infoRow} onPress={() => setShowNotifModal(true)}>
           <Svg width={16} height={16} viewBox="0 0 16 16" fill="none">
@@ -210,7 +232,6 @@ export default function ProfileScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Log out */}
       <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
         <Svg width={16} height={16} viewBox="0 0 16 16" fill="none" style={{ marginRight: 8 }}>
           <Path d="M6 14H3a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1h3M11 11l3-3-3-3M14 8H6" stroke="#dc2626" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
@@ -218,7 +239,6 @@ export default function ProfileScreen() {
         <Text style={styles.logoutText}>Log Out</Text>
       </TouchableOpacity>
 
-      {/* Edit Name Modal */}
       <Modal visible={showNameModal} animationType="fade" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalBox}>
@@ -244,7 +264,6 @@ export default function ProfileScreen() {
         </View>
       </Modal>
 
-      {/* Notifications Modal */}
       <Modal visible={showNotifModal} animationType="fade" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalBox}>
@@ -269,7 +288,6 @@ export default function ProfileScreen() {
         </View>
       </Modal>
 
-      {/* Privacy Modal */}
       <Modal visible={showPrivacyModal} animationType="fade" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalBox}>
@@ -294,7 +312,6 @@ export default function ProfileScreen() {
         </View>
       </Modal>
 
-      {/* Help & Support Modal */}
       <Modal visible={showHelpModal} animationType="slide" transparent>
         <View style={styles.sheetOverlay}>
           <TouchableOpacity style={styles.sheetBackdrop} onPress={() => setShowHelpModal(false)} />
@@ -302,16 +319,10 @@ export default function ProfileScreen() {
             <View style={styles.sheetHandle} />
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.sheetContent}>
               <Text style={[styles.sheetTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>HELP & SUPPORT</Text>
-
-              <TouchableOpacity
-                style={styles.contactBtn}
-                onPress={() => Linking.openURL('mailto:support@zony.app')}
-              >
+              <TouchableOpacity style={styles.contactBtn} onPress={() => Linking.openURL('mailto:support@zony.app')}>
                 <Text style={[styles.contactBtnText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>✉️ CONTACT US</Text>
               </TouchableOpacity>
-
               <Text style={styles.faqHeader}>FREQUENTLY ASKED QUESTIONS</Text>
-
               {FAQ.map((item, i) => (
                 <TouchableOpacity
                   key={i}
@@ -323,12 +334,9 @@ export default function ProfileScreen() {
                     <Text style={styles.faqQ}>{item.q}</Text>
                     <Text style={styles.faqChevron}>{expandedFaq === i ? '▲' : '▼'}</Text>
                   </View>
-                  {expandedFaq === i && (
-                    <Text style={styles.faqA}>{item.a}</Text>
-                  )}
+                  {expandedFaq === i && <Text style={styles.faqA}>{item.a}</Text>}
                 </TouchableOpacity>
               ))}
-
               <Text style={styles.versionText}>Zony v1.0.0</Text>
             </ScrollView>
           </View>
