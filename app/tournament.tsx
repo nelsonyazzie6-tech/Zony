@@ -17,6 +17,16 @@ function SadFace() {
   );
 }
 
+function SuccessTrophy() {
+  return (
+    <Svg width={56} height={56} viewBox="0 0 24 24" fill="none">
+      <Path d="M8 3h8v8a4 4 0 0 1-8 0V3Z" stroke="#008080" strokeWidth="1.5" strokeLinejoin="round" />
+      <Path d="M8 6H5a2 2 0 0 0 0 4h3M16 6h3a2 2 0 0 1 0 4h-3" stroke="#008080" strokeWidth="1.5" strokeLinecap="round" />
+      <Path d="M12 15v4M9 21h6" stroke="#008080" strokeWidth="1.5" strokeLinecap="round" />
+    </Svg>
+  );
+}
+
 function formatPhone(val: string) {
   const digits = val.replace(/\D/g, '').slice(0, 10);
   if (digits.length <= 3) return digits;
@@ -33,6 +43,10 @@ export default function TournamentScreen() {
   const [activeTab, setActiveTab] = useState<'details' | 'teams'>('details');
   const [teams, setTeams] = useState([]);
   const [showTeamModal, setShowTeamModal] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [successData, setSuccessData] = useState<{ teamName: string; tournamentName: string; depositMsg: string } | null>(null);
   const [teamName, setTeamName] = useState('');
   const [contactName, setContactName] = useState('');
   const [contactInfo, setContactInfo] = useState('');
@@ -163,46 +177,50 @@ export default function TournamentScreen() {
       setTeamName(''); setContactName(''); setContactInfo(''); setTeamDivision('');
 
       const depositMsg = tournament?.depositAmount && tournament?.depositDue
-        ? `\n\nDeposit of ${tournament.depositAmount} is due by ${tournament.depositDue}. This deposit is non-refundable.`
+        ? `Deposit of ${tournament.depositAmount} is due by ${tournament.depositDue}. This deposit is non-refundable.`
         : tournament?.depositAmount
-        ? `\n\nDeposit of ${tournament.depositAmount} is required. This deposit is non-refundable.`
+        ? `Deposit of ${tournament.depositAmount} is required. This deposit is non-refundable.`
         : '';
 
-      Alert.alert('Team Registered!', `${teamName} has been registered for ${tournament?.name}.${depositMsg}`);
+      setSuccessData({ teamName, tournamentName: tournament?.name, depositMsg });
+      setShowSuccessModal(true);
+
     } catch (e: any) { Alert.alert('Error', e.message); }
     setTeamLoading(false);
   };
 
-  const handleDelete = () => {
-    Alert.alert('Delete Tournament', 'Are you sure you want to delete this tournament?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete', style: 'destructive', onPress: async () => {
-          try {
-            await deleteDoc(doc(db, 'tournaments', id as string));
-            router.replace('/');
-          } catch (e: any) { Alert.alert('Error', e.message); }
-        }
-      }
-    ]);
-  };
-
-  const handleCancelToggle = () => {
-    const isCanceled = tournament.status === 'canceled';
-    Alert.alert(
-      isCanceled ? 'Reactivate Tournament' : 'Cancel Tournament',
-      isCanceled ? 'Mark this tournament as active again?' : 'Mark this tournament as canceled?',
-      [
-        { text: 'No', style: 'cancel' },
-        {
-          text: 'Yes', onPress: async () => {
-            const newStatus = isCanceled ? 'active' : 'canceled';
-            await updateDoc(doc(db, 'tournaments', id as string), { status: newStatus });
-            setTournament((prev: any) => ({ ...prev, status: newStatus }));
+  const confirmDelete = async () => {
+    setDeleteLoading(true);
+    try {
+      const teamsSnap = await getDocs(collection(db, 'tournaments', id as string, 'teams'));
+      await Promise.all(
+        teamsSnap.docs.map(async (teamDoc) => {
+          const teamData = teamDoc.data();
+          if (teamData.registeredBy) {
+            await addDoc(collection(db, 'notifications'), {
+              toUserId: teamData.registeredBy,
+              message: `⚠️ ${tournament.name} has been canceled by the organizer.`,
+              createdAt: serverTimestamp(),
+            });
+            const userSnap = await getDoc(doc(db, 'users', teamData.registeredBy));
+            if (userSnap.exists() && userSnap.data().pushToken) {
+              await fetch('https://exp.host/--/api/v2/push/send', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  to: userSnap.data().pushToken,
+                  title: '⚠️ Tournament Canceled',
+                  body: `${tournament.name} has been canceled by the organizer.`,
+                }),
+              });
+            }
           }
-        }
-      ]
-    );
+        })
+      );
+      await deleteDoc(doc(db, 'tournaments', id as string));
+      router.replace('/');
+    } catch (e: any) { Alert.alert('Error', e.message); }
+    setDeleteLoading(false);
   };
 
   const handleShare = async () => {
@@ -243,13 +261,13 @@ export default function TournamentScreen() {
 
         {isOwner && (
           <View style={styles.tabRow}>
-  <TouchableOpacity style={[styles.tab, activeTab === 'details' && { backgroundColor: sportColor }]} onPress={() => setActiveTab('details')}>
-    <Text style={[styles.tabText, activeTab === 'details' && styles.tabTextActive]}>Details</Text>
-  </TouchableOpacity>
-  <TouchableOpacity style={[styles.tab, activeTab === 'teams' && { backgroundColor: sportColor }]} onPress={() => setActiveTab('teams')}>
-    <Text style={[styles.tabText, activeTab === 'teams' && styles.tabTextActive]}>Teams {teams.length > 0 ? `(${teams.length})` : ''}</Text>
-  </TouchableOpacity>
-</View>
+            <TouchableOpacity style={[styles.tab, activeTab === 'details' && { backgroundColor: sportColor }]} onPress={() => setActiveTab('details')}>
+              <Text style={[styles.tabText, activeTab === 'details' && styles.tabTextActive]}>Details</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.tab, activeTab === 'teams' && { backgroundColor: sportColor }]} onPress={() => setActiveTab('teams')}>
+              <Text style={[styles.tabText, activeTab === 'teams' && styles.tabTextActive]}>Teams {teams.length > 0 ? `(${teams.length})` : ''}</Text>
+            </TouchableOpacity>
+          </View>
         )}
 
         {activeTab === 'teams' && isOwner ? (
@@ -284,11 +302,10 @@ export default function TournamentScreen() {
           </ScrollView>
         ) : (
           <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 40 }}>
-
             <View style={styles.card}>
               <View style={[styles.sportBadge, { backgroundColor: sportColor }]}>
-  <Text style={styles.sportBadgeText}>{tournament.sport}</Text>
-</View>
+                <Text style={styles.sportBadgeText}>{tournament.sport}</Text>
+              </View>
               <Text style={[styles.tournamentName, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>{tournament.name}</Text>
               <View style={styles.divider} />
 
@@ -398,10 +415,7 @@ export default function TournamentScreen() {
                 <TouchableOpacity style={styles.editBtn} onPress={() => router.push({ pathname: '/edit-tournament', params: { id } })}>
                   <Text style={styles.editBtnText}>Edit Tournament</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.cancelBtn} onPress={handleCancelToggle}>
-                  <Text style={styles.cancelBtnText}>{isCanceled ? 'Mark as Active' : 'Cancel Tournament'}</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.deleteBtn} onPress={handleDelete}>
+                <TouchableOpacity style={styles.deleteBtn} onPress={() => setShowDeleteModal(true)}>
                   <Text style={styles.deleteBtnText}>Delete Tournament</Text>
                 </TouchableOpacity>
               </View>
@@ -419,11 +433,11 @@ export default function TournamentScreen() {
                 </Text>
               </TouchableOpacity>
             )}
-
           </ScrollView>
         )}
       </View>
 
+      {/* Team Registration Modal */}
       <Modal visible={showTeamModal} animationType="slide" transparent onRequestClose={tryCloseModal}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalBox}>
@@ -488,6 +502,69 @@ export default function TournamentScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Delete Confirmation Modal */}
+      <Modal visible={showDeleteModal} animationType="fade" transparent>
+        <View style={styles.successOverlay}>
+          <View style={styles.deleteBox}>
+            <Text style={[styles.deleteModalTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>
+              DELETE TOURNAMENT
+            </Text>
+            <Text style={styles.deleteModalMsg}>
+              This will notify all registered teams and permanently delete{' '}
+              <Text style={{ fontWeight: '700', color: '#003333' }}>{tournament.name}</Text>.
+              {'\n\n'}This cannot be undone.
+            </Text>
+            <View style={styles.deleteModalBtns}>
+              <TouchableOpacity
+                style={styles.deleteModalCancelBtn}
+                onPress={() => setShowDeleteModal(false)}
+                activeOpacity={0.85}
+              >
+                <Text style={[styles.deleteModalCancelText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>KEEP IT</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.deleteModalConfirmBtn}
+                onPress={confirmDelete}
+                disabled={deleteLoading}
+                activeOpacity={0.85}
+              >
+                <Text style={[styles.deleteModalConfirmText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>
+                  {deleteLoading ? 'DELETING...' : 'DELETE'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Success Modal */}
+      <Modal visible={showSuccessModal} animationType="fade" transparent>
+        <View style={styles.successOverlay}>
+          <View style={styles.successBox}>
+            <SuccessTrophy />
+            <Text style={[styles.successTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>
+              TEAM REGISTERED!
+            </Text>
+            <Text style={styles.successMsg}>
+              {successData?.teamName} has been registered for {successData?.tournamentName}.
+            </Text>
+            {successData?.depositMsg ? (
+              <View style={styles.successDepositBox}>
+                <Text style={styles.successDepositText}>💰 {successData.depositMsg}</Text>
+              </View>
+            ) : null}
+            <TouchableOpacity
+              style={[styles.successBtn, { backgroundColor: sportColor }]}
+              onPress={() => setShowSuccessModal(false)}
+              activeOpacity={0.85}
+            >
+              <Text style={[styles.successBtnText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>GOT IT</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
     </KeyboardAvoidingView>
   );
 }
@@ -519,7 +596,7 @@ const styles = StyleSheet.create({
   contactLineIcon: { fontSize: 12 },
   contactLineText: { fontSize: 12, color: '#777' },
   card: { backgroundColor: '#fff', borderRadius: 24, padding: 20, marginBottom: 16, shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 8, elevation: 2 },
-  sportBadge: { backgroundColor: '#008080', alignSelf: 'flex-start', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 4, marginBottom: 12 },
+  sportBadge: { alignSelf: 'flex-start', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 4, marginBottom: 12 },
   sportBadgeText: { color: '#fff', fontSize: 12, fontWeight: '700' },
   tournamentName: { fontSize: 26, fontWeight: '900', color: '#111', marginBottom: 12, lineHeight: 30 },
   divider: { height: 1, backgroundColor: '#f0f0f0', marginBottom: 12 },
@@ -533,8 +610,6 @@ const styles = StyleSheet.create({
   ownerActions: { gap: 10, marginBottom: 20 },
   editBtn: { backgroundColor: '#008080', borderRadius: 12, paddingVertical: 16, alignItems: 'center' },
   editBtnText: { color: '#fff', fontSize: 18, fontFamily: 'Rajdhani_700Bold', letterSpacing: 1 },
-  cancelBtn: { backgroundColor: '#fff', borderRadius: 12, paddingVertical: 16, alignItems: 'center', borderWidth: 2, borderColor: '#8B1A1A' },
-  cancelBtnText: { color: '#8B1A1A', fontSize: 18, fontFamily: 'Rajdhani_700Bold', letterSpacing: 1 },
   deleteBtn: { backgroundColor: '#1a1a2e', borderRadius: 12, paddingVertical: 16, alignItems: 'center' },
   deleteBtnText: { color: '#fff', fontSize: 18, fontFamily: 'Rajdhani_700Bold', letterSpacing: 1 },
   joinBtn: { backgroundColor: '#008080', borderRadius: 16, paddingVertical: 16, alignItems: 'center', marginBottom: 20 },
@@ -564,4 +639,20 @@ const styles = StyleSheet.create({
   modalCancelText: { fontSize: 16, color: '#5a7a7a', fontWeight: '600' },
   modalSubmitBtn: { flex: 1, backgroundColor: '#008080', borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
   modalSubmitText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
+  successOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 },
+  successBox: { backgroundColor: '#f5ede0', borderRadius: 24, padding: 28, alignItems: 'center', width: '100%', shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 16, elevation: 8 },
+  successTitle: { fontSize: 28, color: '#003333', letterSpacing: 2, marginTop: 12, marginBottom: 8, textAlign: 'center' },
+  successMsg: { fontSize: 15, color: '#555', textAlign: 'center', marginBottom: 16, lineHeight: 22 },
+  successDepositBox: { backgroundColor: '#fff8e0', borderRadius: 12, padding: 14, marginBottom: 20, borderWidth: 1, borderColor: '#f0d080', width: '100%' },
+  successDepositText: { fontSize: 13, color: '#7a5a00', fontWeight: '600', textAlign: 'center', lineHeight: 20 },
+  successBtn: { borderRadius: 14, paddingVertical: 14, paddingHorizontal: 40, alignItems: 'center', marginTop: 4 },
+  successBtnText: { color: '#fff', fontSize: 18, letterSpacing: 1 },
+  deleteBox: { backgroundColor: '#f5ede0', borderRadius: 24, padding: 28, alignItems: 'center', width: '100%', shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 16, elevation: 8 },
+  deleteModalTitle: { fontSize: 26, color: '#1a1a2e', letterSpacing: 2, marginBottom: 12, textAlign: 'center' },
+  deleteModalMsg: { fontSize: 15, color: '#555', textAlign: 'center', lineHeight: 24, marginBottom: 24 },
+  deleteModalBtns: { flexDirection: 'row', gap: 12, width: '100%' },
+  deleteModalCancelBtn: { flex: 1, backgroundColor: '#fff', borderRadius: 14, paddingVertical: 14, alignItems: 'center', borderWidth: 1, borderColor: '#e0d8c8' },
+  deleteModalCancelText: { fontSize: 16, color: '#555', letterSpacing: 1 },
+  deleteModalConfirmBtn: { flex: 1, backgroundColor: '#1a1a2e', borderRadius: 14, paddingVertical: 14, alignItems: 'center' },
+  deleteModalConfirmText: { color: '#fff', fontSize: 16, letterSpacing: 1 },
 });

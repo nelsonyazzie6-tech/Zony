@@ -76,6 +76,8 @@ export default function RootLayout() {
           <Stack.Screen name="notifications" options={{ headerShown: false }} />
           <Stack.Screen name="board-detail" options={{ headerShown: false }} />
           <Stack.Screen name="edit-board" options={{ headerShown: false }} />
+          <Stack.Screen name="new-post" options={{ headerShown: false }} />
+<Stack.Screen name="community-post" options={{ headerShown: false }} />
         </Stack>
         <StatusBar style="auto" />
       </ThemeProvider>

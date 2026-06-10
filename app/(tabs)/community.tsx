@@ -1,48 +1,35 @@
 import { Rajdhani_700Bold, useFonts } from '@expo-google-fonts/rajdhani';
-import { useState } from 'react';
-import { FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useRouter } from 'expo-router';
+import { collection, onSnapshot, orderBy, query } from 'firebase/firestore';
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Svg, { Path, Polygon } from 'react-native-svg';
-import { auth } from '../../firebaseConfig';
+import { auth, db } from '../../firebaseConfig';
 
-const DUMMY_POSTS = [
-  {
-    id: '1',
-    type: 'For Sale',
-    author: 'Aaliyah R.',
-    initials: 'AR',
-    avatarColor: '#8B1A1A',
-    time: '2h ago',
-    title: 'Nike Volleyball Jersey — Size M',
-    body: 'Worn twice, great condition. Navy blue. Perfect for 14U–18U players.',
-    price: '$35',
-  },
-  {
-    id: '2',
-    type: 'Question',
-    author: 'Jordan C.',
-    initials: 'JC',
-    avatarColor: '#008080',
-    time: '4h ago',
-    title: null,
-    body: 'Anyone know a good ref service for youth basketball tournaments in the Phoenix area? Planning a 10U event in August.',
-    price: null,
-  },
-  {
-    id: '3',
-    type: 'For Sale',
-    author: 'Marcus W.',
-    initials: 'MW',
-    avatarColor: '#aaa',
-    time: 'Yesterday',
-    title: 'Ball bag + 2 Spalding basketballs',
-    body: 'Selling a barely used ball bag + 2 Spalding basketballs. Great for a team. Asking $60 for all.',
-    price: '$60',
-  },
-];
+function SadFace() {
+  return (
+    <Svg width={64} height={64} viewBox="0 0 64 64" fill="none">
+      <Path d="M32 12a20 20 0 1 0 0 40 20 20 0 0 0 0-40Z" stroke="#a0b8b8" strokeWidth="2" />
+      <Path d="M24 26a2 2 0 1 1 4 0 2 2 0 0 1-4 0Z" fill="#a0b8b8" />
+      <Path d="M36 26a2 2 0 1 1 4 0 2 2 0 0 1-4 0Z" fill="#a0b8b8" />
+      <Path d="M24 42c1.5-3 4-5 8-5s6.5 2 8 5" stroke="#a0b8b8" strokeWidth="2" strokeLinecap="round" />
+    </Svg>
+  );
+}
+
+function timeAgo(seconds: number) {
+  const mins = Math.floor(seconds / 60);
+  const hrs = Math.floor(mins / 60);
+  const days = Math.floor(hrs / 24);
+  if (days > 0) return `${days}d ago`;
+  if (hrs > 0) return `${hrs}h ago`;
+  if (mins > 0) return `${mins}m ago`;
+  return 'just now';
+}
 
 const filterOptions = [
   { label: 'All', value: 'All' },
-  { label: 'For Sale', value: 'For Sale' },
+  { label: 'For Sale', value: 'Sale' },
   { label: 'Questions', value: 'Question' },
 ];
 
@@ -51,16 +38,27 @@ export default function CommunityScreen() {
   const [fontsLoaded] = useFonts({ Rajdhani_700Bold });
   const [filter, setFilter] = useState('All');
   const [showFilter, setShowFilter] = useState(false);
+  const [posts, setPosts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const router = useRouter();
   const user = auth.currentUser;
   const initials = user?.email?.slice(0, 2).toUpperCase() || 'ME';
 
+  useEffect(() => {
+    const q = query(collection(db, 'community'), orderBy('createdAt', 'desc'));
+    const unsub = onSnapshot(q, (snap) => {
+      setPosts(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      setLoading(false);
+    });
+    return () => unsub();
+  }, []);
+
   const filterLabel = filterOptions.find(o => o.value === filter)?.label || 'All';
-  const filteredPosts = filter === 'All' ? DUMMY_POSTS : DUMMY_POSTS.filter(p => p.type === filter);
+  const filtered = filter === 'All' ? posts : posts.filter((p: any) => p.type === filter);
 
   return (
     <View style={styles.container}>
 
-      {/* Header */}
       <View style={styles.headerBlock} onLayout={e => setHeaderHeight(e.nativeEvent.layout.height)}>
         <Svg style={StyleSheet.absoluteFill} width="100%" height={headerHeight} viewBox="0 0 390 130" preserveAspectRatio="xMidYMid slice">
           <Polygon points="0,0 80,30 40,80" fill="white" opacity={0.04} />
@@ -83,29 +81,26 @@ export default function CommunityScreen() {
         <Text style={[styles.sub, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>Connect beyond the game</Text>
       </View>
 
-      {/* Post composer */}
-      <View style={styles.composer}>
+      {/* Composer */}
+      <TouchableOpacity style={styles.composer} onPress={() => router.push('/new-post')} activeOpacity={0.8}>
         <View style={styles.composerAvatar}>
           <Text style={styles.composerAvatarText}>{initials}</Text>
         </View>
-        <TouchableOpacity style={styles.composerInput}>
+        <View style={styles.composerInput}>
           <Text style={styles.composerPlaceholder}>Ask a question or post gear for sale...</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.composerImageBtn}>
+        </View>
+        <View style={styles.composerImageBtn}>
           <Svg width={16} height={16} viewBox="0 0 16 16" fill="none">
             <Path d="M2 2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Z" stroke="#888" strokeWidth="1.4" />
             <Path d="M5 9l2.5-3L10 9" stroke="#888" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
           </Svg>
-        </TouchableOpacity>
-      </View>
+        </View>
+      </TouchableOpacity>
 
-      {/* Filter dropdown */}
+      {/* Filter */}
       <View style={styles.filterRow}>
         <View style={styles.dropdownWrapper}>
-          <TouchableOpacity
-            style={styles.dropdownSelect}
-            onPress={() => setShowFilter(!showFilter)}
-          >
+          <TouchableOpacity style={styles.dropdownSelect} onPress={() => setShowFilter(!showFilter)}>
             <Text style={styles.dropdownSelectText}>{filterLabel}</Text>
             <Svg width={12} height={12} viewBox="0 0 12 12" fill="none">
               <Path d="M2 4l4 4 4-4" stroke="#888" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
@@ -127,45 +122,58 @@ export default function CommunityScreen() {
         </View>
       </View>
 
-      {/* Feed */}
-      <FlatList
-        data={filteredPosts}
-        keyExtractor={p => p.id}
-        contentContainerStyle={styles.list}
-        renderItem={({ item: p }) => (
-          <View style={styles.card}>
-            <View style={styles.cardTop}>
-              <View style={[styles.avatar, { backgroundColor: p.avatarColor }]}>
-                <Text style={styles.avatarText}>{p.initials}</Text>
-              </View>
-              <View style={styles.cardMeta}>
-                <Text style={styles.cardAuthor}>{p.author}</Text>
-                <Text style={styles.cardTime}>{p.time} · {p.type}</Text>
-              </View>
-              <View style={[styles.typeBadge, p.type === 'Question' && styles.typeBadgeQuestion]}>
-                <Text style={[styles.typeBadgeText, p.type === 'Question' && styles.typeBadgeTextQuestion]}>{p.type}</Text>
-              </View>
-            </View>
-            {p.title ? <Text style={styles.cardTitle}>{p.title}</Text> : null}
-            <Text style={styles.cardBody}>{p.body}</Text>
-            {p.price ? (
-              <View style={styles.cardFooter}>
-                <Text style={styles.cardPrice}>{p.price}</Text>
-                <TouchableOpacity style={styles.messageBtn}>
-                  <Text style={styles.messageBtnText}>Message</Text>
-                </TouchableOpacity>
-              </View>
-            ) : (
-              <View style={styles.cardFooter}>
-                <TouchableOpacity style={styles.replyBtn}>
-                  <Text style={styles.replyBtnText}>Reply</Text>
-                </TouchableOpacity>
-                <Text style={styles.repliesText}>3 replies</Text>
-              </View>
-            )}
-          </View>
-        )}
-      />
+      {loading ? (
+        <ActivityIndicator size="large" color="#008080" style={{ marginTop: 60 }} />
+      ) : filtered.length === 0 ? (
+        <View style={styles.emptyContainer}>
+          <SadFace />
+          <Text style={styles.emptyTitle}>Nothing posted yet</Text>
+          <Text style={styles.emptySub}>Be the first to post in the community.</Text>
+        </View>
+      ) : (
+        <FlatList
+          data={filtered}
+          keyExtractor={(p: any) => p.id}
+          contentContainerStyle={styles.list}
+          renderItem={({ item: p }: any) => {
+            const ago = p.createdAt?.seconds ? timeAgo(Math.floor(Date.now() / 1000) - p.createdAt.seconds) : '';
+            const isSale = p.type === 'Sale';
+            return (
+              <TouchableOpacity
+                style={styles.card}
+                activeOpacity={0.85}
+                onPress={() => router.push({ pathname: '/community-post', params: { id: p.id } })}
+              >
+                <View style={styles.cardTop}>
+                  <View style={[styles.avatar, { backgroundColor: isSale ? '#008080' : '#7A1E1E' }]}>
+                    <Text style={styles.avatarText}>{p.authorInitials || '??'}</Text>
+                  </View>
+                  <View style={styles.cardMeta}>
+                    <Text style={styles.cardAuthor}>{p.authorName || 'Anonymous'}</Text>
+                    <Text style={styles.cardTime}>{ago}</Text>
+                  </View>
+                  <View style={[styles.typeBadge, !isSale && styles.typeBadgeQuestion]}>
+                    <Text style={[styles.typeBadgeText, !isSale && styles.typeBadgeTextQuestion]}>
+                      {isSale ? 'For Sale' : 'Question'}
+                    </Text>
+                  </View>
+                </View>
+                {p.title ? <Text style={styles.cardTitle}>{p.title}</Text> : null}
+                <Text style={styles.cardBody} numberOfLines={3}>{p.body}</Text>
+                {p.imageUrl ? (
+                  <View style={styles.cardImagePlaceholder}>
+                    <Text style={styles.cardImagePlaceholderText}>📷 Photo attached</Text>
+                  </View>
+                ) : null}
+                <View style={styles.cardFooter}>
+                  {isSale && p.price ? <Text style={styles.cardPrice}>{p.price}</Text> : <View />}
+                  <Text style={styles.commentCount}>💬 {p.commentCount || 0} comments</Text>
+                </View>
+              </TouchableOpacity>
+            );
+          }}
+        />
+      )}
     </View>
   );
 }
@@ -199,16 +207,17 @@ const styles = StyleSheet.create({
   cardAuthor: { fontSize: 13, fontWeight: '700', color: '#111' },
   cardTime: { fontSize: 11, color: '#aaa', marginTop: 1 },
   typeBadge: { backgroundColor: 'rgba(0,128,128,0.1)', borderRadius: 20, paddingHorizontal: 8, paddingVertical: 3 },
-  typeBadgeQuestion: { backgroundColor: 'rgba(234,179,8,0.1)' },
+  typeBadgeQuestion: { backgroundColor: 'rgba(122,30,30,0.1)' },
   typeBadgeText: { fontSize: 10, color: '#008080', fontWeight: '600' },
-  typeBadgeTextQuestion: { color: '#ca8a04' },
+  typeBadgeTextQuestion: { color: '#7A1E1E' },
   cardTitle: { fontSize: 14, fontWeight: '700', color: '#111', marginBottom: 4 },
   cardBody: { fontSize: 13, color: '#555', lineHeight: 19 },
+  cardImagePlaceholder: { backgroundColor: '#f5ede0', borderRadius: 8, padding: 8, marginTop: 8 },
+  cardImagePlaceholderText: { fontSize: 12, color: '#a0b8b8' },
   cardFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 },
   cardPrice: { fontSize: 14, fontWeight: '800', color: '#008080' },
-  messageBtn: { backgroundColor: '#008080', borderRadius: 20, paddingHorizontal: 14, paddingVertical: 6 },
-  messageBtnText: { color: '#fff', fontSize: 12, fontWeight: '600' },
-  replyBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  replyBtnText: { fontSize: 12, color: '#aaa' },
-  repliesText: { fontSize: 12, color: '#aaa' },
+  commentCount: { fontSize: 12, color: '#aaa' },
+  emptyContainer: { alignItems: 'center', marginTop: 60, gap: 10 },
+  emptyTitle: { fontSize: 18, fontWeight: 'bold', color: '#a0b8b8', marginTop: 8 },
+  emptySub: { fontSize: 14, color: '#a0b8b8', textAlign: 'center', paddingHorizontal: 40 },
 });
