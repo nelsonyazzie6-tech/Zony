@@ -31,8 +31,10 @@ export default function NewPostScreen() {
     setLoading(true);
     try {
       const userSnap = await getDoc(doc(db, 'users', user.uid));
-      const username = userSnap.exists() ? (userSnap.data().username || user.email || 'Anonymous') : (user.email || 'Anonymous');
+      const userData = userSnap.exists() ? userSnap.data() : {};
+      const username = userData.username || user.email || 'Anonymous';
       const initials = username.slice(0, 2).toUpperCase();
+      const photoURL = userData.photoURL || null;
 
       await addDoc(collection(db, 'community'), {
         type,
@@ -42,6 +44,7 @@ export default function NewPostScreen() {
         imageUrl: null,
         authorName: username,
         authorInitials: initials,
+        authorPhotoURL: photoURL,
         authorId: user.uid,
         commentCount: 0,
         createdAt: serverTimestamp(),

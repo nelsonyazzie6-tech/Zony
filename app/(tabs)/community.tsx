@@ -1,8 +1,8 @@
 import { Rajdhani_700Bold, useFonts } from '@expo-google-fonts/rajdhani';
 import { useRouter } from 'expo-router';
-import { collection, onSnapshot, orderBy, query } from 'firebase/firestore';
+import { collection, doc, getDoc, onSnapshot, orderBy, query } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, FlatList, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Svg, { Path, Polygon } from 'react-native-svg';
 import { auth, db } from '../../firebaseConfig';
 
@@ -40,6 +40,7 @@ export default function CommunityScreen() {
   const [showFilter, setShowFilter] = useState(false);
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [myPhotoURL, setMyPhotoURL] = useState<string | null>(null);
   const router = useRouter();
   const user = auth.currentUser;
   const initials = user?.email?.slice(0, 2).toUpperCase() || 'ME';
@@ -51,6 +52,14 @@ export default function CommunityScreen() {
       setLoading(false);
     });
     return () => unsub();
+  }, []);
+
+  // Load current user's photo for composer
+  useEffect(() => {
+    if (!user) return;
+    getDoc(doc(db, 'users', user.uid)).then(snap => {
+      if (snap.exists() && snap.data().photoURL) setMyPhotoURL(snap.data().photoURL);
+    });
   }, []);
 
   const filterLabel = filterOptions.find(o => o.value === filter)?.label || 'All';
@@ -82,9 +91,13 @@ export default function CommunityScreen() {
       </View>
 
       <TouchableOpacity style={styles.composer} onPress={() => router.push('/new-post')} activeOpacity={0.8}>
-        <View style={styles.composerAvatar}>
-          <Text style={[styles.composerAvatarText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>{initials}</Text>
-        </View>
+        {myPhotoURL ? (
+          <Image source={{ uri: myPhotoURL }} style={styles.composerAvatarImg} />
+        ) : (
+          <View style={styles.composerAvatar}>
+            <Text style={[styles.composerAvatarText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>{initials}</Text>
+          </View>
+        )}
         <View style={styles.composerInput}>
           <Text style={styles.composerPlaceholder}>Ask a question or post gear for sale...</Text>
         </View>
@@ -140,11 +153,15 @@ export default function CommunityScreen() {
                 onPress={() => router.push({ pathname: '/community-post', params: { id: p.id } })}
               >
                 <View style={styles.cardTop}>
-                  <View style={[styles.avatar, { backgroundColor: avatarColor }]}>
-                    <Text style={[styles.avatarText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>
-                      {p.authorInitials || '??'}
-                    </Text>
-                  </View>
+                  {p.authorPhotoURL ? (
+                    <Image source={{ uri: p.authorPhotoURL }} style={styles.avatarImg} />
+                  ) : (
+                    <View style={[styles.avatar, { backgroundColor: avatarColor }]}>
+                      <Text style={[styles.avatarText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>
+                        {p.authorInitials || '??'}
+                      </Text>
+                    </View>
+                  )}
                   <View style={styles.cardMeta}>
                     <Text style={[styles.cardAuthor, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>
                       {p.authorName ? p.authorName.toUpperCase() : 'ANONYMOUS'}
@@ -179,6 +196,7 @@ const styles = StyleSheet.create({
   sub: { fontSize: 14, color: 'rgba(255,255,255,0.8)', textAlign: 'center', marginTop: 2 },
   composer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#f0f0f0', paddingHorizontal: 16, paddingVertical: 12, gap: 10 },
   composerAvatar: { width: 38, height: 38, borderRadius: 10, backgroundColor: '#008080', alignItems: 'center', justifyContent: 'center' },
+  composerAvatarImg: { width: 38, height: 38, borderRadius: 10 },
   composerAvatarText: { color: '#fff', fontSize: 13, fontWeight: 'bold' },
   composerInput: { flex: 1, backgroundColor: '#F5F0E8', borderRadius: 20, paddingHorizontal: 14, paddingVertical: 8 },
   composerPlaceholder: { fontSize: 13, color: '#aaa' },
@@ -195,6 +213,7 @@ const styles = StyleSheet.create({
   card: { backgroundColor: '#fff', borderRadius: 16, marginBottom: 12, padding: 14, borderWidth: 1, borderColor: '#e8e8e8', shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 4, elevation: 1 },
   cardTop: { flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 8 },
   avatar: { width: 38, height: 38, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  avatarImg: { width: 38, height: 38, borderRadius: 10 },
   avatarText: { color: '#fff', fontSize: 13, fontWeight: 'bold' },
   cardMeta: { flex: 1 },
   cardAuthor: { fontSize: 14, fontWeight: '700', color: '#111', letterSpacing: 0.5 },
