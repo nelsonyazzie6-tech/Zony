@@ -81,23 +81,15 @@ export default function CommunityScreen() {
         <Text style={[styles.sub, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>Connect beyond the game</Text>
       </View>
 
-      {/* Composer */}
       <TouchableOpacity style={styles.composer} onPress={() => router.push('/new-post')} activeOpacity={0.8}>
         <View style={styles.composerAvatar}>
-          <Text style={styles.composerAvatarText}>{initials}</Text>
+          <Text style={[styles.composerAvatarText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>{initials}</Text>
         </View>
         <View style={styles.composerInput}>
           <Text style={styles.composerPlaceholder}>Ask a question or post gear for sale...</Text>
         </View>
-        <View style={styles.composerImageBtn}>
-          <Svg width={16} height={16} viewBox="0 0 16 16" fill="none">
-            <Path d="M2 2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Z" stroke="#888" strokeWidth="1.4" />
-            <Path d="M5 9l2.5-3L10 9" stroke="#888" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
-          </Svg>
-        </View>
       </TouchableOpacity>
 
-      {/* Filter */}
       <View style={styles.filterRow}>
         <View style={styles.dropdownWrapper}>
           <TouchableOpacity style={styles.dropdownSelect} onPress={() => setShowFilter(!showFilter)}>
@@ -138,6 +130,9 @@ export default function CommunityScreen() {
           renderItem={({ item: p }: any) => {
             const ago = p.createdAt?.seconds ? timeAgo(Math.floor(Date.now() / 1000) - p.createdAt.seconds) : '';
             const isSale = p.type === 'Sale';
+            const avatarColor = isSale ? '#7A1E1E' : '#008080';
+            const badgeBg = isSale ? 'rgba(122,30,30,0.1)' : 'rgba(0,128,128,0.1)';
+            const badgeColor = isSale ? '#7A1E1E' : '#008080';
             return (
               <TouchableOpacity
                 style={styles.card}
@@ -145,26 +140,25 @@ export default function CommunityScreen() {
                 onPress={() => router.push({ pathname: '/community-post', params: { id: p.id } })}
               >
                 <View style={styles.cardTop}>
-                  <View style={[styles.avatar, { backgroundColor: isSale ? '#008080' : '#7A1E1E' }]}>
-                    <Text style={styles.avatarText}>{p.authorInitials || '??'}</Text>
+                  <View style={[styles.avatar, { backgroundColor: avatarColor }]}>
+                    <Text style={[styles.avatarText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>
+                      {p.authorInitials || '??'}
+                    </Text>
                   </View>
                   <View style={styles.cardMeta}>
-                    <Text style={styles.cardAuthor}>{p.authorName || 'Anonymous'}</Text>
+                    <Text style={[styles.cardAuthor, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>
+                      {p.authorName ? p.authorName.toUpperCase() : 'ANONYMOUS'}
+                    </Text>
                     <Text style={styles.cardTime}>{ago}</Text>
                   </View>
-                  <View style={[styles.typeBadge, !isSale && styles.typeBadgeQuestion]}>
-                    <Text style={[styles.typeBadgeText, !isSale && styles.typeBadgeTextQuestion]}>
+                  <View style={[styles.typeBadge, { backgroundColor: badgeBg }]}>
+                    <Text style={[styles.typeBadgeText, { color: badgeColor }]}>
                       {isSale ? 'For Sale' : 'Question'}
                     </Text>
                   </View>
                 </View>
                 {p.title ? <Text style={styles.cardTitle}>{p.title}</Text> : null}
                 <Text style={styles.cardBody} numberOfLines={3}>{p.body}</Text>
-                {p.imageUrl ? (
-                  <View style={styles.cardImagePlaceholder}>
-                    <Text style={styles.cardImagePlaceholderText}>📷 Photo attached</Text>
-                  </View>
-                ) : null}
                 <View style={styles.cardFooter}>
                   {isSale && p.price ? <Text style={styles.cardPrice}>{p.price}</Text> : <View />}
                   <Text style={styles.commentCount}>💬 {p.commentCount || 0} comments</Text>
@@ -184,11 +178,10 @@ const styles = StyleSheet.create({
   header: { fontSize: 28, fontWeight: '900', color: '#fff', textAlign: 'center', letterSpacing: 3 },
   sub: { fontSize: 14, color: 'rgba(255,255,255,0.8)', textAlign: 'center', marginTop: 2 },
   composer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#f0f0f0', paddingHorizontal: 16, paddingVertical: 12, gap: 10 },
-  composerAvatar: { width: 34, height: 34, borderRadius: 17, backgroundColor: '#008080', alignItems: 'center', justifyContent: 'center' },
-  composerAvatarText: { color: '#fff', fontSize: 11, fontWeight: 'bold' },
+  composerAvatar: { width: 38, height: 38, borderRadius: 10, backgroundColor: '#008080', alignItems: 'center', justifyContent: 'center' },
+  composerAvatarText: { color: '#fff', fontSize: 13, fontWeight: 'bold' },
   composerInput: { flex: 1, backgroundColor: '#F5F0E8', borderRadius: 20, paddingHorizontal: 14, paddingVertical: 8 },
   composerPlaceholder: { fontSize: 13, color: '#aaa' },
-  composerImageBtn: { width: 34, height: 34, borderRadius: 17, backgroundColor: '#F5F0E8', alignItems: 'center', justifyContent: 'center' },
   filterRow: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 4, zIndex: 999 },
   dropdownWrapper: { zIndex: 999 },
   dropdownSelect: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#fff', borderRadius: 14, paddingHorizontal: 12, paddingVertical: 10, borderWidth: 1, borderColor: '#e8e8e8', shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 4, elevation: 1 },
@@ -201,21 +194,17 @@ const styles = StyleSheet.create({
   list: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 80 },
   card: { backgroundColor: '#fff', borderRadius: 16, marginBottom: 12, padding: 14, borderWidth: 1, borderColor: '#e8e8e8', shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 4, elevation: 1 },
   cardTop: { flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 8 },
-  avatar: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
-  avatarText: { color: '#fff', fontSize: 11, fontWeight: 'bold' },
+  avatar: { width: 38, height: 38, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  avatarText: { color: '#fff', fontSize: 13, fontWeight: 'bold' },
   cardMeta: { flex: 1 },
-  cardAuthor: { fontSize: 13, fontWeight: '700', color: '#111' },
+  cardAuthor: { fontSize: 14, fontWeight: '700', color: '#111', letterSpacing: 0.5 },
   cardTime: { fontSize: 11, color: '#aaa', marginTop: 1 },
-  typeBadge: { backgroundColor: 'rgba(0,128,128,0.1)', borderRadius: 20, paddingHorizontal: 8, paddingVertical: 3 },
-  typeBadgeQuestion: { backgroundColor: 'rgba(122,30,30,0.1)' },
-  typeBadgeText: { fontSize: 10, color: '#008080', fontWeight: '600' },
-  typeBadgeTextQuestion: { color: '#7A1E1E' },
+  typeBadge: { borderRadius: 20, paddingHorizontal: 8, paddingVertical: 3 },
+  typeBadgeText: { fontSize: 10, fontWeight: '600' },
   cardTitle: { fontSize: 14, fontWeight: '700', color: '#111', marginBottom: 4 },
   cardBody: { fontSize: 13, color: '#555', lineHeight: 19 },
-  cardImagePlaceholder: { backgroundColor: '#f5ede0', borderRadius: 8, padding: 8, marginTop: 8 },
-  cardImagePlaceholderText: { fontSize: 12, color: '#a0b8b8' },
   cardFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 },
-  cardPrice: { fontSize: 14, fontWeight: '800', color: '#008080' },
+  cardPrice: { fontSize: 14, fontWeight: '800', color: '#7A1E1E' },
   commentCount: { fontSize: 12, color: '#aaa' },
   emptyContainer: { alignItems: 'center', marginTop: 60, gap: 10 },
   emptyTitle: { fontSize: 18, fontWeight: 'bold', color: '#a0b8b8', marginTop: 8 },

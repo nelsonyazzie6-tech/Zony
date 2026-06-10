@@ -1,11 +1,8 @@
 import { Rajdhani_700Bold, useFonts } from '@expo-google-fonts/rajdhani';
-import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { addDoc, collection, doc, getDoc, serverTimestamp } from 'firebase/firestore';
-import { getDownloadURL, getStorage, ref, uploadBytes } from 'firebase/storage';
 import { useState } from 'react';
-import { Alert, Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import Svg, { Path } from 'react-native-svg';
+import { Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { auth, db } from '../firebaseConfig';
 
 const typeOptions = ['Sale', 'Question'];
@@ -18,17 +15,7 @@ export default function NewPostScreen() {
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
   const [price, setPrice] = useState('');
-  const [image, setImage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-
-  const pickImage = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      quality: 0.7,
-    });
-    if (!result.canceled) setImage(result.assets[0].uri);
-  };
 
   const handlePost = async () => {
     if (!type || !body.trim()) {
@@ -47,21 +34,12 @@ export default function NewPostScreen() {
       const username = userSnap.exists() ? (userSnap.data().username || user.email || 'Anonymous') : (user.email || 'Anonymous');
       const initials = username.slice(0, 2).toUpperCase();
 
-      let imageUrl = null;
-      if (image) {
-        const storage = getStorage();
-        const blob = await (await fetch(image)).blob();
-        const storageRef = ref(storage, `community/${user.uid}_${Date.now()}`);
-        await uploadBytes(storageRef, blob);
-        imageUrl = await getDownloadURL(storageRef);
-      }
-
       await addDoc(collection(db, 'community'), {
         type,
         title: type === 'Sale' ? title.trim() : null,
         body: body.trim(),
         price: type === 'Sale' ? price.trim() : null,
-        imageUrl,
+        imageUrl: null,
         authorName: username,
         authorInitials: initials,
         authorId: user.uid,
@@ -93,7 +71,6 @@ export default function NewPostScreen() {
 
       <View style={styles.form}>
 
-        {/* Type picker */}
         <Text style={styles.label}>Post Type</Text>
         <TouchableOpacity
           style={styles.dropdown}
@@ -121,7 +98,6 @@ export default function NewPostScreen() {
           </View>
         )}
 
-        {/* Sale-only fields */}
         {type === 'Sale' && (
           <>
             <Text style={styles.label}>Item Title</Text>
@@ -145,7 +121,6 @@ export default function NewPostScreen() {
           </>
         )}
 
-        {/* Body */}
         <Text style={styles.label}>
           {type === 'Sale' ? 'Description' : type === 'Question' ? 'Your Question' : 'Content'}
         </Text>
@@ -164,29 +139,6 @@ export default function NewPostScreen() {
           multiline
           numberOfLines={5}
         />
-
-        {/* Image picker */}
-        <Text style={styles.label}>
-          Photo <Text style={styles.optional}>(optional)</Text>
-        </Text>
-        <TouchableOpacity style={styles.imagePicker} onPress={pickImage} activeOpacity={0.8}>
-          {image ? (
-            <Image source={{ uri: image }} style={styles.imagePreview} />
-          ) : (
-            <View style={styles.imagePickerInner}>
-              <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
-                <Path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" stroke="#a0b8b8" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                <Path d="M17 8l-5-5-5 5M12 3v12" stroke="#a0b8b8" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-              </Svg>
-              <Text style={styles.imagePickerText}>Tap to upload a photo</Text>
-            </View>
-          )}
-        </TouchableOpacity>
-        {image && (
-          <TouchableOpacity onPress={() => setImage(null)} style={styles.removeImage}>
-            <Text style={styles.removeImageText}>Remove photo</Text>
-          </TouchableOpacity>
-        )}
 
       </View>
     </ScrollView>
@@ -213,10 +165,4 @@ const styles = StyleSheet.create({
   dropdownItem: { paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#f5f5f5' },
   dropdownItemText: { fontSize: 14, color: '#003333' },
   dropdownItemActive: { color: '#008080', fontWeight: '700' },
-  imagePicker: { backgroundColor: '#fff', borderRadius: 16, borderWidth: 1, borderColor: '#e8e8e8', overflow: 'hidden', marginTop: 4 },
-  imagePickerInner: { alignItems: 'center', justifyContent: 'center', paddingVertical: 28, gap: 8 },
-  imagePickerText: { fontSize: 13, color: '#a0b8b8' },
-  imagePreview: { width: '100%', height: 200, resizeMode: 'cover' },
-  removeImage: { marginTop: 8, alignSelf: 'flex-end' },
-  removeImageText: { fontSize: 12, color: '#7A1E1E', fontWeight: '600' },
 });

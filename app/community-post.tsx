@@ -1,8 +1,8 @@
 import { Rajdhani_700Bold, useFonts } from '@expo-google-fonts/rajdhani';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { addDoc, collection, doc, getDoc, increment, onSnapshot, orderBy, query, serverTimestamp, updateDoc } from 'firebase/firestore';
+import { addDoc, collection, deleteDoc, doc, getDoc, increment, onSnapshot, orderBy, query, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
-import { Alert, Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Image, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { auth, db } from '../firebaseConfig';
 
@@ -26,6 +26,8 @@ export default function CommunityPostScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
   const [replyText, setReplyText] = useState('');
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
   const user = auth.currentUser;
 
   useEffect(() => {
@@ -45,45 +47,64 @@ export default function CommunityPostScreen() {
 
   const handleComment = async () => {
     if (!commentText.trim()) return;
-    if (!user) { Alert.alert('Sign in required'); return; }
+    if (!user) return;
     setSubmitting(true);
     try {
       const userSnap = await getDoc(doc(db, 'users', user.uid));
-      const username = userSnap.exists() ? (userSnap.data().username || user.email || 'Anonymous') : (user.email || 'Anonymous');
+      const username = userSnap.exists() ? (userSnap.data().username || '') : '';
+      const initials = username
+        ? username.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase()
+        : '??';
       await addDoc(collection(db, 'community', id as string, 'comments'), {
         body: commentText.trim(),
         authorName: username,
-        authorInitials: username.slice(0, 2).toUpperCase(),
+        authorInitials: initials,
         authorId: user.uid,
         createdAt: serverTimestamp(),
       });
       await updateDoc(doc(db, 'community', id as string), { commentCount: increment(1) });
       setCommentText('');
-    } catch (e: any) { Alert.alert('Error', e.message); }
+    } catch (e: any) { console.log(e); }
     setSubmitting(false);
   };
 
   const handleReply = async (commentId: string) => {
     if (!replyText.trim()) return;
-    if (!user) { Alert.alert('Sign in required'); return; }
+    if (!user) return;
     try {
       const userSnap = await getDoc(doc(db, 'users', user.uid));
-      const username = userSnap.exists() ? (userSnap.data().username || user.email || 'Anonymous') : (user.email || 'Anonymous');
+      const username = userSnap.exists() ? (userSnap.data().username || '') : '';
+      const initials = username
+        ? username.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase()
+        : '??';
       await addDoc(collection(db, 'community', id as string, 'comments', commentId, 'replies'), {
         body: replyText.trim(),
         authorName: username,
-        authorInitials: username.slice(0, 2).toUpperCase(),
+        authorInitials: initials,
         authorId: user.uid,
         createdAt: serverTimestamp(),
       });
       setReplyText('');
       setReplyingTo(null);
-    } catch (e: any) { Alert.alert('Error', e.message); }
+    } catch (e: any) { console.log(e); }
+  };
+
+  const confirmDelete = async () => {
+    setDeleteLoading(true);
+    try {
+      await deleteDoc(doc(db, 'community', id as string));
+      router.replace('/(tabs)/community');
+    } catch (e: any) { console.log(e); }
+    setDeleteLoading(false);
   };
 
   if (!post) return null;
   const isSale = post.type === 'Sale';
+  const isOwner = user?.uid === post.authorId;
   const ago = post.createdAt?.seconds ? timeAgo(Math.floor(Date.now() / 1000) - post.createdAt.seconds) : '';
+  const avatarColor = isSale ? '#7A1E1E' : '#008080';
+  const badgeBg = isSale ? 'rgba(122,30,30,0.1)' : 'rgba(0,128,128,0.1)';
+  const badgeColor = isSale ? '#7A1E1E' : '#008080';
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -93,22 +114,30 @@ export default function CommunityPostScreen() {
           <TouchableOpacity onPress={() => router.back()}>
             <Text style={styles.backText}>← Back</Text>
           </TouchableOpacity>
+          {isOwner && (
+            <TouchableOpacity onPress={() => setShowDeleteModal(true)} style={styles.deleteBtn}>
+              <Text style={styles.deleteBtnText}>Delete Post</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
 
-          {/* Post */}
           <View style={styles.postCard}>
             <View style={styles.postTop}>
-              <View style={[styles.avatar, { backgroundColor: isSale ? '#008080' : '#7A1E1E' }]}>
-                <Text style={styles.avatarText}>{post.authorInitials || '??'}</Text>
+              <View style={[styles.avatar, { backgroundColor: avatarColor }]}>
+                <Text style={[styles.avatarText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>
+                  {post.authorInitials || '??'}
+                </Text>
               </View>
               <View style={styles.postMeta}>
-                <Text style={styles.postAuthor}>{post.authorName}</Text>
+                <Text style={[styles.postAuthor, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>
+                  {post.authorName ? post.authorName.toUpperCase() : 'ANONYMOUS'}
+                </Text>
                 <Text style={styles.postTime}>{ago}</Text>
               </View>
-              <View style={[styles.typeBadge, !isSale && styles.typeBadgeQuestion]}>
-                <Text style={[styles.typeBadgeText, !isSale && styles.typeBadgeTextQuestion]}>
+              <View style={[styles.typeBadge, { backgroundColor: badgeBg }]}>
+                <Text style={[styles.typeBadgeText, { color: badgeColor }]}>
                   {isSale ? 'For Sale' : 'Question'}
                 </Text>
               </View>
@@ -123,7 +152,6 @@ export default function CommunityPostScreen() {
             ) : null}
           </View>
 
-          {/* Comments */}
           <Text style={styles.commentsHeader}>
             {comments.length} {comments.length === 1 ? 'Comment' : 'Comments'}
           </Text>
@@ -134,10 +162,14 @@ export default function CommunityPostScreen() {
               <View key={c.id} style={styles.commentCard}>
                 <View style={styles.commentTop}>
                   <View style={styles.commentAvatar}>
-                    <Text style={styles.commentAvatarText}>{c.authorInitials || '??'}</Text>
+                    <Text style={[styles.commentAvatarText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>
+                      {c.authorInitials || '??'}
+                    </Text>
                   </View>
                   <View style={styles.commentMeta}>
-                    <Text style={styles.commentAuthor}>{c.authorName}</Text>
+                    <Text style={[styles.commentAuthor, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>
+                      {c.authorName ? c.authorName.toUpperCase() : 'ANONYMOUS'}
+                    </Text>
                     <Text style={styles.commentTime}>{cAgo}</Text>
                   </View>
                 </View>
@@ -167,7 +199,6 @@ export default function CommunityPostScreen() {
           <View style={{ height: 20 }} />
         </ScrollView>
 
-        {/* Comment input */}
         <View style={styles.commentInputRow}>
           <TextInput
             style={styles.commentInput}
@@ -188,37 +219,61 @@ export default function CommunityPostScreen() {
         </View>
 
       </View>
+
+      <Modal visible={showDeleteModal} animationType="fade" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalBox}>
+            <Text style={[styles.modalTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>
+              DELETE POST
+            </Text>
+            <Text style={styles.modalMsg}>
+              Are you sure you want to delete this post? This cannot be undone.
+            </Text>
+            <View style={styles.modalBtns}>
+              <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setShowDeleteModal(false)} activeOpacity={0.85}>
+                <Text style={[styles.modalCancelText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>KEEP IT</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.modalDeleteBtn} onPress={confirmDelete} disabled={deleteLoading} activeOpacity={0.85}>
+                <Text style={[styles.modalDeleteText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>
+                  {deleteLoading ? 'DELETING...' : 'DELETE'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f5ede0', paddingTop: 60 },
-  topRow: { paddingHorizontal: 20, marginBottom: 8 },
+  topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, marginBottom: 8 },
   backText: { fontSize: 16, color: '#008080', fontWeight: '600' },
+  deleteBtn: { backgroundColor: '#1a1a2e', borderRadius: 20, paddingHorizontal: 14, paddingVertical: 6 },
+  deleteBtnText: { color: '#fff', fontSize: 13, fontWeight: '600' },
   scroll: { paddingHorizontal: 16, paddingBottom: 20 },
   postCard: { backgroundColor: '#fff', borderRadius: 16, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: '#e8e8e8', shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 4, elevation: 1 },
   postTop: { flexDirection: 'row', alignItems: 'center', marginBottom: 10, gap: 8 },
-  avatar: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
-  avatarText: { color: '#fff', fontSize: 12, fontWeight: 'bold' },
+  avatar: { width: 42, height: 42, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  avatarText: { color: '#fff', fontSize: 14, fontWeight: 'bold' },
   postMeta: { flex: 1 },
-  postAuthor: { fontSize: 14, fontWeight: '700', color: '#111' },
+  postAuthor: { fontSize: 15, fontWeight: '700', color: '#111', letterSpacing: 0.5 },
   postTime: { fontSize: 11, color: '#aaa', marginTop: 1 },
-  typeBadge: { backgroundColor: 'rgba(0,128,128,0.1)', borderRadius: 20, paddingHorizontal: 8, paddingVertical: 3 },
-  typeBadgeQuestion: { backgroundColor: 'rgba(122,30,30,0.1)' },
-  typeBadgeText: { fontSize: 10, color: '#008080', fontWeight: '600' },
-  typeBadgeTextQuestion: { color: '#7A1E1E' },
+  typeBadge: { borderRadius: 20, paddingHorizontal: 8, paddingVertical: 3 },
+  typeBadgeText: { fontSize: 10, fontWeight: '600' },
   postTitle: { fontSize: 18, color: '#111', marginBottom: 8 },
   postBody: { fontSize: 14, color: '#444', lineHeight: 22 },
   postImage: { width: '100%', height: 200, borderRadius: 12, marginTop: 12, resizeMode: 'cover' },
-  postPrice: { fontSize: 18, fontWeight: '900', color: '#008080', marginTop: 12 },
+  postPrice: { fontSize: 18, fontWeight: '900', color: '#7A1E1E', marginTop: 12 },
   commentsHeader: { fontSize: 13, fontWeight: '700', color: '#a0b8b8', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 10 },
   commentCard: { backgroundColor: '#fff', borderRadius: 14, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: '#e8e8e8' },
   commentTop: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
-  commentAvatar: { width: 30, height: 30, borderRadius: 15, backgroundColor: '#008080', alignItems: 'center', justifyContent: 'center' },
-  commentAvatarText: { color: '#fff', fontSize: 10, fontWeight: 'bold' },
+  commentAvatar: { width: 34, height: 34, borderRadius: 9, backgroundColor: '#008080', alignItems: 'center', justifyContent: 'center' },
+  commentAvatarText: { color: '#fff', fontSize: 11, fontWeight: 'bold' },
   commentMeta: { flex: 1 },
-  commentAuthor: { fontSize: 13, fontWeight: '700', color: '#111' },
+  commentAuthor: { fontSize: 13, fontWeight: '700', color: '#111', letterSpacing: 0.5 },
   commentTime: { fontSize: 11, color: '#aaa' },
   commentBody: { fontSize: 13, color: '#555', lineHeight: 19, marginBottom: 6 },
   replyBtn: { fontSize: 12, color: '#008080', fontWeight: '600' },
@@ -230,4 +285,13 @@ const styles = StyleSheet.create({
   commentInput: { flex: 1, backgroundColor: '#f5ede0', borderRadius: 20, paddingHorizontal: 16, paddingVertical: 10, fontSize: 14, color: '#003333', borderWidth: 1, borderColor: '#e8e8e8' },
   sendBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#008080', alignItems: 'center', justifyContent: 'center' },
   sendBtnDisabled: { backgroundColor: '#a0b8b8' },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 },
+  modalBox: { backgroundColor: '#f5ede0', borderRadius: 24, padding: 28, alignItems: 'center', width: '100%', shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 16, elevation: 8 },
+  modalTitle: { fontSize: 26, color: '#1a1a2e', letterSpacing: 2, marginBottom: 12, textAlign: 'center' },
+  modalMsg: { fontSize: 15, color: '#555', textAlign: 'center', lineHeight: 22, marginBottom: 24 },
+  modalBtns: { flexDirection: 'row', gap: 12, width: '100%' },
+  modalCancelBtn: { flex: 1, backgroundColor: '#fff', borderRadius: 14, paddingVertical: 14, alignItems: 'center', borderWidth: 1, borderColor: '#e0d8c8' },
+  modalCancelText: { fontSize: 16, color: '#555', letterSpacing: 1 },
+  modalDeleteBtn: { flex: 1, backgroundColor: '#1a1a2e', borderRadius: 14, paddingVertical: 14, alignItems: 'center' },
+  modalDeleteText: { color: '#fff', fontSize: 16, letterSpacing: 1 },
 });
