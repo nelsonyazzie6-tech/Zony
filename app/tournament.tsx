@@ -3,7 +3,26 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { addDoc, arrayRemove, arrayUnion, collection, deleteDoc, doc, getDoc, getDocs, increment, onSnapshot, orderBy, query, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 import { Alert, Clipboard, KeyboardAvoidingView, Modal, Platform, ScrollView, Share, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import Svg, { Path } from 'react-native-svg';
 import { auth, db } from '../firebaseConfig';
+
+function SadFace() {
+  return (
+    <Svg width={64} height={64} viewBox="0 0 64 64" fill="none">
+      <Path d="M32 12a20 20 0 1 0 0 40 20 20 0 0 0 0-40Z" stroke="#a0b8b8" strokeWidth="2" />
+      <Path d="M24 26a2 2 0 1 1 4 0 2 2 0 0 1-4 0Z" fill="#a0b8b8" />
+      <Path d="M36 26a2 2 0 1 1 4 0 2 2 0 0 1-4 0Z" fill="#a0b8b8" />
+      <Path d="M24 42c1.5-3 4-5 8-5s6.5 2 8 5" stroke="#a0b8b8" strokeWidth="2" strokeLinecap="round" />
+    </Svg>
+  );
+}
+
+function formatPhone(val: string) {
+  const digits = val.replace(/\D/g, '').slice(0, 10);
+  if (digits.length <= 3) return digits;
+  if (digits.length <= 6) return `${digits.slice(0, 3)}-${digits.slice(3)}`;
+  return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}`;
+}
 
 export default function TournamentScreen() {
   const { id, postedBy } = useLocalSearchParams();
@@ -123,7 +142,7 @@ export default function TournamentScreen() {
 
       await addDoc(collection(db, 'notifications'), {
         toUserId: postedBy as string,
-        message: `${teamName} (${contactName}) registered for ${tournament?.name} — Division: ${teamDivision}`,
+        message: `${contactName} registered ${teamName} into ${tournament?.name}!`,
         createdAt: serverTimestamp(),
       });
 
@@ -135,7 +154,7 @@ export default function TournamentScreen() {
           body: JSON.stringify({
             to: ownerSnap.data().pushToken,
             title: '🏆 New team registered!',
-            body: `${teamName} registered for ${tournament?.name}`,
+            body: `${contactName} registered ${teamName} into ${tournament?.name}!`,
           }),
         });
       }
@@ -198,6 +217,11 @@ export default function TournamentScreen() {
   if (!tournament) return null;
   const isCanceled = tournament.status === 'canceled';
 
+  const sportColor = tournament.sport === 'Basketball' ? '#008080'
+    : tournament.sport === 'Volleyball' ? '#7A1E1E'
+    : tournament.sport === 'Softball' ? '#B8860B'
+    : '#008080';
+
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <View style={styles.container}>
@@ -219,13 +243,13 @@ export default function TournamentScreen() {
 
         {isOwner && (
           <View style={styles.tabRow}>
-            <TouchableOpacity style={[styles.tab, activeTab === 'details' && styles.tabActive]} onPress={() => setActiveTab('details')}>
-              <Text style={[styles.tabText, activeTab === 'details' && styles.tabTextActive]}>Details</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.tab, activeTab === 'teams' && styles.tabActive]} onPress={() => setActiveTab('teams')}>
-              <Text style={[styles.tabText, activeTab === 'teams' && styles.tabTextActive]}>Teams {teams.length > 0 ? `(${teams.length})` : ''}</Text>
-            </TouchableOpacity>
-          </View>
+  <TouchableOpacity style={[styles.tab, activeTab === 'details' && { backgroundColor: sportColor }]} onPress={() => setActiveTab('details')}>
+    <Text style={[styles.tabText, activeTab === 'details' && styles.tabTextActive]}>Details</Text>
+  </TouchableOpacity>
+  <TouchableOpacity style={[styles.tab, activeTab === 'teams' && { backgroundColor: sportColor }]} onPress={() => setActiveTab('teams')}>
+    <Text style={[styles.tabText, activeTab === 'teams' && styles.tabTextActive]}>Teams {teams.length > 0 ? `(${teams.length})` : ''}</Text>
+  </TouchableOpacity>
+</View>
         )}
 
         {activeTab === 'teams' && isOwner ? (
@@ -233,7 +257,7 @@ export default function TournamentScreen() {
             <Text style={styles.teamsCount}>{teams.length} {teams.length === 1 ? 'team' : 'teams'} registered</Text>
             {teams.length === 0 ? (
               <View style={styles.emptyTeams}>
-                <Text style={styles.emptyTeamsIcon}>🏀</Text>
+                <SadFace />
                 <Text style={styles.emptyTeamsText}>No teams registered yet.</Text>
               </View>
             ) : (
@@ -241,8 +265,8 @@ export default function TournamentScreen() {
                 <View key={t.id} style={styles.teamCard}>
                   <View style={styles.teamCardTop}>
                     <Text style={[styles.teamName, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>{t.teamName}</Text>
-                    <View style={styles.teamDivisionBadge}>
-                      <Text style={styles.teamDivisionText}>{t.division}</Text>
+                    <View style={[styles.teamDivisionBadge, { backgroundColor: `${sportColor}20`, borderColor: sportColor }]}>
+                      <Text style={[styles.teamDivisionText, { color: sportColor }]}>{t.division}</Text>
                     </View>
                   </View>
                   <View style={styles.divider} />
@@ -262,9 +286,9 @@ export default function TournamentScreen() {
           <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 40 }}>
 
             <View style={styles.card}>
-              <View style={styles.sportBadge}>
-                <Text style={styles.sportBadgeText}>{tournament.sport}</Text>
-              </View>
+              <View style={[styles.sportBadge, { backgroundColor: sportColor }]}>
+  <Text style={styles.sportBadgeText}>{tournament.sport}</Text>
+</View>
               <Text style={[styles.tournamentName, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>{tournament.name}</Text>
               <View style={styles.divider} />
 
@@ -421,7 +445,15 @@ export default function TournamentScreen() {
               <TextInput style={styles.modalInput} placeholder="e.g. John Begay" placeholderTextColor="#a0b8b8" value={contactName} onChangeText={setContactName} />
 
               <Text style={styles.modalLabel}>Your Contact Info</Text>
-              <TextInput style={styles.modalInput} placeholder="e.g. (928) 555-1234" placeholderTextColor="#a0b8b8" value={contactInfo} onChangeText={setContactInfo} keyboardType="phone-pad" />
+              <TextInput
+                style={styles.modalInput}
+                placeholder="e.g. 928-555-1234"
+                placeholderTextColor="#a0b8b8"
+                value={contactInfo}
+                onChangeText={v => setContactInfo(formatPhone(v))}
+                keyboardType="phone-pad"
+                maxLength={12}
+              />
 
               <Text style={styles.modalLabel}>Division</Text>
               <TouchableOpacity style={styles.modalDropdown} onPress={() => setShowDivisionPicker(!showDivisionPicker)}>
@@ -474,14 +506,13 @@ const styles = StyleSheet.create({
   tabText: { fontSize: 14, fontWeight: '600', color: '#5a7a7a' },
   tabTextActive: { color: '#fff' },
   teamsCount: { fontSize: 11, color: '#999', fontWeight: '600', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12, paddingLeft: 4 },
-  emptyTeams: { alignItems: 'center', marginTop: 60 },
-  emptyTeamsIcon: { fontSize: 50, marginBottom: 12 },
+  emptyTeams: { alignItems: 'center', marginTop: 60, gap: 10 },
   emptyTeamsText: { fontSize: 16, color: '#a0b8b8' },
   teamCard: { backgroundColor: '#fff', borderRadius: 16, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: '#f0f0f0', shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 4, elevation: 1 },
   teamCardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
   teamName: { fontSize: 17, fontWeight: '900', color: '#111', flex: 1 },
-  teamDivisionBadge: { backgroundColor: 'rgba(0,128,128,0.1)', borderRadius: 20, paddingHorizontal: 10, paddingVertical: 3 },
-  teamDivisionText: { fontSize: 12, color: '#008080', fontWeight: '600' },
+  teamDivisionBadge: { borderRadius: 20, paddingHorizontal: 10, paddingVertical: 3, borderWidth: 1 },
+  teamDivisionText: { fontSize: 12, fontWeight: '600' },
   submittedLabel: { fontSize: 10, color: '#aaa', fontWeight: '600', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 },
   contactName: { fontSize: 14, fontWeight: '600', color: '#333', marginBottom: 4 },
   contactLine: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 },
@@ -500,12 +531,12 @@ const styles = StyleSheet.create({
   copyBtnText: { fontSize: 12, color: '#008080', fontWeight: '600' },
   spotsText: { fontSize: 18, color: '#008080', fontWeight: '900', marginTop: 16 },
   ownerActions: { gap: 10, marginBottom: 20 },
-  editBtn: { backgroundColor: '#008080', borderRadius: 16, paddingVertical: 16, alignItems: 'center' },
-  editBtnText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
-  cancelBtn: { backgroundColor: '#fff', borderRadius: 16, paddingVertical: 16, alignItems: 'center', borderWidth: 2, borderColor: '#8B1A1A' },
-  cancelBtnText: { color: '#8B1A1A', fontSize: 16, fontWeight: 'bold' },
-  deleteBtn: { backgroundColor: '#1a1a2e', borderRadius: 16, paddingVertical: 16, alignItems: 'center' },
-  deleteBtnText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
+  editBtn: { backgroundColor: '#008080', borderRadius: 12, paddingVertical: 16, alignItems: 'center' },
+  editBtnText: { color: '#fff', fontSize: 18, fontFamily: 'Rajdhani_700Bold', letterSpacing: 1 },
+  cancelBtn: { backgroundColor: '#fff', borderRadius: 12, paddingVertical: 16, alignItems: 'center', borderWidth: 2, borderColor: '#8B1A1A' },
+  cancelBtnText: { color: '#8B1A1A', fontSize: 18, fontFamily: 'Rajdhani_700Bold', letterSpacing: 1 },
+  deleteBtn: { backgroundColor: '#1a1a2e', borderRadius: 12, paddingVertical: 16, alignItems: 'center' },
+  deleteBtnText: { color: '#fff', fontSize: 18, fontFamily: 'Rajdhani_700Bold', letterSpacing: 1 },
   joinBtn: { backgroundColor: '#008080', borderRadius: 16, paddingVertical: 16, alignItems: 'center', marginBottom: 20 },
   joinedBtn: { backgroundColor: '#a0b8b8' },
   joinText: { color: '#fff', fontSize: 17, fontWeight: 'bold' },

@@ -11,7 +11,8 @@ import { auth, db } from '../../firebaseConfig';
 const GOOGLE_API_KEY = 'AIzaSyC9w_A1-1lPhvtTTuCFdIQejyfm9GOJXRc';
 const sportOptions = ['Basketball', 'Volleyball', 'Softball'];
 const stateOptions = ['AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY'];
-const divisionOptions = ['8U','10U','12U','14U Boys','14U Girls','HS Boys','HS Girls','Adult Men','Adult Women','Adult Coed','Open'];
+const divisionOptions = ['6U','8U','10U','12U','14U','16U','18U','Adults'];
+const genderOptions = ['Boys', 'Girls', 'Coed', 'Womens', 'Mens'];
 const placeLabels = ['1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th'];
 
 function formatPhone(val: string) {
@@ -27,6 +28,16 @@ function TrophyIcon({ color }: { color: string }) {
       <Path d="M8 3h8v8a4 4 0 0 1-8 0V3Z" stroke={color} strokeWidth="2" strokeLinejoin="round" />
       <Path d="M8 6H5a2 2 0 0 0 0 4h3M16 6h3a2 2 0 0 1 0 4h-3" stroke={color} strokeWidth="2" strokeLinecap="round" />
       <Path d="M12 15v4M9 21h6" stroke={color} strokeWidth="2" strokeLinecap="round" />
+    </Svg>
+  );
+}
+
+function SuccessTrophy() {
+  return (
+    <Svg width={80} height={80} viewBox="0 0 24 24" fill="none">
+      <Path d="M8 3h8v8a4 4 0 0 1-8 0V3Z" stroke="#008080" strokeWidth="1.5" strokeLinejoin="round" />
+      <Path d="M8 6H5a2 2 0 0 0 0 4h3M16 6h3a2 2 0 0 1 0 4h-3" stroke="#008080" strokeWidth="1.5" strokeLinecap="round" />
+      <Path d="M12 15v4M9 21h6" stroke="#008080" strokeWidth="1.5" strokeLinecap="round" />
     </Svg>
   );
 }
@@ -54,6 +65,8 @@ export default function PostScreen() {
   const [spectatorFee, setSpectatorFee] = useState('');
   const [divisions, setDivisions] = useState<string[]>([]);
   const [showDivisionPicker, setShowDivisionPicker] = useState(false);
+  const [gender, setGender] = useState('');
+  const [showGenderPicker, setShowGenderPicker] = useState(false);
   const [rosterSize, setRosterSize] = useState('');
   const [contactName, setContactName] = useState('');
   const [contactPhone, setContactPhone] = useState('');
@@ -122,7 +135,7 @@ export default function PostScreen() {
         name, sport, date: `${startDate} - ${endDate}`, address, city, state, zip,
         location: `${city}, ${state}`, spots: parseInt(spots),
         entryFee: entryFee ? `$${entryFee}` : '', spectatorFee: spectatorFee ? `$${spectatorFee}` : '',
-        divisions, rosterSize, contactName, contactPhone, contactEmail, prizeType,
+        divisions, gender, rosterSize, contactName, contactPhone, contactEmail, prizeType,
         prizes: prizesFormatted, depositAmount: depositAmount ? `$${depositAmount}` : '',
         depositDue, status: 'active', createdAt: serverTimestamp(), postedBy: user.uid,
       });
@@ -134,11 +147,13 @@ export default function PostScreen() {
   if (submitted) {
     return (
       <View style={styles.successContainer}>
-        <Text style={styles.successIcon}>🎉</Text>
-        <Text style={styles.successTitle}>Tournament Posted!</Text>
+        <SuccessTrophy />
+        <Text style={[styles.successTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>
+          TOURNAMENT POSTED!
+        </Text>
         <Text style={styles.successSub}>Your tournament is now live on Zony.</Text>
         <TouchableOpacity style={styles.backBtn} onPress={() => { setSubmitted(false); router.push('/'); }}>
-          <Text style={styles.backText}>Back to Home</Text>
+          <Text style={[styles.backText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>BACK TO HOME</Text>
         </TouchableOpacity>
       </View>
     );
@@ -176,7 +191,7 @@ export default function PostScreen() {
           <TextInput style={styles.input} placeholder="Tournament name" placeholderTextColor="#a0b8b8" value={name} onChangeText={setName} returnKeyType="next" blurOnSubmit={false} onSubmitEditing={() => { Keyboard.dismiss(); setShowSportPicker(true); }} />
 
           <Text style={styles.label}>Sport</Text>
-          <TouchableOpacity style={styles.dropdown} onPress={() => { Keyboard.dismiss(); setShowSportPicker(!showSportPicker); setShowStatePicker(false); setShowDivisionPicker(false); }}>
+          <TouchableOpacity style={styles.dropdown} onPress={() => { Keyboard.dismiss(); setShowSportPicker(!showSportPicker); setShowStatePicker(false); setShowDivisionPicker(false); setShowGenderPicker(false); }}>
             <Text style={sport ? styles.dropdownSelected : styles.dropdownPlaceholder}>{sport || 'Select a sport...'}</Text>
             <Text style={styles.dropdownArrow}>{showSportPicker ? '▲' : '▼'}</Text>
           </TouchableOpacity>
@@ -234,8 +249,9 @@ export default function PostScreen() {
             </View>
           ) : null}
 
+          {/* Divisions */}
           <Text style={styles.label}>Divisions</Text>
-          <TouchableOpacity style={styles.dropdown} onPress={() => { Keyboard.dismiss(); setShowDivisionPicker(!showDivisionPicker); setShowSportPicker(false); setShowStatePicker(false); }}>
+          <TouchableOpacity style={styles.dropdown} onPress={() => { Keyboard.dismiss(); setShowDivisionPicker(!showDivisionPicker); setShowSportPicker(false); setShowStatePicker(false); setShowGenderPicker(false); }}>
             <Text style={divisions.length > 0 ? styles.dropdownSelected : styles.dropdownPlaceholder}>{divisions.length > 0 ? divisions.join(', ') : 'Select divisions...'}</Text>
             <Text style={styles.dropdownArrow}>{showDivisionPicker ? '▲' : '▼'}</Text>
           </TouchableOpacity>
@@ -249,6 +265,22 @@ export default function PostScreen() {
               <TouchableOpacity style={[styles.dropdownItem, { backgroundColor: '#e0f5f5' }]} onPress={() => { setShowDivisionPicker(false); setTimeout(() => entryFeeRef.current?.focus(), 100); }}>
                 <Text style={{ color: '#008080', fontWeight: 'bold', textAlign: 'center' }}>Done</Text>
               </TouchableOpacity>
+            </View>
+          )}
+
+          {/* Gender */}
+          <Text style={styles.label}>Gender</Text>
+          <TouchableOpacity style={styles.dropdown} onPress={() => { Keyboard.dismiss(); setShowGenderPicker(!showGenderPicker); setShowSportPicker(false); setShowStatePicker(false); setShowDivisionPicker(false); }}>
+            <Text style={gender ? styles.dropdownSelected : styles.dropdownPlaceholder}>{gender || 'Select gender...'}</Text>
+            <Text style={styles.dropdownArrow}>{showGenderPicker ? '▲' : '▼'}</Text>
+          </TouchableOpacity>
+          {showGenderPicker && (
+            <View style={styles.dropdownList}>
+              {genderOptions.map((g) => (
+                <TouchableOpacity key={g} style={styles.dropdownItem} onPress={() => { setGender(g); setShowGenderPicker(false); setTimeout(() => entryFeeRef.current?.focus(), 100); }}>
+                  <Text style={[styles.dropdownItemText, gender === g && styles.dropdownItemActive]}>{g}</Text>
+                </TouchableOpacity>
+              ))}
             </View>
           )}
 
@@ -322,7 +354,9 @@ export default function PostScreen() {
           <DateTimePickerModal isVisible={showDepositDuePicker} mode="date" onConfirm={handleDepositDueConfirm} onCancel={() => setShowDepositDuePicker(false)} />
 
           <TouchableOpacity style={styles.submitBtn} onPress={handleSubmit} disabled={loading}>
-            <Text style={styles.submitText}>{loading ? 'Posting...' : 'Post Tournament'}</Text>
+            <Text style={[styles.submitText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>
+              {loading ? 'Posting...' : 'POST TOURNAMENT'}
+            </Text>
           </TouchableOpacity>
 
         </View>
@@ -359,13 +393,12 @@ const styles = StyleSheet.create({
   addPrizeBtn: { borderWidth: 1, borderColor: '#008080', borderRadius: 10, paddingVertical: 10, alignItems: 'center', marginBottom: 16, backgroundColor: '#e0f5f5' },
   addPrizeBtnText: { color: '#008080', fontWeight: 'bold', fontSize: 15 },
   submitBtn: { backgroundColor: '#7A1E1E', borderRadius: 12, paddingVertical: 16, alignItems: 'center', marginTop: 8, marginBottom: 40 },
-  submitText: { color: '#fff', fontSize: 17, fontWeight: 'bold', letterSpacing: 0.5 },
-  successContainer: { flex: 1, backgroundColor: '#f5ede0', alignItems: 'center', justifyContent: 'center', padding: 40 },
-  successIcon: { fontSize: 60, marginBottom: 16 },
-  successTitle: { fontSize: 28, fontWeight: 'bold', color: '#008080', marginBottom: 8 },
-  successSub: { fontSize: 16, color: '#5a7a7a', marginBottom: 32, textAlign: 'center' },
-  backBtn: { backgroundColor: '#008080', borderRadius: 12, paddingVertical: 14, paddingHorizontal: 32 },
-  backText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
+  submitText: { color: '#fff', fontSize: 18, letterSpacing: 1 },
+  successContainer: { flex: 1, backgroundColor: '#f5ede0', alignItems: 'center', justifyContent: 'center', padding: 40, gap: 12 },
+  successTitle: { fontSize: 32, color: '#008080', letterSpacing: 2, marginTop: 8, textAlign: 'center' },
+  successSub: { fontSize: 16, color: '#5a7a7a', textAlign: 'center' },
+  backBtn: { backgroundColor: '#008080', borderRadius: 12, paddingVertical: 16, paddingHorizontal: 32, marginTop: 20 },
+  backText: { color: '#fff', fontSize: 16, letterSpacing: 1 },
   placesWrapper: { marginBottom: 12, zIndex: 10 },
   autoFilledBox: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#e0f5f5', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, marginBottom: 12 },
   autoFilledText: { fontSize: 13, color: '#003333', flex: 1, marginRight: 8 },

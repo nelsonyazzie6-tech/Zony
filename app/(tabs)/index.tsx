@@ -3,7 +3,7 @@ import { useRouter } from 'expo-router';
 import { collection, deleteDoc, doc, onSnapshot, query, updateDoc, where } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import Svg, { Path, Polygon } from 'react-native-svg';
+import Svg, { Circle, Path, Polygon } from 'react-native-svg';
 import { auth, db } from '../../firebaseConfig';
 
 const sportOptions = [
@@ -15,15 +15,79 @@ const sportOptions = [
 
 const states = ['All States', 'AZ', 'NM', 'CO', 'UT', 'TX', 'CA', 'NV', 'OK', 'AL', 'AK', 'AR', 'CT', 'DE', 'FL', 'GA', 'HI', 'ID', 'IL', 'IN', 'IA', 'KS', 'KY', 'LA', 'ME', 'MD', 'MA', 'MI', 'MN', 'MS', 'MO', 'MT', 'NE', 'NH', 'NJ', 'NY', 'NC', 'ND', 'OH', 'OR', 'PA', 'RI', 'SC', 'SD', 'TN', 'VT', 'VA', 'WA', 'WV', 'WI', 'WY'];
 
+function getSportColor(sport: string) {
+  if (sport === 'Basketball') return '#008080';
+  if (sport === 'Volleyball') return '#7A1E1E';
+  if (sport === 'Softball') return '#B8860B';
+  return '#008080';
+}
+
 function BellIcon({ color, hasNew }: { color: string; hasNew: boolean }) {
   return (
     <View>
-      <Svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+      <Svg width="28" height="28" viewBox="0 0 22 22" fill="none">
         <Path d="M11 2a6 6 0 0 1 6 6v4l2 3H3l2-3V8a6 6 0 0 1 6-6Z" stroke={color} strokeWidth="1.5" strokeLinejoin="round" />
         <Path d="M9 17a2 2 0 0 0 4 0" stroke={color} strokeWidth="1.5" />
       </Svg>
       {hasNew && <View style={styles.bellDot} />}
     </View>
+  );
+}
+
+function SadFace() {
+  return (
+    <Svg width={64} height={64} viewBox="0 0 64 64" fill="none">
+      <Path d="M32 12a20 20 0 1 0 0 40 20 20 0 0 0 0-40Z" stroke="#a0b8b8" strokeWidth="2" />
+      <Path d="M24 26a2 2 0 1 1 4 0 2 2 0 0 1-4 0Z" fill="#a0b8b8" />
+      <Path d="M36 26a2 2 0 1 1 4 0 2 2 0 0 1-4 0Z" fill="#a0b8b8" />
+      <Path d="M24 42c1.5-3 4-5 8-5s6.5 2 8 5" stroke="#a0b8b8" strokeWidth="2" strokeLinecap="round" />
+    </Svg>
+  );
+}
+
+function NotiTrophyIcon() {
+  return (
+    <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+      <Path d="M8 3h8v8a4 4 0 0 1-8 0V3Z" stroke="#008080" strokeWidth="1.8" strokeLinejoin="round" />
+      <Path d="M8 6H5a2 2 0 0 0 0 4h3M16 6h3a2 2 0 0 1 0 4h-3" stroke="#008080" strokeWidth="1.8" strokeLinecap="round" />
+      <Path d="M12 15v4M9 21h6" stroke="#008080" strokeWidth="1.8" strokeLinecap="round" />
+    </Svg>
+  );
+}
+
+function PersonIcon() {
+  return (
+    <Svg width={13} height={13} viewBox="0 0 24 24" fill="none">
+      <Path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" stroke="#a0b8b8" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+      <Circle cx="12" cy="7" r="4" stroke="#a0b8b8" strokeWidth="1.8" />
+    </Svg>
+  );
+}
+
+function AwardIcon() {
+  return (
+    <Svg width={13} height={13} viewBox="0 0 24 24" fill="none">
+      <Path d="M8 3h8v8a4 4 0 0 1-8 0V3Z" stroke="#a0b8b8" strokeWidth="1.8" strokeLinejoin="round" />
+      <Path d="M8 6H5a2 2 0 0 0 0 4h3M16 6h3a2 2 0 0 1 0 4h-3" stroke="#a0b8b8" strokeWidth="1.8" strokeLinecap="round" />
+      <Path d="M12 15v4M9 21h6" stroke="#a0b8b8" strokeWidth="1.8" strokeLinecap="round" />
+    </Svg>
+  );
+}
+
+function StarIcon() {
+  return (
+    <Svg width={13} height={13} viewBox="0 0 24 24" fill="none">
+      <Path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" stroke="#a0b8b8" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
+  );
+}
+
+function CalendarIcon() {
+  return (
+    <Svg width={13} height={13} viewBox="0 0 24 24" fill="none">
+      <Path d="M8 2v4M16 2v4" stroke="#a0b8b8" strokeWidth="1.8" strokeLinecap="round" />
+      <Path d="M3 8h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z" stroke="#a0b8b8" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </Svg>
   );
 }
 
@@ -169,7 +233,7 @@ export default function HomeScreen() {
         <ActivityIndicator size="large" color="#7A1E1E" style={{ marginTop: 60 }} />
       ) : filtered.length === 0 ? (
         <View style={styles.emptyContainer}>
-          <Text style={styles.emptyIcon}>🏆</Text>
+          <SadFace />
           <Text style={styles.emptyTitle}>No tournaments found</Text>
           <Text style={styles.emptySub}>Be the first to post one in your area.</Text>
         </View>
@@ -178,31 +242,34 @@ export default function HomeScreen() {
           data={filtered}
           keyExtractor={t => t.id}
           contentContainerStyle={styles.list}
-          renderItem={({ item: t }) => (
-            <TouchableOpacity
-              style={styles.card}
-              onPress={() => router.push({ pathname: '/tournament', params: { id: t.id, postedBy: t.postedBy } })}
-            >
-              <View style={styles.cardHeader}>
-                <Text style={[styles.name, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>{t.name}</Text>
-                <Text style={styles.sportBadge}>{t.sport}</Text>
-              </View>
-              <View style={styles.cardBody}>
-                <Text style={styles.detail}>📅 {t.date}</Text>
-                <Text style={styles.detail}>📍 {t.city}, {t.state}</Text>
-                {t.entryFee ? <Text style={styles.fee}>💵 {t.entryFee} entry</Text> : null}
-                {t.spectatorFee ? <Text style={styles.fee}>🎟 {t.spectatorFee} spectators</Text> : null}
-                <View style={styles.spotsRow}>
-                  <Text style={styles.spots}>{t.spots} spots left</Text>
-                  {t.status === 'canceled' && (
-                    <View style={styles.canceledBadge}>
-                      <Text style={styles.canceledBadgeText}>Canceled</Text>
-                    </View>
-                  )}
+          renderItem={({ item: t }) => {
+            const sportColor = getSportColor(t.sport);
+            return (
+              <TouchableOpacity
+                style={styles.card}
+                onPress={() => router.push({ pathname: '/tournament', params: { id: t.id, postedBy: t.postedBy } })}
+              >
+                <View style={[styles.cardHeader, { backgroundColor: sportColor }]}>
+                  <Text style={[styles.name, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>{t.name}</Text>
+                  <Text style={[styles.sportBadge, { color: sportColor }]}>{t.sport}</Text>
                 </View>
-              </View>
-            </TouchableOpacity>
-          )}
+                <View style={styles.cardBody}>
+                  <Text style={styles.detail}>📅 {t.date}</Text>
+                  <Text style={styles.detail}>📍 {t.city}, {t.state}</Text>
+                  {t.entryFee ? <Text style={styles.fee}>💵 {t.entryFee} entry</Text> : null}
+                  {t.spectatorFee ? <Text style={styles.fee}>🎟 {t.spectatorFee} spectators</Text> : null}
+                  <View style={styles.spotsRow}>
+                    <Text style={[styles.spots, { color: sportColor }]}>{t.spots} spots left</Text>
+                    {t.status === 'canceled' && (
+                      <View style={styles.canceledBadge}>
+                        <Text style={styles.canceledBadgeText}>Canceled</Text>
+                      </View>
+                    )}
+                  </View>
+                </View>
+              </TouchableOpacity>
+            );
+          }}
         />
       )}
 
@@ -244,7 +311,7 @@ export default function HomeScreen() {
             </View>
             {notifications.length === 0 ? (
               <View style={styles.sheetEmpty}>
-                <Text style={styles.sheetEmptyIcon}>🔔</Text>
+                <SadFace />
                 <Text style={styles.sheetEmptyTitle}>No notifications yet</Text>
                 <Text style={styles.sheetEmptySub}>You'll see activity here when someone joins your tournament.</Text>
               </View>
@@ -255,20 +322,25 @@ export default function HomeScreen() {
                 contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 8 }}
                 renderItem={({ item: n }) => {
                   const isRead = n.read === true;
+                  const parts = n.message?.match(/^(.+?) registered (.+?) into (.+?)!$/);
+                  const contactName = parts?.[1] || '';
+                  const teamName = parts?.[2] || '';
+                  const tournamentName = parts?.[3] || '';
                   return (
                     <TouchableOpacity
                       style={[styles.notiCard, isRead && styles.notiCardRead]}
                       onPress={() => updateDoc(doc(db, 'notifications', n.id), { read: true })}
                     >
                       <View style={styles.notiIcon}>
-                        <Text style={{ fontSize: 18 }}>🔔</Text>
+                        <NotiTrophyIcon />
                       </View>
                       <View style={styles.notiContent}>
                         <View style={styles.notiTopRow}>
-                          <Text style={[styles.notiMessage, isRead && styles.notiMessageRead]} numberOfLines={1}>{n.message}</Text>
+                          <Text style={[styles.notiTeamName, isRead && styles.notiMessageRead]} numberOfLines={3}>
+                            {parts ? `${contactName} registered ${teamName} into ${tournamentName}!` : n.message}
+                          </Text>
                           <Text style={styles.notiTime}>{n.createdAt?.toDate?.()?.toLocaleDateString()}</Text>
                         </View>
-                        {n.body ? <Text style={styles.notiBody} numberOfLines={2}>{n.body}</Text> : null}
                       </View>
                       {!isRead && <View style={styles.notiDot} />}
                       <TouchableOpacity onPress={() => handleDeleteNotification(n.id)} style={styles.notiDelete}>
@@ -309,20 +381,19 @@ const styles = StyleSheet.create({
   dropdownMenuTextActive: { color: '#008080', fontWeight: '700' },
   list: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 20 },
   card: { backgroundColor: '#fff', borderRadius: 12, marginBottom: 14, overflow: 'hidden', borderWidth: 1, borderColor: '#e0d8c8', elevation: 3, shadowColor: '#003333', shadowOpacity: 0.1, shadowRadius: 8 },
-  cardHeader: { backgroundColor: '#008080', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 10 },
+  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 10 },
   cardBody: { paddingHorizontal: 14, paddingTop: 10, paddingBottom: 12 },
   name: { fontSize: 17, fontWeight: 'bold', color: '#f5ede0', flex: 1, marginRight: 8, textTransform: 'uppercase', letterSpacing: 1.2 },
-  sportBadge: { fontSize: 11, color: '#008080', backgroundColor: '#f5ede0', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, overflow: 'hidden', fontWeight: 'bold' },
+  sportBadge: { fontSize: 11, backgroundColor: '#f5ede0', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, overflow: 'hidden', fontWeight: 'bold' },
   detail: { fontSize: 14, color: '#5a5a5a', marginBottom: 4 },
   fee: { fontSize: 13, color: '#7A1E1E', fontWeight: '600', marginBottom: 2 },
   spotsRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 },
-  spots: { fontSize: 13, color: '#008080', fontWeight: '600' },
+  spots: { fontSize: 13, fontWeight: '600' },
   canceledBadge: { backgroundColor: '#7A1E1E', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 2 },
   canceledBadgeText: { color: '#fff', fontSize: 11, fontWeight: 'bold' },
-  emptyContainer: { alignItems: 'center', marginTop: 60 },
-  emptyIcon: { fontSize: 50, marginBottom: 12 },
-  emptyTitle: { fontSize: 20, fontWeight: 'bold', color: '#008080', marginBottom: 8 },
-  emptySub: { fontSize: 15, color: '#a0b8b8', textAlign: 'center' },
+  emptyContainer: { alignItems: 'center', marginTop: 60, gap: 10 },
+  emptyTitle: { fontSize: 18, fontWeight: 'bold', color: '#a0b8b8', marginTop: 8 },
+  emptySub: { fontSize: 14, color: '#a0b8b8', textAlign: 'center', paddingHorizontal: 40 },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   modalBox: { backgroundColor: '#f5ede0', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, maxHeight: '70%' },
   modalTitle: { fontSize: 18, fontWeight: 'bold', color: '#008080', marginBottom: 12, textAlign: 'center', letterSpacing: 1 },
@@ -339,20 +410,20 @@ const styles = StyleSheet.create({
   sheetTitle: { fontSize: 20, fontWeight: '900', color: '#111', letterSpacing: 2 },
   sheetHeaderRight: { flexDirection: 'row', alignItems: 'center' },
   markAllRead: { fontSize: 12, color: '#008080', fontWeight: '600' },
-  sheetEmpty: { alignItems: 'center', marginTop: 60 },
-  sheetEmptyIcon: { fontSize: 50, marginBottom: 12 },
+  sheetEmpty: { alignItems: 'center', marginTop: 60, gap: 10 },
   sheetEmptyTitle: { fontSize: 20, fontWeight: 'bold', color: '#003333', marginBottom: 8 },
   sheetEmptySub: { fontSize: 14, color: '#a0b8b8', textAlign: 'center', paddingHorizontal: 40 },
-  notiCard: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, backgroundColor: '#fff', borderRadius: 16, padding: 12, marginBottom: 4, shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 4, elevation: 1 },
+  notiCard: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, backgroundColor: '#fff', borderRadius: 16, padding: 12, marginBottom: 8, shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 4, elevation: 1 },
   notiCardRead: { backgroundColor: 'transparent', shadowOpacity: 0, elevation: 0 },
   notiIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(0,128,128,0.1)', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   notiContent: { flex: 1 },
-  notiTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
-  notiMessage: { fontSize: 13, fontWeight: '700', color: '#111', flex: 1 },
+  notiTopRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 },
+  notiTeamName: { fontSize: 13, fontWeight: '700', color: '#111', flex: 1, lineHeight: 18 },
   notiMessageRead: { fontWeight: '500', color: '#666' },
-  notiBody: { fontSize: 12, color: '#aaa', marginTop: 2, lineHeight: 16 },
+  notiRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3 },
+  notiSub: { fontSize: 12, color: '#666' },
   notiTime: { fontSize: 10, color: '#aaa', flexShrink: 0 },
-  notiDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#8B1A1A', marginTop: 4, flexShrink: 0 },
+  notiDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#8B1A1A', flexShrink: 0 },
   notiDelete: { padding: 4 },
   notiDeleteText: { fontSize: 12, color: '#ccc' },
 });

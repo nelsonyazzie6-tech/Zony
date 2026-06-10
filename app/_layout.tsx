@@ -74,6 +74,8 @@ export default function RootLayout() {
           <Stack.Screen name="map" options={{ headerShown: false }} />
           <Stack.Screen name="postboard" options={{ headerShown: false }} />
           <Stack.Screen name="notifications" options={{ headerShown: false }} />
+          <Stack.Screen name="board-detail" options={{ headerShown: false }} />
+          <Stack.Screen name="edit-board" options={{ headerShown: false }} />
         </Stack>
         <StatusBar style="auto" />
       </ThemeProvider>

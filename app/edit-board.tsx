@@ -1,10 +1,9 @@
 import { Rajdhani_700Bold, useFonts } from '@expo-google-fonts/rajdhani';
-import { useRouter } from 'expo-router';
-import * as SplashScreen from 'expo-splash-screen';
-import { addDoc, collection, getDocs, serverTimestamp } from 'firebase/firestore';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { collection, doc, getDoc, getDocs, updateDoc } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { auth, db } from '../firebaseConfig';
+import { db } from '../firebaseConfig';
 
 const iAmOptions = ['Player', 'Team'];
 const lookingForOptions = ['Player', 'Team'];
@@ -20,9 +19,11 @@ function formatPhone(val: string) {
   return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}`;
 }
 
-export default function PostBoardScreen() {
+export default function EditBoardScreen() {
+  const { id } = useLocalSearchParams();
   const router = useRouter();
   const [fontsLoaded] = useFonts({ Rajdhani_700Bold });
+  const [loading, setLoading] = useState(false);
 
   const [name, setName] = useState('');
   const [type, setType] = useState('');
@@ -44,14 +45,29 @@ export default function PostBoardScreen() {
   const [contactPhone, setContactPhone] = useState('');
   const [contactEmail, setContactEmail] = useState('');
   const [description, setDescription] = useState('');
-  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (fontsLoaded) SplashScreen.hideAsync();
-    const loadTournaments = async () => {
+    const load = async () => {
+      if (!id) return;
+      const snap = await getDoc(doc(db, 'board', id as string));
+      if (snap.exists()) {
+        const d = snap.data();
+        setName(d.name || '');
+        setType(d.type || '');
+        setLookingFor(d.lookingFor || '');
+        setForTournament(d.forTournament || '');
+        setSport(d.sport || '');
+        setDivision(d.division || '');
+        setGender(d.gender || '');
+        setCity(d.city || '');
+        setState(d.state || '');
+        setContactPhone(d.contactPhone || '');
+        setContactEmail(d.contactEmail || '');
+        setDescription(d.description || '');
+      }
       try {
-        const snap = await getDocs(collection(db, 'tournaments'));
-        const data = snap.docs.map(d => ({
+        const tSnap = await getDocs(collection(db, 'tournaments'));
+        const data = tSnap.docs.map(d => ({
           id: d.id,
           name: d.data().name || 'Unnamed',
           sport: d.data().sport || '',
@@ -59,10 +75,8 @@ export default function PostBoardScreen() {
         setTournaments(data);
       } catch (e) { console.error(e); }
     };
-    loadTournaments();
-  }, [fontsLoaded]);
-
-  if (!fontsLoaded) return null;
+    load();
+  }, []);
 
   const closeAll = () => {
     setShowTypePicker(false);
@@ -74,40 +88,35 @@ export default function PostBoardScreen() {
     setShowStatePicker(false);
   };
 
-  const handleSubmit = async () => {
+  const handleSave = async () => {
     if (!name || !type || !sport || !division || !city || !state) {
       Alert.alert('Missing fields', 'Please fill out all required fields.');
       return;
     }
-    const user = auth.currentUser;
-    if (!user) {
-      Alert.alert('Sign in required', 'You need to be logged in to post.');
-      return;
-    }
     setLoading(true);
     try {
-      await addDoc(collection(db, 'board'), {
-        name, type, lookingFor, forTournament, sport, division, gender,
-        city, state, contactPhone, contactEmail, description,
-        postedBy: user.uid,
-        createdAt: serverTimestamp(),
+      await updateDoc(doc(db, 'board', id as string), {
+        name, type, lookingFor, forTournament, sport, division,
+        gender, city, state, contactPhone, contactEmail, description,
       });
-      router.replace('/(tabs)/board');
-    } catch (e) {
-      console.error(e);
+      router.back();
+    } catch (e: any) {
+      Alert.alert('Error', e.message);
     }
     setLoading(false);
   };
 
   const DropdownField = ({
-    label, value, placeholder, show, onToggle, options, onSelect, scrollable,
+    label, value, placeholder, show, onToggle, options, onSelect, scrollable, optional,
   }: {
     label: string; value: string; placeholder: string; show: boolean;
     onToggle: () => void; options: string[]; onSelect: (v: string) => void;
-    scrollable?: boolean;
+    scrollable?: boolean; optional?: boolean;
   }) => (
     <View>
-      <Text style={styles.label}>{label}</Text>
+      <Text style={styles.label}>
+        {label}{optional ? <Text style={styles.optional}> (optional)</Text> : null}
+      </Text>
       <TouchableOpacity style={styles.dropdown} onPress={onToggle} activeOpacity={0.8}>
         <Text style={value ? styles.dropdownSelected : styles.dropdownPlaceholder}>
           {value || placeholder}
@@ -144,13 +153,12 @@ export default function PostBoardScreen() {
       </TouchableOpacity>
 
       <View style={styles.headerBlock}>
-        <Text style={styles.header}>BOARD POST</Text>
-        <Text style={styles.sub}>Let the community know</Text>
+        <Text style={[styles.header, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>EDIT POST</Text>
+        <Text style={styles.sub}>Update your board post</Text>
       </View>
 
       <View style={styles.form}>
 
-        {/* Name */}
         <Text style={styles.label}>Name</Text>
         <TextInput
           style={styles.input}
@@ -160,7 +168,6 @@ export default function PostBoardScreen() {
           onChangeText={setName}
         />
 
-        {/* I am a... */}
         <DropdownField
           label="I am a..."
           value={type}
@@ -171,7 +178,6 @@ export default function PostBoardScreen() {
           onSelect={setType}
         />
 
-        {/* Looking for a... */}
         <DropdownField
           label="Looking for a..."
           value={lookingFor}
@@ -182,7 +188,6 @@ export default function PostBoardScreen() {
           onSelect={setLookingFor}
         />
 
-        {/* For... (live tournaments) */}
         <View>
           <Text style={styles.label}>
             For... <Text style={styles.optional}>(optional)</Text>
@@ -224,7 +229,6 @@ export default function PostBoardScreen() {
           )}
         </View>
 
-        {/* Sport */}
         <DropdownField
           label="Sport"
           value={sport}
@@ -235,7 +239,6 @@ export default function PostBoardScreen() {
           onSelect={setSport}
         />
 
-        {/* Division */}
         <DropdownField
           label="Division"
           value={division}
@@ -246,7 +249,6 @@ export default function PostBoardScreen() {
           onSelect={setDivision}
         />
 
-        {/* Gender */}
         <DropdownField
           label="Gender"
           value={gender}
@@ -255,9 +257,9 @@ export default function PostBoardScreen() {
           onToggle={() => { closeAll(); setShowGenderPicker(!showGenderPicker); }}
           options={genderOptions}
           onSelect={setGender}
+          optional
         />
 
-        {/* City */}
         <Text style={styles.label}>City</Text>
         <TextInput
           style={styles.input}
@@ -267,7 +269,6 @@ export default function PostBoardScreen() {
           onChangeText={setCity}
         />
 
-        {/* State */}
         <DropdownField
           label="State"
           value={state}
@@ -279,7 +280,6 @@ export default function PostBoardScreen() {
           scrollable
         />
 
-        {/* Contact Phone */}
         <Text style={styles.label}>
           Contact Phone <Text style={styles.optional}>(optional)</Text>
         </Text>
@@ -293,7 +293,6 @@ export default function PostBoardScreen() {
           maxLength={12}
         />
 
-        {/* Contact Email */}
         <Text style={styles.label}>
           Contact Email <Text style={styles.optional}>(optional)</Text>
         </Text>
@@ -307,13 +306,12 @@ export default function PostBoardScreen() {
           autoCapitalize="none"
         />
 
-        {/* Description */}
         <Text style={styles.label}>
           Description <Text style={styles.optional}>(optional)</Text>
         </Text>
         <TextInput
           style={[styles.input, styles.textArea]}
-          placeholder="e.g. Looking for 14U forward for this weekend at Hozho..."
+          placeholder="e.g. Looking for 14U forward..."
           placeholderTextColor="#a0b8b8"
           value={description}
           onChangeText={setDescription}
@@ -321,9 +319,10 @@ export default function PostBoardScreen() {
           numberOfLines={4}
         />
 
-        {/* Submit */}
-        <TouchableOpacity style={styles.submitBtn} onPress={handleSubmit} disabled={loading} activeOpacity={0.85}>
-          <Text style={styles.submitText}>{loading ? 'Posting...' : 'POST TO BOARD'}</Text>
+        <TouchableOpacity style={styles.saveBtn} onPress={handleSave} disabled={loading} activeOpacity={0.85}>
+          <Text style={[styles.saveBtnText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>
+            {loading ? 'Saving...' : 'SAVE CHANGES'}
+          </Text>
         </TouchableOpacity>
 
       </View>
@@ -336,7 +335,7 @@ const styles = StyleSheet.create({
   back: { paddingHorizontal: 20, marginBottom: 6 },
   backText: { fontSize: 16, color: '#008080', fontWeight: '600' },
   headerBlock: { paddingHorizontal: 20, paddingBottom: 20, alignItems: 'center' },
-  header: { fontSize: 32, fontFamily: 'Rajdhani_700Bold', color: '#003333', letterSpacing: 2 },
+  header: { fontSize: 32, color: '#003333', letterSpacing: 2 },
   sub: { fontSize: 13, color: '#a0b8b8', marginTop: 2 },
   form: { paddingHorizontal: 20, paddingBottom: 48 },
   label: { fontSize: 13, fontWeight: '700', color: '#003333', marginBottom: 6, marginTop: 12 },
@@ -351,6 +350,6 @@ const styles = StyleSheet.create({
   dropdownItem: { paddingHorizontal: 16, paddingVertical: 13, borderBottomWidth: 1, borderBottomColor: '#f5f5f5' },
   dropdownItemText: { fontSize: 14, color: '#003333' },
   dropdownItemActive: { color: '#008080', fontWeight: '700' },
-  submitBtn: { backgroundColor: '#7A1E1E', borderRadius: 16, paddingVertical: 16, alignItems: 'center', marginTop: 20, shadowColor: '#008080', shadowOpacity: 0.3, shadowRadius: 8, shadowOffset: { width: 0, height: 4 }, elevation: 4 },
-  submitText: { color: '#fff', fontSize: 20, fontFamily: 'Rajdhani_700Bold', letterSpacing: 1 },
+  saveBtn: { backgroundColor: '#008080', borderRadius: 16, paddingVertical: 16, alignItems: 'center', marginTop: 20, shadowColor: '#008080', shadowOpacity: 0.3, shadowRadius: 8, shadowOffset: { width: 0, height: 4 }, elevation: 4 },
+  saveBtnText: { color: '#fff', fontSize: 20, letterSpacing: 1 },
 });
