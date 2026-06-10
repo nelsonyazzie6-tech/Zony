@@ -30,15 +30,29 @@ function getLookingLabel(type: string, lookingFor: string) {
   return '';
 }
 
+const divisionOptions = [
+  { label: 'All Divisions', value: 'All' },
+  { label: '6U', value: '6U' },
+  { label: '8U', value: '8U' },
+  { label: '10U', value: '10U' },
+  { label: '12U', value: '12U' },
+  { label: '14U', value: '14U' },
+  { label: '16U', value: '16U' },
+  { label: '18U', value: '18U' },
+  { label: 'Adults', value: 'Adults' },
+];
+
 export default function BoardScreen() {
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [typeFilter, setTypeFilter] = useState('All');
   const [sportFilter, setSportFilter] = useState('All');
+  const [divisionFilter, setDivisionFilter] = useState('All');
   const [search, setSearch] = useState('');
   const [headerHeight, setHeaderHeight] = useState(120);
   const [showTypeMenu, setShowTypeMenu] = useState(false);
   const [showSportMenu, setShowSportMenu] = useState(false);
+  const [showDivisionMenu, setShowDivisionMenu] = useState(false);
   const router = useRouter();
   const user = auth.currentUser;
   const [fontsLoaded] = useFonts({ Rajdhani_700Bold });
@@ -55,6 +69,7 @@ export default function BoardScreen() {
   const filtered = posts
     .filter(p => typeFilter === 'All' || p.type === typeFilter)
     .filter(p => sportFilter === 'All' || p.sport === sportFilter)
+    .filter(p => divisionFilter === 'All' || p.division === divisionFilter)
     .filter(p =>
       p.name?.toLowerCase().includes(search.toLowerCase()) ||
       p.city?.toLowerCase().includes(search.toLowerCase()) ||
@@ -77,11 +92,13 @@ export default function BoardScreen() {
 
   const typeLabel = typeOptions.find(o => o.value === typeFilter)?.label || 'All';
   const sportLabel = sportOptions.find(o => o.value === sportFilter)?.label || 'All Sports';
+  const divisionLabel = divisionOptions.find(o => o.value === divisionFilter)?.label || 'All Divisions';
+
+  const closeAll = () => { setShowTypeMenu(false); setShowSportMenu(false); setShowDivisionMenu(false); };
 
   return (
     <View style={styles.container}>
 
-      {/* Header */}
       <View style={styles.headerBlock} onLayout={e => setHeaderHeight(e.nativeEvent.layout.height)}>
         <Svg style={StyleSheet.absoluteFill} width="100%" height={headerHeight} viewBox="0 0 390 130" preserveAspectRatio="xMidYMid slice">
           <Polygon points="0,0 80,30 40,80" fill="white" opacity={0.04} />
@@ -104,7 +121,6 @@ export default function BoardScreen() {
         <Text style={[styles.sub, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>Find players or teams near you</Text>
       </View>
 
-      {/* Search */}
       <View style={styles.searchRow}>
         <TextInput
           style={styles.search}
@@ -120,12 +136,12 @@ export default function BoardScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Dropdown filters */}
+      {/* Row 1: Type + Sport */}
       <View style={styles.filtersRow}>
         <View style={styles.dropdownWrapper}>
           <TouchableOpacity
             style={styles.dropdownSelect}
-            onPress={() => { setShowTypeMenu(!showTypeMenu); setShowSportMenu(false); }}
+            onPress={() => { closeAll(); setShowTypeMenu(true); }}
           >
             <Text style={styles.dropdownSelectText}>{typeLabel}</Text>
             <Svg width={12} height={12} viewBox="0 0 12 12" fill="none">
@@ -138,7 +154,7 @@ export default function BoardScreen() {
                 <TouchableOpacity
                   key={o.value}
                   style={[styles.dropdownMenuItem, typeFilter === o.value && styles.dropdownMenuItemActive]}
-                  onPress={() => { setTypeFilter(o.value); setShowTypeMenu(false); }}
+                  onPress={() => { setTypeFilter(o.value); closeAll(); }}
                 >
                   <Text style={[styles.dropdownMenuText, typeFilter === o.value && styles.dropdownMenuTextActive]}>{o.label}</Text>
                 </TouchableOpacity>
@@ -150,7 +166,7 @@ export default function BoardScreen() {
         <View style={styles.dropdownWrapper}>
           <TouchableOpacity
             style={styles.dropdownSelect}
-            onPress={() => { setShowSportMenu(!showSportMenu); setShowTypeMenu(false); }}
+            onPress={() => { closeAll(); setShowSportMenu(true); }}
           >
             <Text style={styles.dropdownSelectText}>{sportLabel}</Text>
             <Svg width={12} height={12} viewBox="0 0 12 12" fill="none">
@@ -163,9 +179,37 @@ export default function BoardScreen() {
                 <TouchableOpacity
                   key={o.value}
                   style={[styles.dropdownMenuItem, sportFilter === o.value && styles.dropdownMenuItemActive]}
-                  onPress={() => { setSportFilter(o.value); setShowSportMenu(false); }}
+                  onPress={() => { setSportFilter(o.value); closeAll(); }}
                 >
                   <Text style={[styles.dropdownMenuText, sportFilter === o.value && styles.dropdownMenuTextActive]}>{o.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+        </View>
+      </View>
+
+      {/* Row 2: Division */}
+      <View style={[styles.filtersRow, { zIndex: 998 }]}>
+        <View style={[styles.dropdownWrapper, { flex: 1 }]}>
+          <TouchableOpacity
+            style={styles.dropdownSelect}
+            onPress={() => { closeAll(); setShowDivisionMenu(true); }}
+          >
+            <Text style={styles.dropdownSelectText}>{divisionLabel}</Text>
+            <Svg width={12} height={12} viewBox="0 0 12 12" fill="none">
+              <Path d="M2 4l4 4 4-4" stroke="#888" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            </Svg>
+          </TouchableOpacity>
+          {showDivisionMenu && (
+            <View style={styles.inlineMenu}>
+              {divisionOptions.map(o => (
+                <TouchableOpacity
+                  key={o.value}
+                  style={[styles.dropdownMenuItem, divisionFilter === o.value && styles.dropdownMenuItemActive]}
+                  onPress={() => { setDivisionFilter(o.value); closeAll(); }}
+                >
+                  <Text style={[styles.dropdownMenuText, divisionFilter === o.value && styles.dropdownMenuTextActive]}>{o.label}</Text>
                 </TouchableOpacity>
               ))}
             </View>
@@ -215,10 +259,6 @@ export default function BoardScreen() {
         />
       )}
 
-      <TouchableOpacity style={styles.postBtn} onPress={() => router.push('/postboard')}>
-        <Text style={[styles.postBtnText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>+ POST TO BOARD</Text>
-      </TouchableOpacity>
-
     </View>
   );
 }
@@ -231,7 +271,7 @@ const styles = StyleSheet.create({
   searchRow: { flexDirection: 'row', marginHorizontal: 16, gap: 8, marginTop: 14, marginBottom: 10 },
   search: { flex: 1, backgroundColor: '#fff', borderRadius: 14, paddingHorizontal: 16, paddingVertical: 10, fontSize: 15, color: '#003333', borderWidth: 1, borderColor: '#e8e8e8', shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 4, elevation: 1 },
   stateBtn: { backgroundColor: '#008080', borderRadius: 14, width: 44, alignItems: 'center', justifyContent: 'center' },
-  filtersRow: { flexDirection: 'row', gap: 8, marginHorizontal: 16, marginBottom: 10, zIndex: 999 },
+  filtersRow: { flexDirection: 'row', gap: 8, marginHorizontal: 16, marginBottom: 8, zIndex: 999 },
   dropdownWrapper: { flex: 1, zIndex: 999 },
   dropdownSelect: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#fff', borderRadius: 14, paddingHorizontal: 12, paddingVertical: 10, borderWidth: 1, borderColor: '#e8e8e8', shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 4, elevation: 1 },
   dropdownSelectText: { fontSize: 13, color: '#555', fontWeight: '500' },
@@ -240,7 +280,7 @@ const styles = StyleSheet.create({
   dropdownMenuItemActive: { backgroundColor: '#f0fafa' },
   dropdownMenuText: { fontSize: 13, color: '#333' },
   dropdownMenuTextActive: { color: '#008080', fontWeight: '700' },
-  list: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 80 },
+  list: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 24 },
   card: { backgroundColor: '#fff', borderRadius: 12, marginBottom: 14, overflow: 'hidden', borderWidth: 1, borderColor: '#e0d8c8', elevation: 3, shadowColor: '#003333', shadowOpacity: 0.1, shadowRadius: 8 },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 10 },
   cardName: { fontSize: 16, fontWeight: 'bold', color: '#f5ede0', flex: 1, marginRight: 8, letterSpacing: 1 },
@@ -252,6 +292,4 @@ const styles = StyleSheet.create({
   emptyContainer: { alignItems: 'center', marginTop: 60, gap: 10 },
   emptyTitle: { fontSize: 18, fontWeight: 'bold', color: '#a0b8b8', marginTop: 8 },
   emptySub: { fontSize: 15, color: '#a0b8b8', textAlign: 'center' },
-  postBtn: { position: 'absolute', bottom: 24, alignSelf: 'center', backgroundColor: '#7A1E1E', borderRadius: 12, paddingVertical: 16, paddingHorizontal: 32, shadowColor: '#7A1E1E', shadowOpacity: 0.4, shadowRadius: 8, elevation: 8 },
-  postBtnText: { color: '#fff', fontSize: 18, letterSpacing: 1 },
 });

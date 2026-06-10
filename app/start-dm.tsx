@@ -5,7 +5,7 @@ import { ActivityIndicator, View } from 'react-native';
 import { auth, db } from '../firebaseConfig';
 
 export default function StartDmScreen() {
-  const { recipientId, recipientName, context } = useLocalSearchParams();
+  const { recipientId, recipientName, prefillMessage } = useLocalSearchParams();
   const router = useRouter();
   const user = auth.currentUser;
 
@@ -13,7 +13,6 @@ export default function StartDmScreen() {
     const go = async () => {
       if (!user || !recipientId) return;
 
-      // Get your own username
       const mySnap = await getDoc(doc(db, 'users', user.uid));
       const myName = mySnap.exists() ? (mySnap.data().username || user.email || 'Unknown') : 'Unknown';
 
@@ -34,7 +33,6 @@ export default function StartDmScreen() {
             [user.uid]: myName,
             [recipientId as string]: recipientName || 'Unknown',
           },
-          context: context || '',
           lastMessage: '',
           updatedAt: serverTimestamp(),
           unreadCount: {
@@ -45,7 +43,14 @@ export default function StartDmScreen() {
         threadId = ref.id;
       }
 
-      router.replace({ pathname: '/chat', params: { threadId, otherName: recipientName || 'Unknown' } });
+      router.replace({
+        pathname: '/chat',
+        params: {
+          threadId,
+          otherName: recipientName || 'Unknown',
+          prefillMessage: prefillMessage || '',
+        },
+      });
     };
     go().catch(console.log);
   }, []);

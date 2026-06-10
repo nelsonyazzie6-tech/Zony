@@ -1,16 +1,65 @@
 import { Rajdhani_700Bold, useFonts } from '@expo-google-fonts/rajdhani';
 import { collection, deleteDoc, doc, onSnapshot, query, updateDoc, where } from 'firebase/firestore';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Animated, FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { Swipeable } from 'react-native-gesture-handler';
+import { ActivityIndicator, Alert, Animated, FlatList, PanResponder, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { auth, db } from '../../firebaseConfig';
+
+function SwipeToDelete({ onDelete, children }: { onDelete: () => void; children: React.ReactNode }) {
+  const translateX = useRef(new Animated.Value(0)).current;
+  const deleteWidth = useRef(new Animated.Value(0)).current;
+  const threshold = -70;
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 8 && Math.abs(g.dx) > Math.abs(g.dy),
+      onPanResponderMove: (_, g) => {
+        if (g.dx < 0) {
+          translateX.setValue(Math.max(g.dx, -80));
+          deleteWidth.setValue(Math.min(-g.dx, 80));
+        }
+      },
+      onPanResponderRelease: (_, g) => {
+        if (g.dx < threshold) {
+          Animated.parallel([
+            Animated.spring(translateX, { toValue: -80, useNativeDriver: false }),
+            Animated.spring(deleteWidth, { toValue: 80, useNativeDriver: false }),
+          ]).start();
+        } else {
+          Animated.parallel([
+            Animated.spring(translateX, { toValue: 0, useNativeDriver: false }),
+            Animated.spring(deleteWidth, { toValue: 0, useNativeDriver: false }),
+          ]).start();
+        }
+      },
+    })
+  ).current;
+
+  const handleDelete = () => {
+    Animated.parallel([
+      Animated.timing(translateX, { toValue: -400, duration: 200, useNativeDriver: false }),
+      Animated.timing(deleteWidth, { toValue: 0, duration: 200, useNativeDriver: false }),
+    ]).start(() => onDelete());
+  };
+
+  return (
+    <View style={{ overflow: 'hidden', marginBottom: 4 }}>
+      <Animated.View style={[styles.swipeDelete, { width: deleteWidth, position: 'absolute', right: 0, top: 0, bottom: 0 }]}>
+        <TouchableOpacity onPress={handleDelete} style={styles.swipeDeleteInner}>
+          <Text style={styles.swipeDeleteText}>Delete</Text>
+        </TouchableOpacity>
+      </Animated.View>
+      <Animated.View style={{ transform: [{ translateX }] }} {...panResponder.panHandlers}>
+        {children}
+      </Animated.View>
+    </View>
+  );
+}
 
 export default function NotificationsScreen() {
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [fontsLoaded] = useFonts({ Rajdhani_700Bold });
   const user = auth.currentUser;
-  const swipeRefs = useRef<{ [key: string]: Swipeable | null }>({});
 
   useEffect(() => {
     if (!user) { setLoading(false); return; }
@@ -65,26 +114,10 @@ export default function NotificationsScreen() {
     ]);
   };
 
-  const renderRightActions = (progress: Animated.AnimatedInterpolation<number>, id: string) => {
-    const trans = progress.interpolate({ inputRange: [0, 1], outputRange: [80, 0] });
-    return (
-      <Animated.View style={[styles.swipeDelete, { transform: [{ translateX: trans }] }]}>
-        <TouchableOpacity onPress={() => handleDelete(id)} style={styles.swipeDeleteInner}>
-          <Text style={styles.swipeDeleteText}>Delete</Text>
-        </TouchableOpacity>
-      </Animated.View>
-    );
-  };
-
   const renderItem = ({ item: n }: any) => {
     const isRead = n.read === true;
     return (
-      <Swipeable
-        ref={ref => { swipeRefs.current[n.id] = ref; }}
-        renderRightActions={(progress) => renderRightActions(progress, n.id)}
-        onSwipeableOpen={() => handleDelete(n.id)}
-        rightThreshold={60}
-      >
+      <SwipeToDelete onDelete={() => handleDelete(n.id)}>
         <TouchableOpacity
           activeOpacity={0.85}
           onPress={() => handleMarkRead(n.id, isRead)}
@@ -102,7 +135,7 @@ export default function NotificationsScreen() {
           </View>
           {!isRead && <View style={styles.unreadDot} />}
         </TouchableOpacity>
-      </Swipeable>
+      </SwipeToDelete>
     );
   };
 
@@ -117,11 +150,7 @@ export default function NotificationsScreen() {
 
   return (
     <View style={styles.container}>
-
-      {/* Handle bar */}
       <View style={styles.handleBar} />
-
-      {/* Header */}
       <View style={styles.header}>
         <Text style={[styles.headerTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>NOTIFICATIONS</Text>
         <TouchableOpacity onPress={handleMarkAllRead}>
@@ -157,12 +186,7 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 20, fontWeight: '900', color: '#111', letterSpacing: 2 },
   markAllRead: { fontSize: 12, color: '#008080', fontWeight: '600' },
   list: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 40 },
-  card: {
-    flexDirection: 'row', alignItems: 'flex-start', gap: 10,
-    backgroundColor: '#fff', borderRadius: 16, padding: 12,
-    marginBottom: 4, shadowColor: '#000', shadowOpacity: 0.04,
-    shadowRadius: 4, elevation: 1,
-  },
+  card: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, backgroundColor: '#fff', borderRadius: 16, padding: 12, shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 4, elevation: 1 },
   cardRead: { backgroundColor: 'transparent' },
   cardIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(0,128,128,0.1)', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   cardIconText: { fontSize: 20 },
@@ -173,8 +197,8 @@ const styles = StyleSheet.create({
   cardBody: { fontSize: 12, color: '#aaa', marginTop: 2, lineHeight: 16 },
   time: { fontSize: 10, color: '#aaa', flexShrink: 0 },
   unreadDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#8B1A1A', marginTop: 4, flexShrink: 0 },
-  swipeDelete: { width: 80, marginBottom: 4 },
-  swipeDeleteInner: { flex: 1, backgroundColor: '#cc4444', justifyContent: 'center', alignItems: 'center', borderRadius: 16 },
+  swipeDelete: { justifyContent: 'center', alignItems: 'center', borderRadius: 16 },
+  swipeDeleteInner: { flex: 1, width: '100%', backgroundColor: '#cc4444', justifyContent: 'center', alignItems: 'center', borderRadius: 16 },
   swipeDeleteText: { color: '#fff', fontWeight: 'bold', fontSize: 14 },
   clearAllBtn: { alignSelf: 'center', marginTop: 16, paddingHorizontal: 20, paddingVertical: 10 },
   clearAllText: { fontSize: 13, color: '#aaa', fontWeight: '500' },

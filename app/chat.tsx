@@ -22,7 +22,7 @@ async function sendPushNotification(toToken: string, fromName: string, message: 
 }
 
 export default function ChatScreen() {
-  const { threadId, otherName } = useLocalSearchParams();
+  const { threadId, otherName, prefillMessage } = useLocalSearchParams();
   const router = useRouter();
   const [fontsLoaded] = useFonts({ Rajdhani_700Bold });
   const [messages, setMessages] = useState([]);
@@ -32,19 +32,26 @@ export default function ChatScreen() {
   const [otherIsViewing, setOtherIsViewing] = useState(false);
   const flatRef = useRef<FlatList>(null);
   const user = auth.currentUser;
+  const prefillApplied = useRef(false);
+
+  // Pre-fill message input once when arriving from a listing
+  useEffect(() => {
+    if (prefillMessage && !prefillApplied.current) {
+      setText(prefillMessage as string);
+      prefillApplied.current = true;
+    }
+  }, [prefillMessage]);
 
   useEffect(() => {
     if (!threadId || !user) return;
     const threadRef = doc(db, 'messages', threadId as string);
 
-    // Mark yourself as currently viewing
     updateDoc(threadRef, { [`viewing.${user.uid}`]: true }).catch(() => {});
 
     const threadUnsub = onSnapshot(threadRef, (snap) => {
       if (snap.exists()) {
         const data = snap.data();
         setThread({ id: snap.id, ...data });
-        // Check if the other person is currently viewing
         const otherId = data.participants?.find((p: string) => p !== user.uid);
         setOtherIsViewing(!!data.viewing?.[otherId]);
       }
@@ -58,7 +65,6 @@ export default function ChatScreen() {
     });
 
     return () => {
-      // Mark yourself as no longer viewing when you leave
       updateDoc(threadRef, { [`viewing.${user.uid}`]: false }).catch(() => {});
       threadUnsub();
       msgUnsub();
@@ -89,7 +95,6 @@ export default function ChatScreen() {
         ...(otherId ? { [`unreadCount.${otherId}`]: increment(1) } : {}),
       });
 
-      // Send push notification if the other person isn't already in the chat
       if (otherId && !otherIsViewing) {
         const otherSnap = await getDoc(doc(db, 'users', otherId));
         const pushToken = otherSnap.exists() ? otherSnap.data().pushToken : null;
@@ -101,11 +106,9 @@ export default function ChatScreen() {
     setSending(false);
   };
 
-  // Mark messages as read when viewing
   useEffect(() => {
     if (!user || !threadId || messages.length === 0) return;
     const threadRef = doc(db, 'messages', threadId as string);
-    // Mark unread messages from the other person as read
     messages.forEach((m: any) => {
       if (m.senderId !== user.uid && !m.readBy?.includes(user.uid)) {
         const msgRef = doc(db, 'messages', threadId as string, 'chats', m.id);
@@ -124,7 +127,6 @@ export default function ChatScreen() {
     const otherId = thread?.participants?.find((p: string) => p !== user?.uid);
     const isRead = m.readBy?.includes(otherId);
 
-    // Show read/delivered only on the last message sent by me
     let receipt = null;
     if (isMe && isLastMessage) {
       receipt = (
@@ -164,7 +166,6 @@ export default function ChatScreen() {
               <Text style={[styles.topName, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>
                 {(otherName as string)?.toUpperCase() || 'CHAT'}
               </Text>
-              {thread?.context ? <Text style={styles.topContext} numberOfLines={1}>re: {thread.context}</Text> : null}
             </View>
           </View>
         </View>
@@ -213,7 +214,6 @@ const styles = StyleSheet.create({
   topAvatar: { width: 38, height: 38, borderRadius: 10, backgroundColor: '#008080', alignItems: 'center', justifyContent: 'center' },
   topAvatarText: { color: '#fff', fontSize: 13, fontWeight: 'bold' },
   topName: { fontSize: 16, fontWeight: '700', color: '#003333', letterSpacing: 0.5 },
-  topContext: { fontSize: 11, color: '#a0b8b8', fontStyle: 'italic' },
   chatList: { paddingHorizontal: 16, paddingVertical: 16, paddingBottom: 24 },
   bubbleRow: { marginBottom: 10, maxWidth: '78%' },
   bubbleRowMe: { alignSelf: 'flex-end', alignItems: 'flex-end' },

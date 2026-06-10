@@ -17,6 +17,11 @@ export default function NewPostScreen() {
   const [price, setPrice] = useState('');
   const [loading, setLoading] = useState(false);
 
+  const handlePriceChange = (val: string) => {
+    const digits = val.replace(/[^0-9.]/g, '');
+    setPrice(digits ? `$${digits}` : '');
+  };
+
   const handlePost = async () => {
     if (!type || !body.trim()) {
       Alert.alert('Missing info', 'Please select a type and write something.');
@@ -75,11 +80,7 @@ export default function NewPostScreen() {
       <View style={styles.form}>
 
         <Text style={styles.label}>Post Type</Text>
-        <TouchableOpacity
-          style={styles.dropdown}
-          onPress={() => setShowTypePicker(!showTypePicker)}
-          activeOpacity={0.8}
-        >
+        <TouchableOpacity style={styles.dropdown} onPress={() => setShowTypePicker(!showTypePicker)} activeOpacity={0.8}>
           <Text style={type ? styles.dropdownSelected : styles.dropdownPlaceholder}>
             {type === 'Sale' ? 'For Sale' : type === 'Question' ? 'Question' : 'Select type...'}
           </Text>
@@ -88,11 +89,7 @@ export default function NewPostScreen() {
         {showTypePicker && (
           <View style={styles.dropdownList}>
             {typeOptions.map(opt => (
-              <TouchableOpacity
-                key={opt}
-                style={styles.dropdownItem}
-                onPress={() => { setType(opt); setShowTypePicker(false); }}
-              >
+              <TouchableOpacity key={opt} style={styles.dropdownItem} onPress={() => { setType(opt); setShowTypePicker(false); }}>
                 <Text style={[styles.dropdownItemText, type === opt && styles.dropdownItemActive]}>
                   {opt === 'Sale' ? 'For Sale' : 'Question'}
                 </Text>
@@ -111,15 +108,14 @@ export default function NewPostScreen() {
               value={title}
               onChangeText={setTitle}
             />
-            <Text style={styles.label}>
-              Price <Text style={styles.optional}>(optional)</Text>
-            </Text>
+            <Text style={styles.label}>Price <Text style={styles.optional}>(optional)</Text></Text>
             <TextInput
               style={styles.input}
               placeholder="e.g. $35"
               placeholderTextColor="#a0b8b8"
               value={price}
-              onChangeText={setPrice}
+              onChangeText={handlePriceChange}
+              keyboardType="decimal-pad"
             />
           </>
         )}
@@ -130,11 +126,9 @@ export default function NewPostScreen() {
         <TextInput
           style={[styles.input, styles.textArea]}
           placeholder={
-            type === 'Sale'
-              ? 'Describe the item, condition, size, etc...'
-              : type === 'Question'
-              ? 'Ask the community anything...'
-              : 'Write something...'
+            type === 'Sale' ? 'Describe the item, condition, size, etc...'
+            : type === 'Question' ? 'Ask the community anything...'
+            : 'Write something...'
           }
           placeholderTextColor="#a0b8b8"
           value={body}

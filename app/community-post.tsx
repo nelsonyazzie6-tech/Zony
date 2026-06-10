@@ -85,12 +85,14 @@ export default function CommunityPostScreen() {
 
   const handleMessage = () => {
     if (!post?.authorId) return;
+    const listingLabel = post.title || post.body?.slice(0, 60) || 'your listing';
+    const prefilledMessage = `Hi, I'm interested in your listing: "${listingLabel}"`;
     router.push({
       pathname: '/start-dm',
       params: {
         recipientId: post.authorId,
         recipientName: post.authorName || 'Seller',
-        context: post.title || post.body?.slice(0, 40) || 'Community post',
+        prefillMessage: prefilledMessage,
       },
     });
   };

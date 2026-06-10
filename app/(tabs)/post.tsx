@@ -1,11 +1,14 @@
 import { Rajdhani_700Bold, useFonts } from '@expo-google-fonts/rajdhani';
 import { useRouter } from 'expo-router';
-import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
-import { useRef, useState } from 'react';
-import { Alert, Keyboard, KeyboardAvoidingView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { addDoc, collection, doc, getDoc, getDocs, serverTimestamp } from 'firebase/firestore';
+import { useEffect, useRef, useState } from 'react';
+import {
+  Alert, Keyboard, KeyboardAvoidingView, Platform, ScrollView,
+  StyleSheet, Text, TextInput, TouchableOpacity, View,
+} from 'react-native';
 import { GooglePlacesAutocomplete } from 'react-native-google-places-autocomplete';
 import DateTimePickerModal from 'react-native-modal-datetime-picker';
-import Svg, { Circle, Path, Polygon, Rect } from 'react-native-svg';
+import Svg, { Path, Polygon, Rect } from 'react-native-svg';
 import { auth, db } from '../../firebaseConfig';
 
 const GOOGLE_API_KEY = 'AIzaSyC9w_A1-1lPhvtTTuCFdIQejyfm9GOJXRc';
@@ -14,6 +17,8 @@ const stateOptions = ['AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID
 const divisionOptions = ['6U','8U','10U','12U','14U','16U','18U','Adults'];
 const genderOptions = ['Boys', 'Girls', 'Coed', 'Womens', 'Mens'];
 const placeLabels = ['1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th'];
+const iAmOptions = ['Player', 'Team', 'Parent/Guardian'];
+const lookingForOptions = ['Player', 'Team'];
 
 function formatPhone(val: string) {
   const digits = val.replace(/\D/g, '').slice(0, 10);
@@ -32,18 +37,73 @@ function TrophyIcon({ color }: { color: string }) {
   );
 }
 
-function SuccessTrophy() {
+function SuccessModal({ type, onBack }: { type: 'tournament' | 'board'; onBack: () => void }) {
+  const [fontsLoaded] = useFonts({ Rajdhani_700Bold });
   return (
-    <Svg width={80} height={80} viewBox="0 0 24 24" fill="none">
-      <Path d="M8 3h8v8a4 4 0 0 1-8 0V3Z" stroke="#008080" strokeWidth="1.5" strokeLinejoin="round" />
-      <Path d="M8 6H5a2 2 0 0 0 0 4h3M16 6h3a2 2 0 0 1 0 4h-3" stroke="#008080" strokeWidth="1.5" strokeLinecap="round" />
-      <Path d="M12 15v4M9 21h6" stroke="#008080" strokeWidth="1.5" strokeLinecap="round" />
-    </Svg>
+    <View style={styles.successContainer}>
+      <Svg width={80} height={80} viewBox="0 0 24 24" fill="none">
+        <Path d="M8 3h8v8a4 4 0 0 1-8 0V3Z" stroke="#008080" strokeWidth="1.5" strokeLinejoin="round" />
+        <Path d="M8 6H5a2 2 0 0 0 0 4h3M16 6h3a2 2 0 0 1 0 4h-3" stroke="#008080" strokeWidth="1.5" strokeLinecap="round" />
+        <Path d="M12 15v4M9 21h6" stroke="#008080" strokeWidth="1.5" strokeLinecap="round" />
+      </Svg>
+      <Text style={[styles.successTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>
+        {type === 'tournament' ? 'TOURNAMENT POSTED!' : 'BOARD POST LIVE!'}
+      </Text>
+      <Text style={styles.successSub}>
+        {type === 'tournament' ? 'Your tournament is now live on Zony.' : 'Your post is now visible on the Sports Board.'}
+      </Text>
+      <TouchableOpacity style={styles.backBtn} onPress={onBack}>
+        <Text style={[styles.backText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>BACK TO HOME</Text>
+      </TouchableOpacity>
+    </View>
   );
 }
 
-export default function PostScreen() {
-  const router = useRouter();
+function HubScreen({ onSelect }: { onSelect: (tab: 'tournament' | 'board') => void }) {
+  const [fontsLoaded] = useFonts({ Rajdhani_700Bold });
+  return (
+    <View style={styles.hubContainer}>
+      <View style={styles.hubHeader}>
+        <Text style={[styles.hubTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>CREATE</Text>
+        <Text style={styles.hubSub}>What would you like to post?</Text>
+      </View>
+      <View style={styles.hubCards}>
+        <TouchableOpacity style={styles.hubCard} onPress={() => onSelect('tournament')} activeOpacity={0.85}>
+          <View style={[styles.hubCardIcon, { backgroundColor: '#008080' }]}>
+            <Svg width={36} height={36} viewBox="0 0 24 24" fill="none">
+              <Path d="M8 3h8v8a4 4 0 0 1-8 0V3Z" stroke="#fff" strokeWidth="1.5" strokeLinejoin="round" />
+              <Path d="M8 6H5a2 2 0 0 0 0 4h3M16 6h3a2 2 0 0 1 0 4h-3" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" />
+              <Path d="M12 15v4M9 21h6" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" />
+            </Svg>
+          </View>
+          <Text style={[styles.hubCardTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>TOURNAMENT</Text>
+          <Text style={styles.hubCardDesc}>Post a tournament for teams to register and compete</Text>
+          <View style={[styles.hubCardArrow, { backgroundColor: '#008080' }]}>
+            <Text style={styles.hubCardArrowText}>›</Text>
+          </View>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.hubCard} onPress={() => onSelect('board')} activeOpacity={0.85}>
+          <View style={[styles.hubCardIcon, { backgroundColor: '#7A1E1E' }]}>
+            <Svg width={36} height={36} viewBox="0 0 24 24" fill="none">
+              <Rect x="3" y="3" width="7" height="7" rx="1.5" stroke="#fff" strokeWidth="1.5" />
+              <Rect x="14" y="3" width="7" height="7" rx="1.5" stroke="#fff" strokeWidth="1.5" />
+              <Rect x="3" y="14" width="7" height="7" rx="1.5" stroke="#fff" strokeWidth="1.5" />
+              <Rect x="14" y="14" width="7" height="7" rx="1.5" stroke="#fff" strokeWidth="1.5" />
+            </Svg>
+          </View>
+          <Text style={[styles.hubCardTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>SPORTS BOARD</Text>
+          <Text style={styles.hubCardDesc}>Looking for players, teams, or spots in a tournament</Text>
+          <View style={[styles.hubCardArrow, { backgroundColor: '#7A1E1E' }]}>
+            <Text style={styles.hubCardArrowText}>›</Text>
+          </View>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+
+function TournamentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: () => void }) {
   const scrollRef = useRef<ScrollView>(null);
   const [headerHeight, setHeaderHeight] = useState(120);
   const [fontsLoaded] = useFonts({ Rajdhani_700Bold });
@@ -65,18 +125,18 @@ export default function PostScreen() {
   const [spectatorFee, setSpectatorFee] = useState('');
   const [divisions, setDivisions] = useState<string[]>([]);
   const [showDivisionPicker, setShowDivisionPicker] = useState(false);
-  const [gender, setGender] = useState('');
+  const [genders, setGenders] = useState<string[]>([]);
   const [showGenderPicker, setShowGenderPicker] = useState(false);
   const [rosterSize, setRosterSize] = useState('');
   const [contactName, setContactName] = useState('');
   const [contactPhone, setContactPhone] = useState('');
   const [contactEmail, setContactEmail] = useState('');
-  const [prizeType, setPrizeType] = useState<'cash' | 'other'>('cash');
-  const [prizeRows, setPrizeRows] = useState(['', '', '']);
+  const [prizeRows, setPrizeRows] = useState<{ cash: string; physical: string }[]>([
+    { cash: '', physical: '' }, { cash: '', physical: '' }, { cash: '', physical: '' },
+  ]);
   const [depositAmount, setDepositAmount] = useState('');
   const [depositDue, setDepositDue] = useState('');
   const [showDepositDuePicker, setShowDepositDuePicker] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const entryFeeRef = useRef<TextInput>(null);
@@ -87,6 +147,16 @@ export default function PostScreen() {
   const contactPhoneRef = useRef<TextInput>(null);
   const contactEmailRef = useRef<TextInput>(null);
   const depositAmountRef = useRef<TextInput>(null);
+
+  const resetFields = () => {
+    setName(''); setSport(''); setStartDate(''); setEndDate('');
+    setAddress(''); setCity(''); setState(''); setZip('');
+    setSpots(''); setEntryFee(''); setSpectatorFee('');
+    setDivisions([]); setGenders([]); setRosterSize('');
+    setContactName(''); setContactPhone(''); setContactEmail('');
+    setPrizeRows([{ cash: '', physical: '' }, { cash: '', physical: '' }, { cash: '', physical: '' }]);
+    setDepositAmount(''); setDepositDue('');
+  };
 
   const handlePlaceSelect = (data: any, details: any) => {
     if (!details) return;
@@ -107,18 +177,38 @@ export default function PostScreen() {
     setDivisions(prev => prev.includes(d) ? prev.filter(x => x !== d) : [...prev, d]);
   };
 
-  const updatePrizeRow = (index: number, val: string) => {
-    if (prizeType === 'cash') {
-      const digits = val.replace(/,/g, '');
-      if (!/^\d*$/.test(digits)) return;
-      const formatted = digits ? parseInt(digits).toLocaleString('en-US') : '';
-      setPrizeRows(prev => prev.map((p, i) => i === index ? formatted : p));
-    } else {
-      setPrizeRows(prev => prev.map((p, i) => i === index ? val : p));
-    }
+  const toggleGender = (g: string) => {
+    setGenders(prev => prev.includes(g) ? prev.filter(x => x !== g) : [...prev, g]);
   };
 
-  const addPrizeRow = () => { if (prizeRows.length < 8) setPrizeRows(prev => [...prev, '']); };
+  const updatePrizeCash = (index: number, val: string) => {
+    const digits = val.replace(/,/g, '');
+    if (!/^\d*$/.test(digits)) return;
+    const formatted = digits ? parseInt(digits).toLocaleString('en-US') : '';
+    setPrizeRows(prev => prev.map((p, i) => i === index ? { ...p, cash: formatted } : p));
+  };
+
+  const updatePrizePhysical = (index: number, val: string) => {
+    setPrizeRows(prev => prev.map((p, i) => i === index ? { ...p, physical: val } : p));
+  };
+
+  const addPrizeRow = () => {
+    if (prizeRows.length < 8) setPrizeRows(prev => [...prev, { cash: '', physical: '' }]);
+  };
+
+  const formatPrizes = () => {
+    return prizeRows.map((row, i) => {
+      const cash = row.cash.trim();
+      const physical = row.physical.trim();
+      if (!cash && !physical) return null;
+      let combined = '';
+      if (cash && physical) combined = `$${cash.replace(/,/g, '')} + ${physical}`;
+      else if (cash) combined = `$${cash.replace(/,/g, '')}`;
+      else combined = physical;
+      return `${placeLabels[i]}: ${combined}`;
+    }).filter(Boolean).join(' · ');
+  };
+
   const focusDeposit = () => { depositAmountRef.current?.focus(); scrollRef.current?.scrollTo({ y: 999, animated: true }); };
   const handleStartConfirm = (date: Date) => { setStartDate(date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })); setShowStartPicker(false); };
   const handleEndConfirm = (date: Date) => { setEndDate(date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })); setShowEndPicker(false); };
@@ -129,38 +219,28 @@ export default function PostScreen() {
     const user = auth.currentUser;
     if (!user) { Alert.alert('Sign in required', 'You need to be logged in to post a tournament.'); return; }
     setLoading(true);
-    const prizesFormatted = prizeRows.map((val, i) => val.trim() ? `${placeLabels[i]}: ${prizeType === 'cash' ? '$' : ''}${val.trim().replace(/,/g, '')}` : null).filter(Boolean).join(' · ');
+    const prizesFormatted = formatPrizes();
     try {
+      const userSnap = await getDoc(doc(db, 'users', user.uid));
+      const organizerName = userSnap.exists() ? (userSnap.data().username || '') : '';
+      const organizerPhoto = userSnap.exists() ? (userSnap.data().photoURL || '') : '';
       await addDoc(collection(db, 'tournaments'), {
         name, sport, date: `${startDate} - ${endDate}`, address, city, state, zip,
         location: `${city}, ${state}`, spots: parseInt(spots),
         entryFee: entryFee ? `$${entryFee}` : '', spectatorFee: spectatorFee ? `$${spectatorFee}` : '',
-        divisions, gender, rosterSize, contactName, contactPhone, contactEmail, prizeType,
+        divisions, gender: genders.join(', '), rosterSize, contactName, contactPhone, contactEmail,
         prizes: prizesFormatted, depositAmount: depositAmount ? `$${depositAmount}` : '',
         depositDue, status: 'active', createdAt: serverTimestamp(), postedBy: user.uid,
+        organizerName, organizerPhoto,
       });
-      setSubmitted(true);
+      resetFields();
+      onSuccess();
     } catch (e) { console.error('Error posting tournament:', e); }
     setLoading(false);
   };
 
-  if (submitted) {
-    return (
-      <View style={styles.successContainer}>
-        <SuccessTrophy />
-        <Text style={[styles.successTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>
-          TOURNAMENT POSTED!
-        </Text>
-        <Text style={styles.successSub}>Your tournament is now live on Zony.</Text>
-        <TouchableOpacity style={styles.backBtn} onPress={() => { setSubmitted(false); router.push('/'); }}>
-          <Text style={[styles.backText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>BACK TO HOME</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  }
-
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }}>
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView ref={scrollRef} style={styles.container} keyboardShouldPersistTaps="handled">
 
         <View style={styles.headerBlock} onLayout={e => setHeaderHeight(e.nativeEvent.layout.height)}>
@@ -181,6 +261,9 @@ export default function PostScreen() {
             <Polygon points="240,130 310,80 390,130" fill="white" opacity={0.05} />
             <Polygon points="80,130 180,90 240,130" fill="white" opacity={0.04} />
           </Svg>
+          <TouchableOpacity onPress={onBack} style={styles.formBackBtn}>
+            <Text style={styles.formBackText}>‹ Back</Text>
+          </TouchableOpacity>
           <Text style={[styles.header, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>CREATE TOURNAMENT</Text>
           <Text style={[styles.sub, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>Fill out the details below</Text>
         </View>
@@ -249,7 +332,6 @@ export default function PostScreen() {
             </View>
           ) : null}
 
-          {/* Divisions */}
           <Text style={styles.label}>Divisions</Text>
           <TouchableOpacity style={styles.dropdown} onPress={() => { Keyboard.dismiss(); setShowDivisionPicker(!showDivisionPicker); setShowSportPicker(false); setShowStatePicker(false); setShowGenderPicker(false); }}>
             <Text style={divisions.length > 0 ? styles.dropdownSelected : styles.dropdownPlaceholder}>{divisions.length > 0 ? divisions.join(', ') : 'Select divisions...'}</Text>
@@ -268,19 +350,21 @@ export default function PostScreen() {
             </View>
           )}
 
-          {/* Gender */}
           <Text style={styles.label}>Gender</Text>
           <TouchableOpacity style={styles.dropdown} onPress={() => { Keyboard.dismiss(); setShowGenderPicker(!showGenderPicker); setShowSportPicker(false); setShowStatePicker(false); setShowDivisionPicker(false); }}>
-            <Text style={gender ? styles.dropdownSelected : styles.dropdownPlaceholder}>{gender || 'Select gender...'}</Text>
+            <Text style={genders.length > 0 ? styles.dropdownSelected : styles.dropdownPlaceholder}>{genders.length > 0 ? genders.join(', ') : 'Select gender(s)...'}</Text>
             <Text style={styles.dropdownArrow}>{showGenderPicker ? '▲' : '▼'}</Text>
           </TouchableOpacity>
           {showGenderPicker && (
             <View style={styles.dropdownList}>
               {genderOptions.map((g) => (
-                <TouchableOpacity key={g} style={styles.dropdownItem} onPress={() => { setGender(g); setShowGenderPicker(false); setTimeout(() => entryFeeRef.current?.focus(), 100); }}>
-                  <Text style={[styles.dropdownItemText, gender === g && styles.dropdownItemActive]}>{g}</Text>
+                <TouchableOpacity key={g} style={styles.dropdownItem} onPress={() => toggleGender(g)}>
+                  <Text style={[styles.dropdownItemText, genders.includes(g) && styles.dropdownItemActive]}>{genders.includes(g) ? '✓ ' : ''}{g}</Text>
                 </TouchableOpacity>
               ))}
+              <TouchableOpacity style={[styles.dropdownItem, { backgroundColor: '#e0f5f5' }]} onPress={() => { setShowGenderPicker(false); setTimeout(() => entryFeeRef.current?.focus(), 100); }}>
+                <Text style={{ color: '#008080', fontWeight: 'bold', textAlign: 'center' }}>Done</Text>
+              </TouchableOpacity>
             </View>
           )}
 
@@ -306,35 +390,20 @@ export default function PostScreen() {
           <TextInput ref={contactEmailRef} style={styles.input} placeholder="Email address" placeholderTextColor="#a0b8b8" value={contactEmail} onChangeText={setContactEmail} keyboardType="email-address" autoCapitalize="none" returnKeyType="next" blurOnSubmit={false} onSubmitEditing={() => Keyboard.dismiss()} />
 
           <Text style={styles.label}>Prizes / Awards</Text>
-          <View style={styles.toggleRow}>
-            <TouchableOpacity style={[styles.toggleBtn, prizeType === 'cash' && styles.toggleBtnActive]} onPress={() => setPrizeType('cash')}>
-              <Svg width={14} height={14} viewBox="0 0 24 24" fill="none" style={{ marginRight: 6 }}>
-                <Rect x="3" y="6" width="18" height="12" rx="2" stroke={prizeType === 'cash' ? '#fff' : '#5a7a7a'} strokeWidth="2" />
-                <Circle cx="12" cy="12" r="3" stroke={prizeType === 'cash' ? '#fff' : '#5a7a7a'} strokeWidth="2" />
-              </Svg>
-              <Text style={[styles.toggleBtnText, prizeType === 'cash' && styles.toggleBtnTextActive]}>Cash</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.toggleBtn, prizeType === 'other' && styles.toggleBtnActive]} onPress={() => setPrizeType('other')}>
-              <TrophyIcon color={prizeType === 'other' ? '#fff' : '#5a7a7a'} />
-              <Text style={[styles.toggleBtnText, prizeType === 'other' && styles.toggleBtnTextActive]}>Other</Text>
-            </TouchableOpacity>
-          </View>
+          <Text style={styles.prizesHint}>Fill in cash, physical prizes, or both per place</Text>
 
-          {prizeRows.map((val, i) => (
-            <View key={i} style={styles.prizeRow}>
-              <View style={styles.prizeLabel}>
+          {prizeRows.map((row, i) => (
+            <View key={i} style={styles.prizeRowBlock}>
+              <View style={styles.prizePlaceLabel}>
                 <Text style={styles.prizeLabelText}>{placeLabels[i]}</Text>
               </View>
-              <TextInput
-                style={[styles.input, { flex: 1, marginBottom: 0 }]}
-                placeholder={prizeType === 'cash' ? 'Amount in dollars' : 'Prize description'}
-                placeholderTextColor="#a0b8b8"
-                value={val}
-                onChangeText={(t) => updatePrizeRow(i, t)}
-                returnKeyType="next"
-                blurOnSubmit={false}
-                onSubmitEditing={focusDeposit}
-              />
+              <View style={styles.prizeInputs}>
+                <View style={styles.prizeInputWrapper}>
+                  <Text style={styles.prizeInputPrefix}>$</Text>
+                  <TextInput style={styles.prizeInputCash} placeholder="Cash amount" placeholderTextColor="#a0b8b8" value={row.cash} onChangeText={(t) => updatePrizeCash(i, t)} keyboardType="numeric" returnKeyType="next" blurOnSubmit={false} />
+                </View>
+                <TextInput style={styles.prizeInputPhysical} placeholder="Trophy, Jacket, etc." placeholderTextColor="#a0b8b8" value={row.physical} onChangeText={(t) => updatePrizePhysical(i, t)} returnKeyType="next" blurOnSubmit={false} onSubmitEditing={i === prizeRows.length - 1 ? focusDeposit : undefined} />
+              </View>
             </View>
           ))}
 
@@ -365,15 +434,263 @@ export default function PostScreen() {
   );
 }
 
+function BoardForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: () => void }) {
+  const [fontsLoaded] = useFonts({ Rajdhani_700Bold });
+
+  const [name, setName] = useState('');
+  const [type, setType] = useState('');
+  const [showTypePicker, setShowTypePicker] = useState(false);
+  const [lookingFor, setLookingFor] = useState('');
+  const [showLookingForPicker, setShowLookingForPicker] = useState(false);
+  const [playerAge, setPlayerAge] = useState('');
+  const [forTournament, setForTournament] = useState('');
+  const [showTournamentPicker, setShowTournamentPicker] = useState(false);
+  const [tournaments, setTournaments] = useState<{ id: string; name: string; sport: string }[]>([]);
+  const [sport, setSport] = useState('');
+  const [showSportPicker, setShowSportPicker] = useState(false);
+  const [division, setDivision] = useState('');
+  const [showDivisionPicker, setShowDivisionPicker] = useState(false);
+  const [genders, setGenders] = useState<string[]>([]);
+  const [showGenderPicker, setShowGenderPicker] = useState(false);
+  const [city, setCity] = useState('');
+  const [state, setState] = useState('');
+  const [showStatePicker, setShowStatePicker] = useState(false);
+  const [contactPhone, setContactPhone] = useState('');
+  const [contactEmail, setContactEmail] = useState('');
+  const [description, setDescription] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const isParent = type === 'Parent/Guardian';
+
+  useEffect(() => {
+    const loadTournaments = async () => {
+      try {
+        const snap = await getDocs(collection(db, 'tournaments'));
+        const data = snap.docs.map(d => ({ id: d.id, name: d.data().name || 'Unnamed', sport: d.data().sport || '' }));
+        setTournaments(data);
+      } catch (e) { console.error(e); }
+    };
+    loadTournaments();
+  }, []);
+
+  const resetFields = () => {
+    setName(''); setType(''); setLookingFor(''); setPlayerAge(''); setForTournament('');
+    setSport(''); setDivision(''); setGenders([]); setCity(''); setState('');
+    setContactPhone(''); setContactEmail(''); setDescription('');
+  };
+
+  const closeAll = () => {
+    setShowTypePicker(false); setShowLookingForPicker(false);
+    setShowTournamentPicker(false); setShowSportPicker(false);
+    setShowDivisionPicker(false); setShowGenderPicker(false); setShowStatePicker(false);
+  };
+
+  const toggleGender = (g: string) => {
+    setGenders(prev => prev.includes(g) ? prev.filter(x => x !== g) : [...prev, g]);
+  };
+
+  const handleSubmit = async () => {
+    if (!name || !type || !sport || !division || !city || !state) {
+      Alert.alert('Missing fields', 'Please fill out all required fields.');
+      return;
+    }
+    const user = auth.currentUser;
+    if (!user) { Alert.alert('Sign in required', 'You need to be logged in to post.'); return; }
+    setLoading(true);
+    try {
+      await addDoc(collection(db, 'board'), {
+        name, type,
+        lookingFor: isParent ? 'Team' : lookingFor,
+        playerAge: isParent ? playerAge : '',
+        forTournament, sport, division,
+        gender: genders.join(', '),
+        city, state, contactPhone, contactEmail, description,
+        postedBy: user.uid, createdAt: serverTimestamp(),
+      });
+      resetFields();
+      onSuccess();
+    } catch (e) { console.error(e); }
+    setLoading(false);
+  };
+
+  const DropdownField = ({ label, value, placeholder, show, onToggle, options, onSelect, scrollable }: {
+    label: string; value: string; placeholder: string; show: boolean;
+    onToggle: () => void; options: string[]; onSelect: (v: string) => void; scrollable?: boolean;
+  }) => (
+    <View>
+      <Text style={styles.label}>{label}</Text>
+      <TouchableOpacity style={styles.dropdown} onPress={onToggle} activeOpacity={0.8}>
+        <Text style={value ? styles.dropdownSelected : styles.dropdownPlaceholder}>{value || placeholder}</Text>
+        <Text style={styles.dropdownArrow}>{show ? '▲' : '▼'}</Text>
+      </TouchableOpacity>
+      {show && (
+        <ScrollView style={[styles.dropdownList, scrollable && { maxHeight: 200 }]} nestedScrollEnabled scrollEnabled={!!scrollable}>
+          {options.map(opt => (
+            <TouchableOpacity key={opt} style={styles.dropdownItem} onPress={() => { onSelect(opt); closeAll(); }}>
+              <Text style={[styles.dropdownItemText, value === opt && styles.dropdownItemActive]}>{opt}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      )}
+    </View>
+  );
+
+  return (
+    <ScrollView style={styles.container} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+
+      <View style={[styles.headerBlock, { backgroundColor: '#7A1E1E' }]}>
+        <TouchableOpacity onPress={onBack} style={styles.formBackBtn}>
+          <Text style={styles.formBackText}>‹ Back</Text>
+        </TouchableOpacity>
+        <Text style={[styles.header, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>SPORTS BOARD POST</Text>
+        <Text style={[styles.sub, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>Let the community know</Text>
+      </View>
+
+      <View style={styles.form}>
+
+        <DropdownField
+          label="I am a..."
+          value={type}
+          placeholder="Select type..."
+          show={showTypePicker}
+          onToggle={() => { closeAll(); setShowTypePicker(!showTypePicker); }}
+          options={iAmOptions}
+          onSelect={(v) => { setType(v); if (v === 'Parent/Guardian') setLookingFor('Team'); }}
+        />
+
+        {isParent && (
+          <View style={styles.parentBanner}>
+            <Text style={styles.parentBannerText}>👋 You're posting on behalf of your child. Looking for a team is pre-selected.</Text>
+          </View>
+        )}
+
+        <Text style={styles.label}>{isParent ? "Player's Name" : 'Name'}</Text>
+        <TextInput style={styles.input} placeholder={isParent ? "e.g. Jordan Yazzie" : "e.g. Marcus Webb"} placeholderTextColor="#a0b8b8" value={name} onChangeText={setName} />
+
+        {isParent && (
+          <>
+            <Text style={styles.label}>Player's Age</Text>
+            <TextInput style={styles.input} placeholder="e.g. 10" placeholderTextColor="#a0b8b8" value={playerAge} onChangeText={setPlayerAge} keyboardType="numeric" />
+          </>
+        )}
+
+        {!isParent && (
+          <DropdownField label="Looking for a..." value={lookingFor} placeholder="Select what you need..." show={showLookingForPicker} onToggle={() => { closeAll(); setShowLookingForPicker(!showLookingForPicker); }} options={lookingForOptions} onSelect={setLookingFor} />
+        )}
+
+        <View>
+          <Text style={styles.label}>For... <Text style={styles.optional}>(optional)</Text></Text>
+          <TouchableOpacity style={styles.dropdown} onPress={() => { closeAll(); setShowTournamentPicker(!showTournamentPicker); }} activeOpacity={0.8}>
+            <Text style={forTournament ? styles.dropdownSelected : styles.dropdownPlaceholder}>{forTournament || 'Select a tournament...'}</Text>
+            <Text style={styles.dropdownArrow}>{showTournamentPicker ? '▲' : '▼'}</Text>
+          </TouchableOpacity>
+          {showTournamentPicker && (
+            <ScrollView style={[styles.dropdownList, { maxHeight: 200 }]} nestedScrollEnabled>
+              {tournaments.length === 0 ? (
+                <View style={styles.dropdownItem}><Text style={styles.dropdownItemText}>No tournaments available</Text></View>
+              ) : (
+                tournaments.map(t => (
+                  <TouchableOpacity key={t.id} style={styles.dropdownItem} onPress={() => { setForTournament(t.name); if (t.sport) setSport(t.sport); closeAll(); }}>
+                    <Text style={[styles.dropdownItemText, forTournament === t.name && styles.dropdownItemActive]}>{t.name}</Text>
+                  </TouchableOpacity>
+                ))
+              )}
+            </ScrollView>
+          )}
+        </View>
+
+        <DropdownField label="Sport" value={sport} placeholder="Select a sport..." show={showSportPicker} onToggle={() => { closeAll(); setShowSportPicker(!showSportPicker); }} options={sportOptions} onSelect={setSport} />
+        <DropdownField label="Division" value={division} placeholder="Select division..." show={showDivisionPicker} onToggle={() => { closeAll(); setShowDivisionPicker(!showDivisionPicker); }} options={divisionOptions} onSelect={setDivision} />
+
+        <Text style={styles.label}>Gender</Text>
+        <TouchableOpacity style={styles.dropdown} onPress={() => { closeAll(); setShowGenderPicker(!showGenderPicker); }} activeOpacity={0.8}>
+          <Text style={genders.length > 0 ? styles.dropdownSelected : styles.dropdownPlaceholder}>{genders.length > 0 ? genders.join(', ') : 'Select gender(s)...'}</Text>
+          <Text style={styles.dropdownArrow}>{showGenderPicker ? '▲' : '▼'}</Text>
+        </TouchableOpacity>
+        {showGenderPicker && (
+          <View style={styles.dropdownList}>
+            {genderOptions.map((g) => (
+              <TouchableOpacity key={g} style={styles.dropdownItem} onPress={() => toggleGender(g)}>
+                <Text style={[styles.dropdownItemText, genders.includes(g) && styles.dropdownItemActive]}>{genders.includes(g) ? '✓ ' : ''}{g}</Text>
+              </TouchableOpacity>
+            ))}
+            <TouchableOpacity style={[styles.dropdownItem, { backgroundColor: '#e0f5f5' }]} onPress={() => setShowGenderPicker(false)}>
+              <Text style={{ color: '#008080', fontWeight: 'bold', textAlign: 'center' }}>Done</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        <Text style={styles.label}>City</Text>
+        <TextInput style={styles.input} placeholder="e.g. Gallup" placeholderTextColor="#a0b8b8" value={city} onChangeText={setCity} />
+
+        <DropdownField label="State" value={state} placeholder="Select a state..." show={showStatePicker} onToggle={() => { closeAll(); setShowStatePicker(!showStatePicker); }} options={stateOptions} onSelect={setState} scrollable />
+
+        <Text style={styles.label}>Contact Phone <Text style={styles.optional}>(optional)</Text></Text>
+        <TextInput style={styles.input} placeholder="e.g. 505-555-1234" placeholderTextColor="#a0b8b8" value={contactPhone} onChangeText={v => setContactPhone(formatPhone(v))} keyboardType="phone-pad" maxLength={12} />
+
+        <Text style={styles.label}>Contact Email <Text style={styles.optional}>(optional)</Text></Text>
+        <TextInput style={styles.input} placeholder="e.g. john@email.com" placeholderTextColor="#a0b8b8" value={contactEmail} onChangeText={setContactEmail} keyboardType="email-address" autoCapitalize="none" />
+
+        <Text style={styles.label}>Description <Text style={styles.optional}>(optional)</Text></Text>
+        <TextInput style={[styles.input, styles.textArea]} placeholder={isParent ? "e.g. My son plays point guard, looking for a 10U team in Gallup..." : "e.g. Looking for 14U forward for this weekend at Hozho..."} placeholderTextColor="#a0b8b8" value={description} onChangeText={setDescription} multiline numberOfLines={4} />
+
+        <TouchableOpacity style={[styles.submitBtn, { backgroundColor: '#7A1E1E' }]} onPress={handleSubmit} disabled={loading} activeOpacity={0.85}>
+          <Text style={[styles.submitText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>{loading ? 'Posting...' : 'POST TO BOARD'}</Text>
+        </TouchableOpacity>
+
+      </View>
+    </ScrollView>
+  );
+}
+
+export default function PostScreen() {
+  const router = useRouter();
+  const [view, setView] = useState<'hub' | 'tournament' | 'board'>('hub');
+  const [successType, setSuccessType] = useState<'tournament' | 'board' | null>(null);
+
+  if (successType) {
+    return (
+      <SuccessModal
+        type={successType}
+        onBack={() => { setSuccessType(null); setView('hub'); router.push('/'); }}
+      />
+    );
+  }
+
+  if (view === 'tournament') {
+    return <TournamentForm onBack={() => setView('hub')} onSuccess={() => setSuccessType('tournament')} />;
+  }
+
+  if (view === 'board') {
+    return <BoardForm onBack={() => setView('hub')} onSuccess={() => setSuccessType('board')} />;
+  }
+
+  return <HubScreen onSelect={setView} />;
+}
+
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f5ede0' },
+  hubContainer: { flex: 1, backgroundColor: '#f5ede0', paddingTop: 60 },
+  hubHeader: { paddingHorizontal: 24, paddingBottom: 24, alignItems: 'center' },
+  hubTitle: { fontSize: 36, color: '#003333', letterSpacing: 3 },
+  hubSub: { fontSize: 14, color: '#a0b8b8', marginTop: 4 },
+  hubCards: { paddingHorizontal: 20, gap: 16 },
+  hubCard: { backgroundColor: '#fff', borderRadius: 20, padding: 24, shadowColor: '#000', shadowOpacity: 0.07, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 3, position: 'relative' },
+  hubCardIcon: { width: 64, height: 64, borderRadius: 16, alignItems: 'center', justifyContent: 'center', marginBottom: 14 },
+  hubCardTitle: { fontSize: 22, color: '#003333', letterSpacing: 1, marginBottom: 6 },
+  hubCardDesc: { fontSize: 14, color: '#5a7a7a', lineHeight: 20 },
+  hubCardArrow: { position: 'absolute', right: 20, top: '50%', width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+  hubCardArrowText: { color: '#fff', fontSize: 20, lineHeight: 22 },
   headerBlock: { backgroundColor: '#008080', paddingTop: 60, paddingBottom: 16, paddingHorizontal: 0, marginBottom: 8 },
   header: { fontSize: 28, fontWeight: '900', color: '#fff', textAlign: 'center', letterSpacing: 3 },
   sub: { fontSize: 14, color: 'rgba(255,255,255,0.8)', textAlign: 'center', marginTop: 2 },
-  form: { paddingHorizontal: 20 },
+  formBackBtn: { paddingHorizontal: 20, marginBottom: 8 },
+  formBackText: { fontSize: 16, color: 'rgba(255,255,255,0.85)', fontWeight: '600' },
+  form: { paddingHorizontal: 20, paddingBottom: 48 },
   label: { fontSize: 14, fontWeight: '600', color: '#003333', marginBottom: 6, marginTop: 10 },
   optional: { fontSize: 12, fontWeight: '400', color: '#a0b8b8' },
   input: { backgroundColor: '#fff', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, fontSize: 15, color: '#003333', marginBottom: 4, borderWidth: 1, borderColor: '#e0d8c8' },
+  textArea: { height: 110, textAlignVertical: 'top' },
   dropdown: { backgroundColor: '#fff', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderWidth: 1, borderColor: '#e0d8c8', marginBottom: 4 },
   dropdownPlaceholder: { fontSize: 15, color: '#a0b8b8' },
   dropdownSelected: { fontSize: 15, color: '#003333', flex: 1, marginRight: 8 },
@@ -382,16 +699,6 @@ const styles = StyleSheet.create({
   dropdownItem: { paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#f0fafa' },
   dropdownItemText: { fontSize: 15, color: '#003333' },
   dropdownItemActive: { color: '#008080', fontWeight: 'bold' },
-  toggleRow: { flexDirection: 'row', gap: 10, marginBottom: 12 },
-  toggleBtn: { flex: 1, paddingVertical: 10, borderRadius: 10, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', flexDirection: 'row', borderWidth: 1, borderColor: '#e0d8c8' },
-  toggleBtnActive: { backgroundColor: '#7A1E1E', borderColor: '#7A1E1E' },
-  toggleBtnText: { fontSize: 14, fontWeight: '600', color: '#5a7a7a' },
-  toggleBtnTextActive: { color: '#fff' },
-  prizeRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 8 },
-  prizeLabel: { backgroundColor: '#7A1E1E', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 6, minWidth: 36, alignItems: 'center' },
-  prizeLabelText: { color: '#fff', fontWeight: 'bold', fontSize: 13 },
-  addPrizeBtn: { borderWidth: 1, borderColor: '#008080', borderRadius: 10, paddingVertical: 10, alignItems: 'center', marginBottom: 16, backgroundColor: '#e0f5f5' },
-  addPrizeBtnText: { color: '#008080', fontWeight: 'bold', fontSize: 15 },
   submitBtn: { backgroundColor: '#7A1E1E', borderRadius: 12, paddingVertical: 16, alignItems: 'center', marginTop: 8, marginBottom: 40 },
   submitText: { color: '#fff', fontSize: 18, letterSpacing: 1 },
   successContainer: { flex: 1, backgroundColor: '#f5ede0', alignItems: 'center', justifyContent: 'center', padding: 40, gap: 12 },
@@ -403,4 +710,24 @@ const styles = StyleSheet.create({
   autoFilledBox: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#e0f5f5', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, marginBottom: 12 },
   autoFilledText: { fontSize: 13, color: '#003333', flex: 1, marginRight: 8 },
   clearText: { fontSize: 13, color: '#008080', fontWeight: 'bold' },
+  prizesHint: { fontSize: 12, color: '#a0b8b8', marginBottom: 10, marginTop: -4 },
+  prizeRowBlock: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 10, gap: 8 },
+  prizePlaceLabel: { backgroundColor: '#7A1E1E', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 8, minWidth: 36, alignItems: 'center', marginTop: 2 },
+  prizeLabelText: { color: '#fff', fontWeight: 'bold', fontSize: 13 },
+  prizeInputs: { flex: 1, gap: 6 },
+  prizeInputWrapper: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 12, borderWidth: 1, borderColor: '#e0d8c8', paddingHorizontal: 12 },
+  prizeInputPrefix: { fontSize: 15, color: '#003333', fontWeight: '600', marginRight: 4 },
+  prizeInputCash: { flex: 1, paddingVertical: 10, fontSize: 15, color: '#003333' },
+  prizeInputPhysical: { backgroundColor: '#fff', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 10, fontSize: 15, color: '#003333', borderWidth: 1, borderColor: '#e0d8c8' },
+  addPrizeBtn: { borderWidth: 1, borderColor: '#008080', borderRadius: 10, paddingVertical: 10, alignItems: 'center', marginBottom: 16, backgroundColor: '#e0f5f5' },
+  addPrizeBtnText: { color: '#008080', fontWeight: 'bold', fontSize: 15 },
+  toggleRow: { flexDirection: 'row', gap: 10, marginBottom: 12 },
+  toggleBtn: { flex: 1, paddingVertical: 10, borderRadius: 10, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', flexDirection: 'row', borderWidth: 1, borderColor: '#e0d8c8' },
+  toggleBtnActive: { backgroundColor: '#7A1E1E', borderColor: '#7A1E1E' },
+  toggleBtnText: { fontSize: 14, fontWeight: '600', color: '#5a7a7a' },
+  toggleBtnTextActive: { color: '#fff' },
+  prizeRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 8 },
+  prizeLabel: { backgroundColor: '#7A1E1E', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 6, minWidth: 36, alignItems: 'center' },
+  parentBanner: { backgroundColor: '#fff8e1', borderRadius: 10, padding: 12, marginTop: 8, marginBottom: 4, borderLeftWidth: 3, borderLeftColor: '#B8860B' },
+  parentBannerText: { fontSize: 13, color: '#7a5800', lineHeight: 18 },
 });

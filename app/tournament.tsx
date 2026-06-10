@@ -2,7 +2,7 @@ import { Rajdhani_700Bold, useFonts } from '@expo-google-fonts/rajdhani';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { addDoc, arrayRemove, arrayUnion, collection, deleteDoc, doc, getDoc, getDocs, increment, onSnapshot, orderBy, query, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
-import { Alert, Clipboard, KeyboardAvoidingView, Modal, Platform, ScrollView, Share, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, Clipboard, Image, KeyboardAvoidingView, Modal, Platform, ScrollView, Share, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { auth, db } from '../firebaseConfig';
 
@@ -240,6 +240,10 @@ export default function TournamentScreen() {
     : tournament.sport === 'Softball' ? '#B8860B'
     : '#008080';
 
+  const organizerInitials = tournament.organizerName
+    ? tournament.organizerName.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase()
+    : '?';
+
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <View style={styles.container}>
@@ -303,10 +307,29 @@ export default function TournamentScreen() {
         ) : (
           <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 40 }}>
             <View style={styles.card}>
-              <View style={[styles.sportBadge, { backgroundColor: sportColor }]}>
-                <Text style={styles.sportBadgeText}>{tournament.sport}</Text>
+              <View style={styles.sportBadgeRow}>
+                <View style={[styles.sportBadge, { backgroundColor: sportColor }]}>
+                  <Text style={styles.sportBadgeText}>{tournament.sport}</Text>
+                </View>
               </View>
               <Text style={[styles.tournamentName, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>{tournament.name}</Text>
+
+              {tournament.organizerName ? (
+                <View style={styles.organizerRow}>
+                  {tournament.organizerPhoto ? (
+                    <Image source={{ uri: tournament.organizerPhoto }} style={styles.organizerPhoto} />
+                  ) : (
+                    <View style={[styles.organizerAvatar, { backgroundColor: sportColor }]}>
+                      <Text style={[styles.organizerInitials, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>{organizerInitials}</Text>
+                    </View>
+                  )}
+                  <View>
+                    <Text style={styles.organizerLabel}>Posted by</Text>
+                    <Text style={[styles.organizerName, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>{tournament.organizerName}</Text>
+                  </View>
+                </View>
+              ) : null}
+
               <View style={styles.divider} />
 
               <View style={styles.row}>
@@ -368,8 +391,8 @@ export default function TournamentScreen() {
               {tournament.prizes ? (
                 <>
                   <View style={[styles.row, { marginTop: 16 }]}>
-                    <Text style={styles.rowIcon}>{tournament.prizeType === 'other' ? '🏆' : '💰'}</Text>
-                    <Text style={styles.rowLabel}>{tournament.prizeType === 'other' ? 'Prizes' : 'Prize Money'}</Text>
+                    <Text style={styles.rowIcon}>🏆</Text>
+                    <Text style={styles.rowLabel}>Prizes</Text>
                   </View>
                   <Text style={styles.rowValue}>{tournament.prizes}</Text>
                 </>
@@ -437,7 +460,6 @@ export default function TournamentScreen() {
         )}
       </View>
 
-      {/* Team Registration Modal */}
       <Modal visible={showTeamModal} animationType="slide" transparent onRequestClose={tryCloseModal}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalBox}>
@@ -451,24 +473,12 @@ export default function TournamentScreen() {
                   <Text style={styles.modalCloseText}>✕</Text>
                 </TouchableOpacity>
               </View>
-
               <Text style={styles.modalLabel}>Team Name</Text>
               <TextInput style={styles.modalInput} placeholder="e.g. Gallup Ballers" placeholderTextColor="#a0b8b8" value={teamName} onChangeText={setTeamName} />
-
               <Text style={styles.modalLabel}>Your Name</Text>
               <TextInput style={styles.modalInput} placeholder="e.g. John Begay" placeholderTextColor="#a0b8b8" value={contactName} onChangeText={setContactName} />
-
               <Text style={styles.modalLabel}>Your Contact Info</Text>
-              <TextInput
-                style={styles.modalInput}
-                placeholder="e.g. 928-555-1234"
-                placeholderTextColor="#a0b8b8"
-                value={contactInfo}
-                onChangeText={v => setContactInfo(formatPhone(v))}
-                keyboardType="phone-pad"
-                maxLength={12}
-              />
-
+              <TextInput style={styles.modalInput} placeholder="e.g. 928-555-1234" placeholderTextColor="#a0b8b8" value={contactInfo} onChangeText={v => setContactInfo(formatPhone(v))} keyboardType="phone-pad" maxLength={12} />
               <Text style={styles.modalLabel}>Division</Text>
               <TouchableOpacity style={styles.modalDropdown} onPress={() => setShowDivisionPicker(!showDivisionPicker)}>
                 <Text style={teamDivision ? styles.modalDropdownSelected : styles.modalDropdownPlaceholder}>{teamDivision || 'Select division...'}</Text>
@@ -483,13 +493,11 @@ export default function TournamentScreen() {
                   ))}
                 </View>
               )}
-
               {tournament.depositAmount ? (
                 <View style={styles.depositNotice}>
                   <Text style={styles.depositNoticeText}>💰 A non-refundable deposit of {tournament.depositAmount}{tournament.depositDue ? ` is due by ${tournament.depositDue}` : ' is required'}.</Text>
                 </View>
               ) : null}
-
               <View style={styles.modalBtns}>
                 <TouchableOpacity style={styles.modalCancelBtn} onPress={tryCloseModal}>
                   <Text style={styles.modalCancelText}>Cancel</Text>
@@ -503,62 +511,39 @@ export default function TournamentScreen() {
         </View>
       </Modal>
 
-      {/* Delete Confirmation Modal */}
       <Modal visible={showDeleteModal} animationType="fade" transparent>
         <View style={styles.successOverlay}>
           <View style={styles.deleteBox}>
-            <Text style={[styles.deleteModalTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>
-              DELETE TOURNAMENT
-            </Text>
+            <Text style={[styles.deleteModalTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>DELETE TOURNAMENT</Text>
             <Text style={styles.deleteModalMsg}>
               This will notify all registered teams and permanently delete{' '}
               <Text style={{ fontWeight: '700', color: '#003333' }}>{tournament.name}</Text>.
               {'\n\n'}This cannot be undone.
             </Text>
             <View style={styles.deleteModalBtns}>
-              <TouchableOpacity
-                style={styles.deleteModalCancelBtn}
-                onPress={() => setShowDeleteModal(false)}
-                activeOpacity={0.85}
-              >
+              <TouchableOpacity style={styles.deleteModalCancelBtn} onPress={() => setShowDeleteModal(false)} activeOpacity={0.85}>
                 <Text style={[styles.deleteModalCancelText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>KEEP IT</Text>
               </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.deleteModalConfirmBtn}
-                onPress={confirmDelete}
-                disabled={deleteLoading}
-                activeOpacity={0.85}
-              >
-                <Text style={[styles.deleteModalConfirmText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>
-                  {deleteLoading ? 'DELETING...' : 'DELETE'}
-                </Text>
+              <TouchableOpacity style={styles.deleteModalConfirmBtn} onPress={confirmDelete} disabled={deleteLoading} activeOpacity={0.85}>
+                <Text style={[styles.deleteModalConfirmText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>{deleteLoading ? 'DELETING...' : 'DELETE'}</Text>
               </TouchableOpacity>
             </View>
           </View>
         </View>
       </Modal>
 
-      {/* Success Modal */}
       <Modal visible={showSuccessModal} animationType="fade" transparent>
         <View style={styles.successOverlay}>
           <View style={styles.successBox}>
             <SuccessTrophy />
-            <Text style={[styles.successTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>
-              TEAM REGISTERED!
-            </Text>
-            <Text style={styles.successMsg}>
-              {successData?.teamName} has been registered for {successData?.tournamentName}.
-            </Text>
+            <Text style={[styles.successTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>TEAM REGISTERED!</Text>
+            <Text style={styles.successMsg}>{successData?.teamName} has been registered for {successData?.tournamentName}.</Text>
             {successData?.depositMsg ? (
               <View style={styles.successDepositBox}>
                 <Text style={styles.successDepositText}>💰 {successData.depositMsg}</Text>
               </View>
             ) : null}
-            <TouchableOpacity
-              style={[styles.successBtn, { backgroundColor: sportColor }]}
-              onPress={() => setShowSuccessModal(false)}
-              activeOpacity={0.85}
-            >
+            <TouchableOpacity style={[styles.successBtn, { backgroundColor: sportColor }]} onPress={() => setShowSuccessModal(false)} activeOpacity={0.85}>
               <Text style={[styles.successBtnText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>GOT IT</Text>
             </TouchableOpacity>
           </View>
@@ -596,9 +581,16 @@ const styles = StyleSheet.create({
   contactLineIcon: { fontSize: 12 },
   contactLineText: { fontSize: 12, color: '#777' },
   card: { backgroundColor: '#fff', borderRadius: 24, padding: 20, marginBottom: 16, shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 8, elevation: 2 },
-  sportBadge: { alignSelf: 'flex-start', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 4, marginBottom: 12 },
+  sportBadgeRow: { marginBottom: 12 },
+  sportBadge: { alignSelf: 'flex-start', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 4 },
   sportBadgeText: { color: '#fff', fontSize: 12, fontWeight: '700' },
   tournamentName: { fontSize: 26, fontWeight: '900', color: '#111', marginBottom: 12, lineHeight: 30 },
+  organizerRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 14, backgroundColor: '#f5ede0', borderRadius: 12, padding: 10 },
+  organizerPhoto: { width: 40, height: 40, borderRadius: 20 },
+  organizerAvatar: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  organizerInitials: { color: '#fff', fontSize: 14, fontWeight: 'bold' },
+  organizerLabel: { fontSize: 11, color: '#a0b8b8', fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 },
+  organizerName: { fontSize: 15, color: '#003333', letterSpacing: 0.5 },
   divider: { height: 1, backgroundColor: '#f0f0f0', marginBottom: 12 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
   rowIcon: { fontSize: 15 },
