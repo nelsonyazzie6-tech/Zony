@@ -41,8 +41,9 @@ export default function TournamentScreen() {
   const [joined, setJoined] = useState(false);
   const [onWaitlist, setOnWaitlist] = useState(false);
   const [spotsLeft, setSpotsLeft] = useState(0);
-  const [activeTab, setActiveTab] = useState<'details' | 'teams'>('details');
+  const [activeTab, setActiveTab] = useState<'details' | 'teams' | 'waitlist'>('details');
   const [teams, setTeams] = useState([]);
+  const [waitlistEntries, setWaitlistEntries] = useState([]);
   const [showTeamModal, setShowTeamModal] = useState(false);
   const [isEditingRegistration, setIsEditingRegistration] = useState(false);
   const [myTeamId, setMyTeamId] = useState<string | null>(null);
@@ -77,8 +78,6 @@ export default function TournamentScreen() {
       if (user) {
         const userSnap = await getDoc(doc(db, 'users', user.uid));
         if (userSnap.exists()) setCurrentUsername(userSnap.data().username || user.email || '');
-
-        // Check if user is on waitlist
         const waitlistSnap = await getDocs(collection(db, 'tournaments', id as string, 'waitlist'));
         const isOnWaitlist = waitlistSnap.docs.some(d => d.data().userId === user.uid);
         setOnWaitlist(isOnWaitlist);
@@ -91,7 +90,12 @@ export default function TournamentScreen() {
       setTeams(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
 
-    return () => { unsubTeams(); };
+    const waitlistQuery = query(collection(db, 'tournaments', id as string, 'waitlist'), orderBy('createdAt', 'asc'));
+    const unsubWaitlist = onSnapshot(waitlistQuery, (snap) => {
+      setWaitlistEntries(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    });
+
+    return () => { unsubTeams(); unsubWaitlist(); };
   }, []);
 
   const handleCopyAddress = () => {
@@ -129,7 +133,6 @@ export default function TournamentScreen() {
       setMyTeamId(null);
       setSpotsLeft(prev => prev + 1);
 
-      // Notify organizer
       const cancelingName = myTeamData?.contactName || currentUsername || 'A team';
       const cancelingTeamName = myTeamData?.teamName || 'Unknown team';
       await addDoc(collection(db, 'notifications'), {
@@ -154,7 +157,6 @@ export default function TournamentScreen() {
         });
       }
 
-      // Item 10 — notify first person on waitlist that a spot opened
       const waitlistSnap = await getDocs(
         query(collection(db, 'tournaments', id as string, 'waitlist'), orderBy('createdAt', 'asc'))
       );
@@ -181,13 +183,11 @@ export default function TournamentScreen() {
             }),
           });
         }
-        // Remove them from waitlist so they don't get notified again
         await deleteDoc(first.ref);
       }
     } catch (e: any) { console.error(e); }
   };
 
-  // Item 10 — join waitlist
   const handleJoinWaitlist = async () => {
     if (!user || onWaitlist) return;
     try {
@@ -198,6 +198,28 @@ export default function TournamentScreen() {
       });
       setOnWaitlist(true);
       setShowWaitlistModal(true);
+
+      await addDoc(collection(db, 'notifications'), {
+        toUserId: postedBy as string,
+        message: `${currentUsername} joined the waitlist for ${tournament?.name}`,
+        body: 'A spot opening up will automatically notify them.',
+        link: `/tournament?id=${id}&postedBy=${postedBy}`,
+        createdAt: serverTimestamp(),
+        read: false,
+      });
+
+      const ownerSnap = await getDoc(doc(db, 'users', postedBy as string));
+      if (ownerSnap.exists() && ownerSnap.data().pushToken) {
+        await fetch('https://exp.host/--/api/v2/push/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            to: ownerSnap.data().pushToken,
+            title: '📋 New waitlist signup',
+            body: `${currentUsername} joined the waitlist for ${tournament?.name}.`,
+          }),
+        });
+      }
     } catch (e: any) { console.error(e); }
   };
 
@@ -271,7 +293,6 @@ export default function TournamentScreen() {
           createdAt: serverTimestamp(),
         });
 
-        // Notify organizer
         await addDoc(collection(db, 'notifications'), {
           toUserId: postedBy as string,
           message: `${contactName} registered ${teamName} into ${tournament?.name}!`,
@@ -294,7 +315,6 @@ export default function TournamentScreen() {
           });
         }
 
-        // Notify registering team
         await addDoc(collection(db, 'notifications'), {
           toUserId: user.uid,
           message: `You're registered for ${tournament?.name}!`,
@@ -408,6 +428,9 @@ export default function TournamentScreen() {
             <TouchableOpacity style={[styles.tab, activeTab === 'teams' && { backgroundColor: sportColor }]} onPress={() => setActiveTab('teams')}>
               <Text style={[styles.tabText, activeTab === 'teams' && styles.tabTextActive]}>Teams {teams.length > 0 ? `(${teams.length})` : ''}</Text>
             </TouchableOpacity>
+            <TouchableOpacity style={[styles.tab, activeTab === 'waitlist' && { backgroundColor: '#B8860B' }]} onPress={() => setActiveTab('waitlist')}>
+              <Text style={[styles.tabText, activeTab === 'waitlist' && styles.tabTextActive]}>Waitlist {waitlistEntries.length > 0 ? `(${waitlistEntries.length})` : ''}</Text>
+            </TouchableOpacity>
           </View>
         )}
 
@@ -441,6 +464,33 @@ export default function TournamentScreen() {
               ))
             )}
           </ScrollView>
+
+        ) : activeTab === 'waitlist' && isOwner ? (
+          <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 40 }}>
+            <Text style={styles.teamsCount}>{waitlistEntries.length} {waitlistEntries.length === 1 ? 'person' : 'people'} waiting</Text>
+            {waitlistEntries.length === 0 ? (
+              <View style={styles.emptyTeams}>
+                <SadFace />
+                <Text style={styles.emptyTeamsText}>No one on the waitlist.</Text>
+              </View>
+            ) : (
+              waitlistEntries.map((w: any, index: number) => {
+                const joinedDate = w.createdAt?.toDate?.()?.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) || '';
+                return (
+                  <View key={w.id} style={styles.waitlistCard}>
+                    <View style={styles.waitlistPosition}>
+                      <Text style={[styles.waitlistPositionText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>#{index + 1}</Text>
+                    </View>
+                    <View style={styles.waitlistInfo}>
+                      <Text style={[styles.waitlistName, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>{w.username || 'Unknown'}</Text>
+                      {joinedDate ? <Text style={styles.waitlistDate}>Joined {joinedDate}</Text> : null}
+                    </View>
+                  </View>
+                );
+              })
+            )}
+          </ScrollView>
+
         ) : (
           <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 40 }}>
             <View style={styles.card}>
@@ -569,6 +619,13 @@ export default function TournamentScreen() {
               <Text style={[styles.spotsText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>
                 {isFull ? 'Tournament Full' : `${spotsLeft} spots left`}
               </Text>
+
+              {/* Waitlist indicator for players */}
+              {onWaitlist && !isOwner && (
+                <View style={styles.waitlistBanner}>
+                  <Text style={styles.waitlistBannerText}>📋 You're on the waitlist — we'll notify you if a spot opens.</Text>
+                </View>
+              )}
             </View>
 
             {isOwner ? (
@@ -592,7 +649,6 @@ export default function TournamentScreen() {
                     </TouchableOpacity>
                   </>
                 ) : isFull && !isCanceled ? (
-                  // Item 10 — waitlist button when full
                   <TouchableOpacity
                     style={[styles.joinBtn, { backgroundColor: onWaitlist ? '#a0b8b8' : '#B8860B' }]}
                     onPress={handleJoinWaitlist}
@@ -654,9 +710,7 @@ export default function TournamentScreen() {
                     <TouchableOpacity key={d} style={styles.modalDropdownItem} onPress={() => { setTeamDivision(d); setShowDivisionPicker(false); }}>
                       <View style={styles.divisionPickerRow}>
                         <Text style={[styles.modalDropdownItemText, teamDivision === d && styles.modalDropdownItemActive]}>{d}</Text>
-                        {getDivisionFee(d) ? (
-                          <Text style={styles.divisionFeeTag}>{getDivisionFee(d)}</Text>
-                        ) : null}
+                        {getDivisionFee(d) ? <Text style={styles.divisionFeeTag}>{getDivisionFee(d)}</Text> : null}
                       </View>
                     </TouchableOpacity>
                   ))}
@@ -784,7 +838,7 @@ const styles = StyleSheet.create({
   canceledBannerText: { color: '#fff', fontWeight: 'bold', fontSize: 14, textAlign: 'center' },
   tabRow: { flexDirection: 'row', marginHorizontal: 20, marginBottom: 16, backgroundColor: '#e0f5f5', borderRadius: 12, padding: 4 },
   tab: { flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center' },
-  tabText: { fontSize: 14, fontWeight: '600', color: '#5a7a7a' },
+  tabText: { fontSize: 13, fontWeight: '600', color: '#5a7a7a' },
   tabTextActive: { color: '#fff' },
   teamsCount: { fontSize: 11, color: '#999', fontWeight: '600', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12, paddingLeft: 4 },
   emptyTeams: { alignItems: 'center', marginTop: 60, gap: 10 },
@@ -800,6 +854,14 @@ const styles = StyleSheet.create({
   contactLineIcon: { fontSize: 12 },
   contactLineText: { fontSize: 12, color: '#777' },
   tappableLink: { color: '#008080', textDecorationLine: 'underline' },
+  waitlistCard: { flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: '#fff', borderRadius: 16, padding: 16, marginBottom: 10, borderWidth: 1, borderColor: '#f0f0f0', shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 4, elevation: 1 },
+  waitlistPosition: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#fff8e0', borderWidth: 1, borderColor: '#f0d080', alignItems: 'center', justifyContent: 'center' },
+  waitlistPositionText: { fontSize: 16, color: '#B8860B', fontWeight: '900' },
+  waitlistInfo: { flex: 1 },
+  waitlistName: { fontSize: 15, color: '#111', fontWeight: '700', letterSpacing: 0.5 },
+  waitlistDate: { fontSize: 12, color: '#a0b8b8', marginTop: 2 },
+  waitlistBanner: { backgroundColor: '#fff8e0', borderRadius: 12, padding: 12, marginTop: 12, borderWidth: 1, borderColor: '#f0d080' },
+  waitlistBannerText: { fontSize: 13, color: '#7a5a00', fontWeight: '600', lineHeight: 18 },
   card: { backgroundColor: '#fff', borderRadius: 24, padding: 20, marginBottom: 16, shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 8, elevation: 2 },
   sportBadgeRow: { marginBottom: 12 },
   sportBadge: { alignSelf: 'flex-start', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 4 },
