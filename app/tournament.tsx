@@ -2,7 +2,7 @@ import { Rajdhani_700Bold, useFonts } from '@expo-google-fonts/rajdhani';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { addDoc, arrayRemove, arrayUnion, collection, deleteDoc, doc, getDoc, getDocs, increment, onSnapshot, orderBy, query, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
-import { Alert, Clipboard, Image, KeyboardAvoidingView, Modal, Platform, ScrollView, Share, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Clipboard, Image, KeyboardAvoidingView, Modal, Platform, ScrollView, Share, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { auth, db } from '../firebaseConfig';
 
@@ -43,10 +43,12 @@ export default function TournamentScreen() {
   const [activeTab, setActiveTab] = useState<'details' | 'teams'>('details');
   const [teams, setTeams] = useState([]);
   const [showTeamModal, setShowTeamModal] = useState(false);
+  const [isEditingRegistration, setIsEditingRegistration] = useState(false);
+  const [myTeamId, setMyTeamId] = useState<string | null>(null);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
-  const [successData, setSuccessData] = useState<{ teamName: string; tournamentName: string; depositMsg: string } | null>(null);
+  const [successData, setSuccessData] = useState<{ teamName: string; tournamentName: string; depositMsg: string; contactInfo: string } | null>(null);
   const [teamName, setTeamName] = useState('');
   const [contactName, setContactName] = useState('');
   const [contactInfo, setContactInfo] = useState('');
@@ -93,99 +95,125 @@ export default function TournamentScreen() {
   };
 
   const handleCancelRegistration = () => {
-    Alert.alert('Cancel Registration', 'Are you sure you want to cancel your registration?', [
-      { text: 'No', style: 'cancel' },
-      {
-        text: 'Yes', style: 'destructive', onPress: async () => {
-          try {
-            const teamsSnap = await getDocs(collection(db, 'tournaments', id as string, 'teams'));
-            const myTeam = teamsSnap.docs.find(d => d.data().registeredBy === user?.uid);
-            if (myTeam) await deleteDoc(doc(db, 'tournaments', id as string, 'teams', myTeam.id));
-            await updateDoc(doc(db, 'tournaments', id as string), {
-              joinedUsers: arrayRemove(user?.uid),
-              spots: increment(1),
-            });
-            setJoined(false);
-            setSpotsLeft(prev => prev + 1);
-          } catch (e: any) { Alert.alert('Error', e.message); }
-        }
-      }
-    ]);
+    // Custom modal handled via showDeleteModal pattern — use inline state
+    setCancelConfirmVisible(true);
   };
 
-  const hasUnsavedTeamData = () => !!(teamName || contactName || contactInfo || teamDivision);
+  const [cancelConfirmVisible, setCancelConfirmVisible] = useState(false);
+
+  const doCancelRegistration = async () => {
+    setCancelConfirmVisible(false);
+    try {
+      const teamsSnap = await getDocs(collection(db, 'tournaments', id as string, 'teams'));
+      const myTeam = teamsSnap.docs.find(d => d.data().registeredBy === user?.uid);
+      if (myTeam) await deleteDoc(doc(db, 'tournaments', id as string, 'teams', myTeam.id));
+      await updateDoc(doc(db, 'tournaments', id as string), {
+        joinedUsers: arrayRemove(user?.uid),
+        spots: increment(1),
+      });
+      setJoined(false);
+      setMyTeamId(null);
+      setSpotsLeft(prev => prev + 1);
+    } catch (e: any) { console.error(e); }
+  };
+
+  const openEditRegistration = async () => {
+    try {
+      const teamsSnap = await getDocs(collection(db, 'tournaments', id as string, 'teams'));
+      const myTeam = teamsSnap.docs.find(d => d.data().registeredBy === user?.uid);
+      if (!myTeam) return;
+      const data = myTeam.data();
+      setMyTeamId(myTeam.id);
+      setTeamName(data.teamName || '');
+      setContactName(data.contactName || '');
+      setContactInfo(data.contactInfo || '');
+      setTeamDivision(data.division || '');
+      setIsEditingRegistration(true);
+      setShowTeamModal(true);
+    } catch (e: any) { console.error(e); }
+  };
 
   const tryCloseModal = () => {
-    if (hasUnsavedTeamData()) {
-      Alert.alert('Discard changes?', 'You have unsaved information. Are you sure you want to leave?', [
-        { text: 'Keep Editing', style: 'cancel' },
-        {
-          text: 'Discard', style: 'destructive', onPress: () => {
-            setTeamName(''); setContactName(''); setContactInfo(''); setTeamDivision('');
-            setShowTeamModal(false);
-          }
-        },
-      ]);
-    } else {
-      setShowTeamModal(false);
-    }
+    setTeamName(''); setContactName(''); setContactInfo(''); setTeamDivision('');
+    setIsEditingRegistration(false);
+    setMyTeamId(null);
+    setShowTeamModal(false);
+  };
+
+  // Division-specific fee lookup
+  const getDivisionFee = (div: string): string | null => {
+    if (!tournament?.divisionFees) return null;
+    const fee = tournament.divisionFees[div];
+    return fee ? `$${fee}` : null;
   };
 
   const handleRegisterTeam = async () => {
-    if (!teamName || !contactName || !contactInfo || !teamDivision) {
-      Alert.alert('Missing info', 'Please fill out all fields.');
-      return;
-    }
-    if (!user) { Alert.alert('Sign in required', 'You need to be logged in.'); return; }
-    if (spotsLeft <= 0) { Alert.alert('Full', 'This tournament is full.'); return; }
+    if (!teamName || !contactName || !contactInfo || !teamDivision) return;
+    if (!user) return;
+
     setTeamLoading(true);
     try {
-      await updateDoc(doc(db, 'tournaments', id as string), {
-        joinedUsers: arrayUnion(user.uid),
-        spots: increment(-1),
-      });
-      setJoined(true);
-      setSpotsLeft(prev => prev - 1);
-
-      await addDoc(collection(db, 'tournaments', id as string, 'teams'), {
-        teamName, contactName, contactInfo,
-        division: teamDivision,
-        registeredBy: user.uid,
-        createdAt: serverTimestamp(),
-      });
-
-      await addDoc(collection(db, 'notifications'), {
-        toUserId: postedBy as string,
-        message: `${contactName} registered ${teamName} into ${tournament?.name}!`,
-        createdAt: serverTimestamp(),
-      });
-
-      const ownerSnap = await getDoc(doc(db, 'users', postedBy as string));
-      if (ownerSnap.exists() && ownerSnap.data().pushToken) {
-        await fetch('https://exp.host/--/api/v2/push/send', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            to: ownerSnap.data().pushToken,
-            title: '🏆 New team registered!',
-            body: `${contactName} registered ${teamName} into ${tournament?.name}!`,
-          }),
+      if (isEditingRegistration && myTeamId) {
+        await updateDoc(doc(db, 'tournaments', id as string, 'teams', myTeamId), {
+          teamName, contactName, contactInfo, division: teamDivision,
         });
+        setShowTeamModal(false);
+        setTeamName(''); setContactName(''); setContactInfo(''); setTeamDivision('');
+        setIsEditingRegistration(false);
+        setMyTeamId(null);
+      } else {
+        if (spotsLeft <= 0) { setTeamLoading(false); return; }
+
+        await updateDoc(doc(db, 'tournaments', id as string), {
+          joinedUsers: arrayUnion(user.uid),
+          spots: increment(-1),
+        });
+        setJoined(true);
+        setSpotsLeft(prev => prev - 1);
+
+        await addDoc(collection(db, 'tournaments', id as string, 'teams'), {
+          teamName, contactName, contactInfo,
+          division: teamDivision,
+          registeredBy: user.uid,
+          createdAt: serverTimestamp(),
+        });
+
+        await addDoc(collection(db, 'notifications'), {
+          toUserId: postedBy as string,
+          message: `${contactName} registered ${teamName} into ${tournament?.name}!`,
+          link: `/tournament?id=${id}&postedBy=${postedBy}`,
+          createdAt: serverTimestamp(),
+        });
+
+        const ownerSnap = await getDoc(doc(db, 'users', postedBy as string));
+        if (ownerSnap.exists() && ownerSnap.data().pushToken) {
+          await fetch('https://exp.host/--/api/v2/push/send', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              to: ownerSnap.data().pushToken,
+              title: '🏆 New team registered!',
+              body: `${contactName} registered ${teamName} into ${tournament?.name}!`,
+            }),
+          });
+        }
+
+        setShowTeamModal(false);
+        setTeamName(''); setContactName(''); setContactInfo(''); setTeamDivision('');
+
+        const depositMsg = tournament?.depositAmount && tournament?.depositDue
+          ? `Deposit of ${tournament.depositAmount} due by ${tournament.depositDue}.`
+          : tournament?.depositAmount
+          ? `Deposit of ${tournament.depositAmount} required.`
+          : '';
+
+        // Build contact info string for payment prompt
+        const orgContact = [tournament?.contactName, tournament?.contactPhone].filter(Boolean).join(' · ');
+
+        setSuccessData({ teamName, tournamentName: tournament?.name, depositMsg, contactInfo: orgContact });
+        setShowSuccessModal(true);
       }
-
-      setShowTeamModal(false);
-      setTeamName(''); setContactName(''); setContactInfo(''); setTeamDivision('');
-
-      const depositMsg = tournament?.depositAmount && tournament?.depositDue
-        ? `Deposit of ${tournament.depositAmount} is due by ${tournament.depositDue}. This deposit is non-refundable.`
-        : tournament?.depositAmount
-        ? `Deposit of ${tournament.depositAmount} is required. This deposit is non-refundable.`
-        : '';
-
-      setSuccessData({ teamName, tournamentName: tournament?.name, depositMsg });
-      setShowSuccessModal(true);
-
-    } catch (e: any) { Alert.alert('Error', e.message); }
+    } catch (e: any) { console.error(e); }
     setTeamLoading(false);
   };
 
@@ -200,6 +228,7 @@ export default function TournamentScreen() {
             await addDoc(collection(db, 'notifications'), {
               toUserId: teamData.registeredBy,
               message: `⚠️ ${tournament.name} has been canceled by the organizer.`,
+              link: `/`,
               createdAt: serverTimestamp(),
             });
             const userSnap = await getDoc(doc(db, 'users', teamData.registeredBy));
@@ -219,7 +248,7 @@ export default function TournamentScreen() {
       );
       await deleteDoc(doc(db, 'tournaments', id as string));
       router.replace('/');
-    } catch (e: any) { Alert.alert('Error', e.message); }
+    } catch (e: any) { console.error(e); }
     setDeleteLoading(false);
   };
 
@@ -227,9 +256,9 @@ export default function TournamentScreen() {
     if (!tournament) return;
     try {
       await Share.share({
-        message: `🏆 ${tournament.name}\n📅 ${tournament.date}\n📍 ${tournament.city}, ${tournament.state}${tournament.entryFee ? `\n💵 Entry: ${tournament.entryFee}` : ''}${tournament.contactPhone ? `\n📞 ${tournament.contactPhone}` : ''}\n\nFind this tournament on Zony!`,
+        message: `🏆 ${tournament.name}\n📅 ${tournament.date}\n📍 ${tournament.city}, ${tournament.state}${tournament.contactPhone ? `\n📞 ${tournament.contactPhone}` : ''}\n\nFind this tournament on Zony!`,
       });
-    } catch (e: any) { Alert.alert('Error', e.message); }
+    } catch (e: any) { console.error(e); }
   };
 
   if (!tournament) return null;
@@ -243,6 +272,9 @@ export default function TournamentScreen() {
   const organizerInitials = tournament.organizerName
     ? tournament.organizerName.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase()
     : '?';
+
+  // Divisions available for registration
+  const registrationDivisions = tournament.divisions?.length > 0 ? tournament.divisions : [];
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -354,19 +386,16 @@ export default function TournamentScreen() {
                     <Text style={styles.rowIcon}>🏅</Text>
                     <Text style={styles.rowLabel}>Divisions</Text>
                   </View>
-                  <Text style={styles.rowValue}>{tournament.divisions.join(' · ')}</Text>
+                  {tournament.divisions.map((d: string) => {
+                    const fee = getDivisionFee(d);
+                    return (
+                      <Text key={d} style={styles.rowValue}>
+                        {d}{fee ? `  —  ${fee}` : ''}
+                      </Text>
+                    );
+                  })}
                 </>
               )}
-
-              {tournament.entryFee ? (
-                <>
-                  <View style={[styles.row, { marginTop: 16 }]}>
-                    <Text style={styles.rowIcon}>💵</Text>
-                    <Text style={styles.rowLabel}>Entry Fee</Text>
-                  </View>
-                  <Text style={styles.rowValue}>{tournament.entryFee} per team</Text>
-                </>
-              ) : null}
 
               {tournament.spectatorFee ? (
                 <>
@@ -389,14 +418,16 @@ export default function TournamentScreen() {
               ) : null}
 
               {tournament.prizes ? (
-                <>
-                  <View style={[styles.row, { marginTop: 16 }]}>
-                    <Text style={styles.rowIcon}>🏆</Text>
-                    <Text style={styles.rowLabel}>Prizes</Text>
-                  </View>
-                  <Text style={styles.rowValue}>{tournament.prizes}</Text>
-                </>
-              ) : null}
+  <>
+    <View style={[styles.row, { marginTop: 16 }]}>
+      <Text style={styles.rowIcon}>🏆</Text>
+      <Text style={styles.rowLabel}>Prizes</Text>
+    </View>
+    {tournament.prizes.split(/\n| · /).map((line: string, i: number) => line.trim() ? (
+      <Text key={i} style={styles.rowValue}>{line.trim()}</Text>
+    ) : null)}
+  </>
+) : null}
 
               {tournament.depositAmount ? (
                 <>
@@ -436,49 +467,64 @@ export default function TournamentScreen() {
             {isOwner ? (
               <View style={styles.ownerActions}>
                 <TouchableOpacity style={styles.editBtn} onPress={() => router.push({ pathname: '/edit-tournament', params: { id } })}>
-                  <Text style={styles.editBtnText}>Edit Tournament</Text>
+                  <Text style={[styles.editBtnText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>Edit Tournament</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.deleteBtn} onPress={() => setShowDeleteModal(true)}>
-                  <Text style={styles.deleteBtnText}>Delete Tournament</Text>
+                  <Text style={[styles.deleteBtnText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>Delete Tournament</Text>
                 </TouchableOpacity>
               </View>
             ) : (
-              <TouchableOpacity
-                style={[styles.joinBtn, (joined || isCanceled) && styles.joinedBtn]}
-                onPress={() => {
-                  if (joined) { handleCancelRegistration(); }
-                  else if (!isCanceled && spotsLeft > 0) { setShowTeamModal(true); }
-                }}
-                disabled={!joined && (spotsLeft <= 0 || isCanceled)}
-              >
-                <Text style={styles.joinText}>
-                  {isCanceled && !joined ? 'Canceled' : joined ? 'Registered ✓ (tap to cancel)' : spotsLeft <= 0 ? 'Full' : 'Register Team'}
-                </Text>
-              </TouchableOpacity>
+              <View style={styles.registrationActions}>
+                {joined ? (
+                  <>
+                    <TouchableOpacity style={[styles.joinBtn, { backgroundColor: sportColor }]} onPress={openEditRegistration}>
+                      <Text style={styles.joinText}>Edit Registration ✏️</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.cancelRegBtn} onPress={handleCancelRegistration}>
+                      <Text style={styles.cancelRegText}>Cancel Registration</Text>
+                    </TouchableOpacity>
+                  </>
+                ) : (
+                  <TouchableOpacity
+                    style={[styles.joinBtn, (spotsLeft <= 0 || isCanceled) && styles.joinedBtn]}
+                    onPress={() => { if (!isCanceled && spotsLeft > 0) setShowTeamModal(true); }}
+                    disabled={spotsLeft <= 0 || isCanceled}
+                  >
+                    <Text style={styles.joinText}>
+                      {isCanceled ? 'Canceled' : spotsLeft <= 0 ? 'Full' : 'Register Team'}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </View>
             )}
           </ScrollView>
         )}
       </View>
 
+      {/* Registration Modal */}
       <Modal visible={showTeamModal} animationType="slide" transparent onRequestClose={tryCloseModal}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalBox}>
             <ScrollView keyboardShouldPersistTaps="handled">
               <View style={styles.modalHeader}>
                 <View>
-                  <Text style={styles.modalTitle}>Register Your Team</Text>
+                  <Text style={[styles.modalTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>{isEditingRegistration ? 'EDIT REGISTRATION' : 'REGISTER YOUR TEAM'}</Text>
                   <Text style={styles.modalSub}>{tournament.name}</Text>
                 </View>
                 <TouchableOpacity onPress={tryCloseModal} style={styles.modalCloseBtn}>
                   <Text style={styles.modalCloseText}>✕</Text>
                 </TouchableOpacity>
               </View>
+
               <Text style={styles.modalLabel}>Team Name</Text>
               <TextInput style={styles.modalInput} placeholder="e.g. Gallup Ballers" placeholderTextColor="#a0b8b8" value={teamName} onChangeText={setTeamName} />
+
               <Text style={styles.modalLabel}>Your Name</Text>
               <TextInput style={styles.modalInput} placeholder="e.g. John Begay" placeholderTextColor="#a0b8b8" value={contactName} onChangeText={setContactName} />
+
               <Text style={styles.modalLabel}>Your Contact Info</Text>
               <TextInput style={styles.modalInput} placeholder="e.g. 928-555-1234" placeholderTextColor="#a0b8b8" value={contactInfo} onChangeText={v => setContactInfo(formatPhone(v))} keyboardType="phone-pad" maxLength={12} />
+
               <Text style={styles.modalLabel}>Division</Text>
               <TouchableOpacity style={styles.modalDropdown} onPress={() => setShowDivisionPicker(!showDivisionPicker)}>
                 <Text style={teamDivision ? styles.modalDropdownSelected : styles.modalDropdownPlaceholder}>{teamDivision || 'Select division...'}</Text>
@@ -486,24 +532,38 @@ export default function TournamentScreen() {
               </TouchableOpacity>
               {showDivisionPicker && (
                 <View style={styles.modalDropdownList}>
-                  {(tournament.divisions || []).map((d: string) => (
+                  {registrationDivisions.map((d: string) => (
                     <TouchableOpacity key={d} style={styles.modalDropdownItem} onPress={() => { setTeamDivision(d); setShowDivisionPicker(false); }}>
-                      <Text style={[styles.modalDropdownItemText, teamDivision === d && styles.modalDropdownItemActive]}>{d}</Text>
+                      <View style={styles.divisionPickerRow}>
+                        <Text style={[styles.modalDropdownItemText, teamDivision === d && styles.modalDropdownItemActive]}>{d}</Text>
+                        {getDivisionFee(d) ? (
+                          <Text style={styles.divisionFeeTag}>{getDivisionFee(d)}</Text>
+                        ) : null}
+                      </View>
                     </TouchableOpacity>
                   ))}
                 </View>
               )}
-              {tournament.depositAmount ? (
-                <View style={styles.depositNotice}>
-                  <Text style={styles.depositNoticeText}>💰 A non-refundable deposit of {tournament.depositAmount}{tournament.depositDue ? ` is due by ${tournament.depositDue}` : ' is required'}.</Text>
+
+              {/* Show selected division's fee inline */}
+              {teamDivision && getDivisionFee(teamDivision) ? (
+                <View style={styles.selectedDivisionFeeBox}>
+                  <Text style={styles.selectedDivisionFeeText}>💵 Entry fee for {teamDivision}: {getDivisionFee(teamDivision)}</Text>
                 </View>
               ) : null}
+
+              {tournament.depositAmount && !isEditingRegistration ? (
+                <View style={styles.depositNotice}>
+                  <Text style={styles.depositNoticeText}>💰 Non-refundable deposit of {tournament.depositAmount}{tournament.depositDue ? ` due by ${tournament.depositDue}` : ' required'}.</Text>
+                </View>
+              ) : null}
+
               <View style={styles.modalBtns}>
                 <TouchableOpacity style={styles.modalCancelBtn} onPress={tryCloseModal}>
                   <Text style={styles.modalCancelText}>Cancel</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.modalSubmitBtn} onPress={handleRegisterTeam} disabled={teamLoading}>
-                  <Text style={styles.modalSubmitText}>{teamLoading ? 'Registering...' : 'Register'}</Text>
+                  <Text style={[styles.modalSubmitText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>{teamLoading ? 'Saving...' : isEditingRegistration ? 'SAVE' : 'REGISTER'}</Text>
                 </TouchableOpacity>
               </View>
             </ScrollView>
@@ -511,20 +571,38 @@ export default function TournamentScreen() {
         </View>
       </Modal>
 
+      {/* Cancel Registration Confirm Modal */}
+      <Modal visible={cancelConfirmVisible} animationType="fade" transparent>
+        <View style={styles.successOverlay}>
+          <View style={styles.deleteBox}>
+            <Text style={[styles.deleteModalTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>CANCEL REGISTRATION?</Text>
+            <Text style={styles.deleteModalMsg}>Are you sure you want to cancel your registration for {tournament.name}?</Text>
+            <View style={styles.deleteModalBtns}>
+              <TouchableOpacity style={styles.deleteModalCancelBtn} onPress={() => setCancelConfirmVisible(false)}>
+                <Text style={[styles.deleteModalCancelText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>KEEP IT</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.deleteModalConfirmBtn} onPress={doCancelRegistration}>
+                <Text style={[styles.deleteModalConfirmText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>CANCEL</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Delete Tournament Modal */}
       <Modal visible={showDeleteModal} animationType="fade" transparent>
         <View style={styles.successOverlay}>
           <View style={styles.deleteBox}>
             <Text style={[styles.deleteModalTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>DELETE TOURNAMENT</Text>
             <Text style={styles.deleteModalMsg}>
               This will notify all registered teams and permanently delete{' '}
-              <Text style={{ fontWeight: '700', color: '#003333' }}>{tournament.name}</Text>.
-              {'\n\n'}This cannot be undone.
+              <Text style={{ fontWeight: '700', color: '#003333' }}>{tournament.name}</Text>.{'\n\n'}This cannot be undone.
             </Text>
             <View style={styles.deleteModalBtns}>
-              <TouchableOpacity style={styles.deleteModalCancelBtn} onPress={() => setShowDeleteModal(false)} activeOpacity={0.85}>
+              <TouchableOpacity style={styles.deleteModalCancelBtn} onPress={() => setShowDeleteModal(false)}>
                 <Text style={[styles.deleteModalCancelText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>KEEP IT</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.deleteModalConfirmBtn} onPress={confirmDelete} disabled={deleteLoading} activeOpacity={0.85}>
+              <TouchableOpacity style={styles.deleteModalConfirmBtn} onPress={confirmDelete} disabled={deleteLoading}>
                 <Text style={[styles.deleteModalConfirmText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>{deleteLoading ? 'DELETING...' : 'DELETE'}</Text>
               </TouchableOpacity>
             </View>
@@ -532,18 +610,32 @@ export default function TournamentScreen() {
         </View>
       </Modal>
 
+      {/* Success / Payment Prompt Modal */}
       <Modal visible={showSuccessModal} animationType="fade" transparent>
         <View style={styles.successOverlay}>
           <View style={styles.successBox}>
             <SuccessTrophy />
             <Text style={[styles.successTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>TEAM REGISTERED!</Text>
-            <Text style={styles.successMsg}>{successData?.teamName} has been registered for {successData?.tournamentName}.</Text>
+            <Text style={styles.successMsg}>{successData?.teamName} is registered for {successData?.tournamentName}.</Text>
+
             {successData?.depositMsg ? (
               <View style={styles.successDepositBox}>
                 <Text style={styles.successDepositText}>💰 {successData.depositMsg}</Text>
               </View>
             ) : null}
-            <TouchableOpacity style={[styles.successBtn, { backgroundColor: sportColor }]} onPress={() => setShowSuccessModal(false)} activeOpacity={0.85}>
+
+            {/* Item 12 — payment contact prompt */}
+            <View style={styles.paymentPromptBox}>
+              <Text style={styles.paymentPromptTitle}>💳 Payment Details</Text>
+              <Text style={styles.paymentPromptText}>
+                Contact the organizer for payment instructions and accepted methods.
+              </Text>
+              {successData?.contactInfo ? (
+                <Text style={styles.paymentContactInfo}>{successData.contactInfo}</Text>
+              ) : null}
+            </View>
+
+            <TouchableOpacity style={[styles.successBtn, { backgroundColor: sportColor }]} onPress={() => setShowSuccessModal(false)}>
               <Text style={[styles.successBtnText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>GOT IT</Text>
             </TouchableOpacity>
           </View>
@@ -564,7 +656,6 @@ const styles = StyleSheet.create({
   canceledBannerText: { color: '#fff', fontWeight: 'bold', fontSize: 14, textAlign: 'center' },
   tabRow: { flexDirection: 'row', marginHorizontal: 20, marginBottom: 16, backgroundColor: '#e0f5f5', borderRadius: 12, padding: 4 },
   tab: { flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center' },
-  tabActive: { backgroundColor: '#008080' },
   tabText: { fontSize: 14, fontWeight: '600', color: '#5a7a7a' },
   tabTextActive: { color: '#fff' },
   teamsCount: { fontSize: 11, color: '#999', fontWeight: '600', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12, paddingLeft: 4 },
@@ -601,18 +692,21 @@ const styles = StyleSheet.create({
   spotsText: { fontSize: 18, color: '#008080', fontWeight: '900', marginTop: 16 },
   ownerActions: { gap: 10, marginBottom: 20 },
   editBtn: { backgroundColor: '#008080', borderRadius: 12, paddingVertical: 16, alignItems: 'center' },
-  editBtnText: { color: '#fff', fontSize: 18, fontFamily: 'Rajdhani_700Bold', letterSpacing: 1 },
+  editBtnText: { color: '#fff', fontSize: 18, letterSpacing: 1 },
   deleteBtn: { backgroundColor: '#1a1a2e', borderRadius: 12, paddingVertical: 16, alignItems: 'center' },
-  deleteBtnText: { color: '#fff', fontSize: 18, fontFamily: 'Rajdhani_700Bold', letterSpacing: 1 },
-  joinBtn: { backgroundColor: '#008080', borderRadius: 16, paddingVertical: 16, alignItems: 'center', marginBottom: 20 },
+  deleteBtnText: { color: '#fff', fontSize: 18, letterSpacing: 1 },
+  registrationActions: { gap: 10, marginBottom: 20 },
+  joinBtn: { backgroundColor: '#008080', borderRadius: 16, paddingVertical: 16, alignItems: 'center' },
   joinedBtn: { backgroundColor: '#a0b8b8' },
   joinText: { color: '#fff', fontSize: 17, fontWeight: 'bold' },
+  cancelRegBtn: { borderRadius: 16, paddingVertical: 14, alignItems: 'center', borderWidth: 1, borderColor: '#cc4444' },
+  cancelRegText: { fontSize: 15, color: '#cc4444', fontWeight: '600' },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   modalBox: { backgroundColor: '#f0fafa', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, maxHeight: '90%' },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 },
   modalCloseBtn: { padding: 4 },
   modalCloseText: { fontSize: 22, color: '#5a7a7a', fontWeight: 'bold' },
-  modalTitle: { fontSize: 24, fontWeight: 'bold', color: '#003333', marginBottom: 4 },
+  modalTitle: { fontSize: 22, color: '#003333', letterSpacing: 1, marginBottom: 4 },
   modalSub: { fontSize: 14, color: '#5a7a7a', marginBottom: 20 },
   modalLabel: { fontSize: 14, fontWeight: '600', color: '#003333', marginBottom: 6, marginTop: 10 },
   modalInput: { backgroundColor: '#fff', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, fontSize: 15, color: '#003333', marginBottom: 4, borderWidth: 1, borderColor: '#e0f0f0' },
@@ -624,19 +718,27 @@ const styles = StyleSheet.create({
   modalDropdownItem: { paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#f0fafa' },
   modalDropdownItemText: { fontSize: 15, color: '#003333' },
   modalDropdownItemActive: { color: '#008080', fontWeight: 'bold' },
-  depositNotice: { backgroundColor: '#fff8e0', borderRadius: 10, padding: 12, marginTop: 16, borderWidth: 1, borderColor: '#f0d080' },
+  divisionPickerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  divisionFeeTag: { fontSize: 13, color: '#008080', fontWeight: '700' },
+  selectedDivisionFeeBox: { backgroundColor: '#e0f5f5', borderRadius: 10, padding: 10, marginTop: 6, marginBottom: 4 },
+  selectedDivisionFeeText: { fontSize: 13, color: '#003333', fontWeight: '600' },
+  depositNotice: { backgroundColor: '#fff8e0', borderRadius: 10, padding: 12, marginTop: 12, borderWidth: 1, borderColor: '#f0d080' },
   depositNoticeText: { fontSize: 13, color: '#7a5a00', fontWeight: '600' },
   modalBtns: { flexDirection: 'row', gap: 10, marginTop: 20, marginBottom: 10 },
   modalCancelBtn: { flex: 1, borderRadius: 12, paddingVertical: 14, alignItems: 'center', borderWidth: 1, borderColor: '#c0d8d8' },
   modalCancelText: { fontSize: 16, color: '#5a7a7a', fontWeight: '600' },
   modalSubmitBtn: { flex: 1, backgroundColor: '#008080', borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
-  modalSubmitText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
+  modalSubmitText: { color: '#fff', fontSize: 16, letterSpacing: 1 },
   successOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 },
   successBox: { backgroundColor: '#f5ede0', borderRadius: 24, padding: 28, alignItems: 'center', width: '100%', shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 16, elevation: 8 },
   successTitle: { fontSize: 28, color: '#003333', letterSpacing: 2, marginTop: 12, marginBottom: 8, textAlign: 'center' },
-  successMsg: { fontSize: 15, color: '#555', textAlign: 'center', marginBottom: 16, lineHeight: 22 },
-  successDepositBox: { backgroundColor: '#fff8e0', borderRadius: 12, padding: 14, marginBottom: 20, borderWidth: 1, borderColor: '#f0d080', width: '100%' },
+  successMsg: { fontSize: 15, color: '#555', textAlign: 'center', marginBottom: 12, lineHeight: 22 },
+  successDepositBox: { backgroundColor: '#fff8e0', borderRadius: 12, padding: 14, marginBottom: 12, borderWidth: 1, borderColor: '#f0d080', width: '100%' },
   successDepositText: { fontSize: 13, color: '#7a5a00', fontWeight: '600', textAlign: 'center', lineHeight: 20 },
+  paymentPromptBox: { backgroundColor: '#e0f5f5', borderRadius: 12, padding: 14, marginBottom: 20, width: '100%', borderWidth: 1, borderColor: '#c0e8e8' },
+  paymentPromptTitle: { fontSize: 13, fontWeight: '700', color: '#003333', marginBottom: 4 },
+  paymentPromptText: { fontSize: 13, color: '#5a7a7a', lineHeight: 18 },
+  paymentContactInfo: { fontSize: 13, color: '#008080', fontWeight: '600', marginTop: 6 },
   successBtn: { borderRadius: 14, paddingVertical: 14, paddingHorizontal: 40, alignItems: 'center', marginTop: 4 },
   successBtnText: { color: '#fff', fontSize: 18, letterSpacing: 1 },
   deleteBox: { backgroundColor: '#f5ede0', borderRadius: 24, padding: 28, alignItems: 'center', width: '100%', shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 16, elevation: 8 },

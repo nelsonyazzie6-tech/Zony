@@ -1,8 +1,8 @@
 import { Rajdhani_700Bold, useFonts } from '@expo-google-fonts/rajdhani';
 import { useRouter } from 'expo-router';
-import { collection, onSnapshot } from 'firebase/firestore';
+import { collection, doc, getDoc, onSnapshot } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, FlatList, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, FlatList, Image, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import Svg, { Path, Polygon } from 'react-native-svg';
 import { auth, db } from '../../firebaseConfig';
 
@@ -24,26 +24,49 @@ function getSportColor(sport: string) {
   return '#008080';
 }
 
-function getLookingLabel(type: string, lookingFor: string) {
-  if (type && lookingFor) return `${type} looking for ${lookingFor}`;
-  if (type) return type;
-  return '';
+function formatTimeAgo(createdAt: any): string {
+  if (!createdAt) return '';
+  const date = createdAt.toDate ? createdAt.toDate() : new Date(createdAt);
+  const now = new Date();
+  const diff = Math.floor((now.getTime() - date.getTime()) / 1000);
+  if (diff < 60) return 'just now';
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  if (diff < 604800) return `${Math.floor(diff / 86400)}d ago`;
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
 const divisionOptions = [
   { label: 'All Divisions', value: 'All' },
-  { label: '6U', value: '6U' },
-  { label: '8U', value: '8U' },
-  { label: '10U', value: '10U' },
-  { label: '12U', value: '12U' },
-  { label: '14U', value: '14U' },
-  { label: '16U', value: '16U' },
-  { label: '18U', value: '18U' },
-  { label: 'Adults', value: 'Adults' },
+  { label: '6U Boys', value: '6U Boys' },
+  { label: '6U Girls', value: '6U Girls' },
+  { label: '6U Coed', value: '6U Coed' },
+  { label: '8U Boys', value: '8U Boys' },
+  { label: '8U Girls', value: '8U Girls' },
+  { label: '8U Coed', value: '8U Coed' },
+  { label: '10U Boys', value: '10U Boys' },
+  { label: '10U Girls', value: '10U Girls' },
+  { label: '10U Coed', value: '10U Coed' },
+  { label: '12U Boys', value: '12U Boys' },
+  { label: '12U Girls', value: '12U Girls' },
+  { label: '12U Coed', value: '12U Coed' },
+  { label: '14U Boys', value: '14U Boys' },
+  { label: '14U Girls', value: '14U Girls' },
+  { label: '14U Coed', value: '14U Coed' },
+  { label: '16U Boys', value: '16U Boys' },
+  { label: '16U Girls', value: '16U Girls' },
+  { label: '16U Coed', value: '16U Coed' },
+  { label: '18U Boys', value: '18U Boys' },
+  { label: '18U Girls', value: '18U Girls' },
+  { label: '18U Coed', value: '18U Coed' },
+  { label: 'Adult Men', value: 'Adult Men' },
+  { label: 'Adult Women', value: 'Adult Women' },
+  { label: 'Adult Coed', value: 'Adult Coed' },
 ];
 
 export default function BoardScreen() {
   const [posts, setPosts] = useState([]);
+  const [userCache, setUserCache] = useState<Record<string, { username: string; photoURL: string }>>({});
   const [loading, setLoading] = useState(true);
   const [typeFilter, setTypeFilter] = useState('All');
   const [sportFilter, setSportFilter] = useState('All');
@@ -58,22 +81,42 @@ export default function BoardScreen() {
   const [fontsLoaded] = useFonts({ Rajdhani_700Bold });
 
   useEffect(() => {
-    const unsub = onSnapshot(collection(db, 'board'), (snapshot) => {
-      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    const unsub = onSnapshot(collection(db, 'board'), async (snapshot) => {
+      const now = new Date();
+      const data = snapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() }))
+        .filter((p: any) => {
+          if (!p.expiresAt) return true;
+          const expDate = p.expiresAt.toDate ? p.expiresAt.toDate() : new Date(p.expiresAt);
+          return expDate > now;
+        });
       setPosts(data);
       setLoading(false);
+
+      const uids = [...new Set(data.map((p: any) => p.postedBy).filter(Boolean))];
+      const newCache: Record<string, { username: string; photoURL: string }> = {};
+      await Promise.all(uids.map(async (uid: string) => {
+        try {
+          const snap = await getDoc(doc(db, 'users', uid));
+          if (snap.exists()) {
+            newCache[uid] = {
+              username: snap.data().username || '',
+              photoURL: snap.data().photoURL || '',
+            };
+          }
+        } catch (_) {}
+      }));
+      setUserCache(prev => ({ ...prev, ...newCache }));
     });
     return () => unsub();
   }, []);
 
   const filtered = posts
-    .filter(p => typeFilter === 'All' || p.type === typeFilter)
-    .filter(p => sportFilter === 'All' || p.sport === sportFilter)
-    .filter(p => divisionFilter === 'All' || p.division === divisionFilter)
-    .filter(p =>
+    .filter((p: any) => typeFilter === 'All' || p.type === typeFilter)
+    .filter((p: any) => sportFilter === 'All' || p.sport === sportFilter)
+    .filter((p: any) => divisionFilter === 'All' || p.division === divisionFilter)
+    .filter((p: any) =>
       p.name?.toLowerCase().includes(search.toLowerCase()) ||
-      p.city?.toLowerCase().includes(search.toLowerCase()) ||
-      p.state?.toLowerCase().includes(search.toLowerCase()) ||
       p.description?.toLowerCase().includes(search.toLowerCase())
     );
 
@@ -129,20 +172,11 @@ export default function BoardScreen() {
           value={search}
           onChangeText={setSearch}
         />
-        <TouchableOpacity style={styles.stateBtn}>
-          <Svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-            <Path d="M3 5h14M5 10h10M7 15h6" stroke="#f5ede0" strokeWidth="1.5" strokeLinecap="round" />
-          </Svg>
-        </TouchableOpacity>
       </View>
 
-      {/* Row 1: Type + Sport */}
       <View style={styles.filtersRow}>
         <View style={styles.dropdownWrapper}>
-          <TouchableOpacity
-            style={styles.dropdownSelect}
-            onPress={() => { closeAll(); setShowTypeMenu(true); }}
-          >
+          <TouchableOpacity style={styles.dropdownSelect} onPress={() => { closeAll(); setShowTypeMenu(true); }}>
             <Text style={styles.dropdownSelectText}>{typeLabel}</Text>
             <Svg width={12} height={12} viewBox="0 0 12 12" fill="none">
               <Path d="M2 4l4 4 4-4" stroke="#888" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
@@ -151,11 +185,7 @@ export default function BoardScreen() {
           {showTypeMenu && (
             <View style={styles.inlineMenu}>
               {typeOptions.map(o => (
-                <TouchableOpacity
-                  key={o.value}
-                  style={[styles.dropdownMenuItem, typeFilter === o.value && styles.dropdownMenuItemActive]}
-                  onPress={() => { setTypeFilter(o.value); closeAll(); }}
-                >
+                <TouchableOpacity key={o.value} style={[styles.dropdownMenuItem, typeFilter === o.value && styles.dropdownMenuItemActive]} onPress={() => { setTypeFilter(o.value); closeAll(); }}>
                   <Text style={[styles.dropdownMenuText, typeFilter === o.value && styles.dropdownMenuTextActive]}>{o.label}</Text>
                 </TouchableOpacity>
               ))}
@@ -164,10 +194,7 @@ export default function BoardScreen() {
         </View>
 
         <View style={styles.dropdownWrapper}>
-          <TouchableOpacity
-            style={styles.dropdownSelect}
-            onPress={() => { closeAll(); setShowSportMenu(true); }}
-          >
+          <TouchableOpacity style={styles.dropdownSelect} onPress={() => { closeAll(); setShowSportMenu(true); }}>
             <Text style={styles.dropdownSelectText}>{sportLabel}</Text>
             <Svg width={12} height={12} viewBox="0 0 12 12" fill="none">
               <Path d="M2 4l4 4 4-4" stroke="#888" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
@@ -176,11 +203,7 @@ export default function BoardScreen() {
           {showSportMenu && (
             <View style={styles.inlineMenu}>
               {sportOptions.map(o => (
-                <TouchableOpacity
-                  key={o.value}
-                  style={[styles.dropdownMenuItem, sportFilter === o.value && styles.dropdownMenuItemActive]}
-                  onPress={() => { setSportFilter(o.value); closeAll(); }}
-                >
+                <TouchableOpacity key={o.value} style={[styles.dropdownMenuItem, sportFilter === o.value && styles.dropdownMenuItemActive]} onPress={() => { setSportFilter(o.value); closeAll(); }}>
                   <Text style={[styles.dropdownMenuText, sportFilter === o.value && styles.dropdownMenuTextActive]}>{o.label}</Text>
                 </TouchableOpacity>
               ))}
@@ -189,26 +212,18 @@ export default function BoardScreen() {
         </View>
       </View>
 
-      {/* Row 2: Division */}
       <View style={[styles.filtersRow, { zIndex: 998 }]}>
         <View style={[styles.dropdownWrapper, { flex: 1 }]}>
-          <TouchableOpacity
-            style={styles.dropdownSelect}
-            onPress={() => { closeAll(); setShowDivisionMenu(true); }}
-          >
+          <TouchableOpacity style={styles.dropdownSelect} onPress={() => { closeAll(); setShowDivisionMenu(true); }}>
             <Text style={styles.dropdownSelectText}>{divisionLabel}</Text>
             <Svg width={12} height={12} viewBox="0 0 12 12" fill="none">
               <Path d="M2 4l4 4 4-4" stroke="#888" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
             </Svg>
           </TouchableOpacity>
           {showDivisionMenu && (
-            <View style={styles.inlineMenu}>
+            <View style={[styles.inlineMenu, { maxHeight: 240, overflow: 'scroll' }]}>
               {divisionOptions.map(o => (
-                <TouchableOpacity
-                  key={o.value}
-                  style={[styles.dropdownMenuItem, divisionFilter === o.value && styles.dropdownMenuItemActive]}
-                  onPress={() => { setDivisionFilter(o.value); closeAll(); }}
-                >
+                <TouchableOpacity key={o.value} style={[styles.dropdownMenuItem, divisionFilter === o.value && styles.dropdownMenuItemActive]} onPress={() => { setDivisionFilter(o.value); closeAll(); }}>
                   <Text style={[styles.dropdownMenuText, divisionFilter === o.value && styles.dropdownMenuTextActive]}>{o.label}</Text>
                 </TouchableOpacity>
               ))}
@@ -228,11 +243,16 @@ export default function BoardScreen() {
       ) : (
         <FlatList
           data={filtered}
-          keyExtractor={p => p.id}
+          keyExtractor={(p: any) => p.id}
           contentContainerStyle={styles.list}
-          renderItem={({ item: p }) => {
+          renderItem={({ item: p }: any) => {
             const sportColor = getSportColor(p.sport);
-            const lookingLabel = getLookingLabel(p.type, p.lookingFor);
+            const poster = userCache[p.postedBy] || null;
+            const posterInitials = poster?.username
+              ? poster.username.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase()
+              : '?';
+            const timeAgo = formatTimeAgo(p.createdAt);
+
             return (
               <TouchableOpacity
                 style={styles.card}
@@ -241,24 +261,33 @@ export default function BoardScreen() {
               >
                 <View style={[styles.cardHeader, { backgroundColor: sportColor }]}>
                   <Text style={[styles.cardName, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]} numberOfLines={1}>
-                    {p.name ? p.name.toUpperCase() : p.type?.toUpperCase()}
+                    {p.name ? p.name.toUpperCase() : p.sport?.toUpperCase()}
                   </Text>
                   <View style={[styles.sportBadge, { borderColor: sportColor }]}>
                     <Text style={[styles.sportBadgeText, { color: sportColor }]}>{p.sport}</Text>
                   </View>
                 </View>
                 <View style={styles.cardBody}>
-                  {p.city ? <Text style={styles.detail}>📍 {p.city}, {p.state}</Text> : null}
                   {p.division ? <Text style={styles.detail}>🏅 {p.division}</Text> : null}
-                  {lookingLabel ? <Text style={styles.detail}>👤 {lookingLabel}</Text> : null}
+                  {p.forTournament ? <Text style={styles.detail}>🏆 {p.forTournament}</Text> : null}
                   {p.description ? <Text style={styles.description} numberOfLines={2}>{p.description}</Text> : null}
+                  <View style={styles.cardFooter}>
+                    {poster?.photoURL ? (
+                      <Image source={{ uri: poster.photoURL }} style={styles.posterPhoto} />
+                    ) : (
+                      <View style={[styles.posterAvatar, { backgroundColor: sportColor }]}>
+                        <Text style={styles.posterAvatarText}>{posterInitials}</Text>
+                      </View>
+                    )}
+                    <Text style={styles.posterName}>{poster?.username || 'Unknown'}</Text>
+                    {timeAgo ? <Text style={styles.timeAgo}>· {timeAgo}</Text> : null}
+                  </View>
                 </View>
               </TouchableOpacity>
             );
           }}
         />
       )}
-
     </View>
   );
 }
@@ -270,7 +299,6 @@ const styles = StyleSheet.create({
   sub: { fontSize: 14, color: 'rgba(255,255,255,0.8)', textAlign: 'center', marginTop: 2 },
   searchRow: { flexDirection: 'row', marginHorizontal: 16, gap: 8, marginTop: 14, marginBottom: 10 },
   search: { flex: 1, backgroundColor: '#fff', borderRadius: 14, paddingHorizontal: 16, paddingVertical: 10, fontSize: 15, color: '#003333', borderWidth: 1, borderColor: '#e8e8e8', shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 4, elevation: 1 },
-  stateBtn: { backgroundColor: '#008080', borderRadius: 14, width: 44, alignItems: 'center', justifyContent: 'center' },
   filtersRow: { flexDirection: 'row', gap: 8, marginHorizontal: 16, marginBottom: 8, zIndex: 999 },
   dropdownWrapper: { flex: 1, zIndex: 999 },
   dropdownSelect: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#fff', borderRadius: 14, paddingHorizontal: 12, paddingVertical: 10, borderWidth: 1, borderColor: '#e8e8e8', shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 4, elevation: 1 },
@@ -289,6 +317,12 @@ const styles = StyleSheet.create({
   cardBody: { paddingHorizontal: 14, paddingTop: 10, paddingBottom: 12 },
   detail: { fontSize: 14, color: '#5a5a5a', marginBottom: 4 },
   description: { fontSize: 13, color: '#999', marginTop: 4 },
+  cardFooter: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#f0f0f0' },
+  posterPhoto: { width: 22, height: 22, borderRadius: 11 },
+  posterAvatar: { width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
+  posterAvatarText: { fontSize: 9, color: '#fff', fontWeight: 'bold' },
+  posterName: { fontSize: 12, color: '#555', fontWeight: '600' },
+  timeAgo: { fontSize: 11, color: '#a0b8b8' },
   emptyContainer: { alignItems: 'center', marginTop: 60, gap: 10 },
   emptyTitle: { fontSize: 18, fontWeight: 'bold', color: '#a0b8b8', marginTop: 8 },
   emptySub: { fontSize: 15, color: '#a0b8b8', textAlign: 'center' },

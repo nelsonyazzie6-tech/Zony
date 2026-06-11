@@ -2,7 +2,7 @@ import { Rajdhani_700Bold, useFonts } from '@expo-google-fonts/rajdhani';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { deleteDoc, doc, getDoc } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
-import { Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Image, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Svg, { Path, Polygon } from 'react-native-svg';
 import { auth, db } from '../firebaseConfig';
 
@@ -13,16 +13,11 @@ function getSportColor(sport: string) {
   return '#008080';
 }
 
-function getLookingLabel(type: string, lookingFor: string) {
-  if (type && lookingFor) return `${type} looking for ${lookingFor}`;
-  if (type) return type;
-  return '';
-}
-
 export default function BoardDetailScreen() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
   const [post, setPost] = useState<any>(null);
+  const [poster, setPoster] = useState<{ username: string; photoURL: string } | null>(null);
   const [fontsLoaded] = useFonts({ Rajdhani_700Bold });
   const [headerHeight, setHeaderHeight] = useState(160);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -33,7 +28,21 @@ export default function BoardDetailScreen() {
     const load = async () => {
       if (!id) return;
       const snap = await getDoc(doc(db, 'board', id as string));
-      if (snap.exists()) setPost({ id: snap.id, ...snap.data() });
+      if (snap.exists()) {
+        const data = { id: snap.id, ...snap.data() };
+        setPost(data);
+        if ((data as any).postedBy) {
+          try {
+            const userSnap = await getDoc(doc(db, 'users', (data as any).postedBy));
+            if (userSnap.exists()) {
+              setPoster({
+                username: userSnap.data().username || '',
+                photoURL: userSnap.data().photoURL || '',
+              });
+            }
+          } catch (_) {}
+        }
+      }
     };
     load();
   }, []);
@@ -42,11 +51,13 @@ export default function BoardDetailScreen() {
 
   const isOwner = user?.uid === post.postedBy;
   const sportColor = getSportColor(post.sport);
-  const lookingLabel = getLookingLabel(post.type, post.lookingFor);
   const initials = post.name
     ? post.name.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase()
     : post.type === 'Player' ? 'PL' : 'TM';
   const postedDate = post.createdAt?.toDate?.()?.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) || '';
+  const posterInitials = poster?.username
+    ? poster.username.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase()
+    : '?';
 
   const handleDelete = async () => {
     setDeleteLoading(true);
@@ -98,18 +109,19 @@ export default function BoardDetailScreen() {
           </View>
           <View style={styles.heroInfo}>
             <Text style={[styles.heroName, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>
-              {post.name ? post.name.toUpperCase() : post.type?.toUpperCase()}
+              {post.name ? post.name.toUpperCase() : post.sport?.toUpperCase()}
             </Text>
             <View style={styles.badgeRow}>
               {post.sport ? <View style={styles.badge}><Text style={styles.badgeText}>🏀 {post.sport}</Text></View> : null}
-              {lookingLabel ? <View style={styles.badge}><Text style={styles.badgeText}>{lookingLabel}</Text></View> : null}
-              {post.city ? <View style={styles.badge}><Text style={styles.badgeText}>📍 {post.city}, {post.state}</Text></View> : null}
+              {post.division ? <View style={styles.badge}><Text style={styles.badgeText}>🏅 {post.division}</Text></View> : null}
+              {post.forTournament ? <View style={styles.badge}><Text style={styles.badgeText}>🏆 {post.forTournament}</Text></View> : null}
             </View>
           </View>
         </View>
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
+
         {post.description ? (
           <View style={styles.section}>
             <Text style={styles.sectionLabel}>ABOUT</Text>
@@ -119,14 +131,28 @@ export default function BoardDetailScreen() {
 
         <View style={styles.infoCard}>
           {post.division ? <View style={styles.infoRow}><Text style={styles.infoLabel}>Division</Text><Text style={styles.infoValue}>{post.division}</Text></View> : null}
-          {post.gender ? <View style={styles.infoRow}><Text style={styles.infoLabel}>Gender</Text><Text style={styles.infoValue}>{post.gender}</Text></View> : null}
           {post.sport ? <View style={styles.infoRow}><Text style={styles.infoLabel}>Sport</Text><Text style={styles.infoValue}>{post.sport}</Text></View> : null}
           {post.forTournament ? <View style={styles.infoRow}><Text style={styles.infoLabel}>For</Text><Text style={styles.infoValue}>{post.forTournament}</Text></View> : null}
-          {post.city ? <View style={styles.infoRow}><Text style={styles.infoLabel}>Location</Text><Text style={styles.infoValue}>{post.city}, {post.state}</Text></View> : null}
-          <View style={[styles.infoRow, { borderBottomWidth: 0 }]}><Text style={styles.infoLabel}>Looking</Text><Text style={styles.infoValue}>{lookingLabel}</Text></View>
+          {post.contactPhone ? <View style={styles.infoRow}><Text style={styles.infoLabel}>Phone</Text><Text style={styles.infoValue}>{post.contactPhone}</Text></View> : null}
+          {post.contactEmail ? <View style={[styles.infoRow, { borderBottomWidth: 0 }]}><Text style={styles.infoLabel}>Email</Text><Text style={styles.infoValue}>{post.contactEmail}</Text></View> : null}
         </View>
 
-        {postedDate ? <Text style={styles.postedDate}>Posted {postedDate}</Text> : null}
+        {poster && (
+          <View style={styles.posterCard}>
+            {poster.photoURL ? (
+              <Image source={{ uri: poster.photoURL }} style={styles.posterPhoto} />
+            ) : (
+              <View style={[styles.posterAvatar, { backgroundColor: sportColor }]}>
+                <Text style={[styles.posterAvatarText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>{posterInitials}</Text>
+              </View>
+            )}
+            <View>
+              <Text style={styles.posterLabel}>Posted by</Text>
+              <Text style={[styles.posterName, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>{poster.username}</Text>
+            </View>
+            {postedDate ? <Text style={styles.postedDate}>{postedDate}</Text> : null}
+          </View>
+        )}
 
         {!isOwner && post.postedBy ? (
           <TouchableOpacity style={[styles.messageBtn, { backgroundColor: sportColor }]} onPress={handleMessage} activeOpacity={0.85}>
@@ -192,7 +218,13 @@ const styles = StyleSheet.create({
   infoRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#f5f5f5' },
   infoLabel: { fontSize: 13, color: '#a0b8b8', fontWeight: '500' },
   infoValue: { fontSize: 13, color: '#111', fontWeight: '600' },
-  postedDate: { fontSize: 12, color: '#a0b8b8', textAlign: 'center', marginBottom: 16 },
+  posterCard: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#fff', borderRadius: 14, padding: 12, marginBottom: 12, borderWidth: 1, borderColor: '#e8e8e8' },
+  posterPhoto: { width: 40, height: 40, borderRadius: 20 },
+  posterAvatar: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  posterAvatarText: { color: '#fff', fontSize: 14, fontWeight: '900' },
+  posterLabel: { fontSize: 10, color: '#a0b8b8', fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 },
+  posterName: { fontSize: 14, color: '#003333', letterSpacing: 0.5 },
+  postedDate: { fontSize: 11, color: '#a0b8b8', marginLeft: 'auto' },
   messageBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderRadius: 14, paddingVertical: 16, marginBottom: 12, shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 8, shadowOffset: { width: 0, height: 4 }, elevation: 4 },
   messageBtnText: { color: '#fff', fontSize: 18, letterSpacing: 1 },
   ownerActions: { gap: 10 },

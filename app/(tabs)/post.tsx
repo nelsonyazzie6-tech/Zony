@@ -1,9 +1,9 @@
 import { Rajdhani_700Bold, useFonts } from '@expo-google-fonts/rajdhani';
 import { useRouter } from 'expo-router';
-import { addDoc, collection, doc, getDoc, getDocs, serverTimestamp } from 'firebase/firestore';
+import { addDoc, collection, doc, getDoc, getDocs, serverTimestamp, Timestamp } from 'firebase/firestore';
 import { useEffect, useRef, useState } from 'react';
 import {
-  Alert, Keyboard, KeyboardAvoidingView, Platform, ScrollView,
+  Keyboard, KeyboardAvoidingView, Platform, ScrollView,
   StyleSheet, Text, TextInput, TouchableOpacity, View,
 } from 'react-native';
 import { GooglePlacesAutocomplete } from 'react-native-google-places-autocomplete';
@@ -13,28 +13,29 @@ import { auth, db } from '../../firebaseConfig';
 
 const GOOGLE_API_KEY = 'AIzaSyC9w_A1-1lPhvtTTuCFdIQejyfm9GOJXRc';
 const sportOptions = ['Basketball', 'Volleyball', 'Softball'];
-const stateOptions = ['AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY'];
-const divisionOptions = ['6U','8U','10U','12U','14U','16U','18U','Adults'];
-const genderOptions = ['Boys', 'Girls', 'Coed', 'Womens', 'Mens'];
+const divisionOptions = [
+  '6U Boys', '6U Girls', '6U Coed',
+  '8U Boys', '8U Girls', '8U Coed',
+  '10U Boys', '10U Girls', '10U Coed',
+  '12U Boys', '12U Girls', '12U Coed',
+  '14U Boys', '14U Girls', '14U Coed',
+  '16U Boys', '16U Girls', '16U Coed',
+  '18U Boys', '18U Girls', '18U Coed',
+  'Adult Men', 'Adult Women', 'Adult Coed',
+];
 const placeLabels = ['1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th'];
-const iAmOptions = ['Player', 'Team', 'Parent/Guardian'];
-const lookingForOptions = ['Player', 'Team'];
+
+const boardDescriptionPlaceholders = [
+  'e.g. "I have a 14-year-old player looking for a team for an upcoming tournament."',
+  'e.g. "Does anyone need a player for the 16U division this weekend?"',
+  'e.g. "Looking for a 14U player to complete our roster for an upcoming event."',
+];
 
 function formatPhone(val: string) {
   const digits = val.replace(/\D/g, '').slice(0, 10);
   if (digits.length <= 3) return digits;
   if (digits.length <= 6) return `${digits.slice(0, 3)}-${digits.slice(3)}`;
   return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}`;
-}
-
-function TrophyIcon({ color }: { color: string }) {
-  return (
-    <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" style={{ marginRight: 6 }}>
-      <Path d="M8 3h8v8a4 4 0 0 1-8 0V3Z" stroke={color} strokeWidth="2" strokeLinejoin="round" />
-      <Path d="M8 6H5a2 2 0 0 0 0 4h3M16 6h3a2 2 0 0 1 0 4h-3" stroke={color} strokeWidth="2" strokeLinecap="round" />
-      <Path d="M12 15v4M9 21h6" stroke={color} strokeWidth="2" strokeLinecap="round" />
-    </Svg>
-  );
 }
 
 function SuccessModal({ type, onBack }: { type: 'tournament' | 'board'; onBack: () => void }) {
@@ -121,12 +122,10 @@ function TournamentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
   const [showStatePicker, setShowStatePicker] = useState(false);
   const [zip, setZip] = useState('');
   const [spots, setSpots] = useState('');
-  const [entryFee, setEntryFee] = useState('');
-  const [spectatorFee, setSpectatorFee] = useState('');
   const [divisions, setDivisions] = useState<string[]>([]);
   const [showDivisionPicker, setShowDivisionPicker] = useState(false);
-  const [genders, setGenders] = useState<string[]>([]);
-  const [showGenderPicker, setShowGenderPicker] = useState(false);
+  const [divisionFees, setDivisionFees] = useState<Record<string, string>>({});
+  const [spectatorFee, setSpectatorFee] = useState('');
   const [rosterSize, setRosterSize] = useState('');
   const [contactName, setContactName] = useState('');
   const [contactPhone, setContactPhone] = useState('');
@@ -139,7 +138,6 @@ function TournamentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
   const [showDepositDuePicker, setShowDepositDuePicker] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const entryFeeRef = useRef<TextInput>(null);
   const spectatorFeeRef = useRef<TextInput>(null);
   const rosterSizeRef = useRef<TextInput>(null);
   const spotsRef = useRef<TextInput>(null);
@@ -148,11 +146,16 @@ function TournamentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
   const contactEmailRef = useRef<TextInput>(null);
   const depositAmountRef = useRef<TextInput>(null);
 
+  useEffect(() => {
+    const user = auth.currentUser;
+    if (user?.email) setContactEmail(user.email);
+  }, []);
+
   const resetFields = () => {
     setName(''); setSport(''); setStartDate(''); setEndDate('');
     setAddress(''); setCity(''); setState(''); setZip('');
-    setSpots(''); setEntryFee(''); setSpectatorFee('');
-    setDivisions([]); setGenders([]); setRosterSize('');
+    setSpots(''); setDivisionFees({}); setSpectatorFee('');
+    setDivisions([]); setRosterSize('');
     setContactName(''); setContactPhone(''); setContactEmail('');
     setPrizeRows([{ cash: '', physical: '' }, { cash: '', physical: '' }, { cash: '', physical: '' }]);
     setDepositAmount(''); setDepositDue('');
@@ -174,11 +177,13 @@ function TournamentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
   };
 
   const toggleDivision = (d: string) => {
-    setDivisions(prev => prev.includes(d) ? prev.filter(x => x !== d) : [...prev, d]);
-  };
-
-  const toggleGender = (g: string) => {
-    setGenders(prev => prev.includes(g) ? prev.filter(x => x !== g) : [...prev, g]);
+    setDivisions(prev => {
+      if (prev.includes(d)) {
+        setDivisionFees(f => { const n = { ...f }; delete n[d]; return n; });
+        return prev.filter(x => x !== d);
+      }
+      return [...prev, d];
+    });
   };
 
   const updatePrizeCash = (index: number, val: string) => {
@@ -206,7 +211,7 @@ function TournamentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
       else if (cash) combined = `$${cash.replace(/,/g, '')}`;
       else combined = physical;
       return `${placeLabels[i]}: ${combined}`;
-    }).filter(Boolean).join(' · ');
+    }).filter(Boolean).join('\n');
   };
 
   const focusDeposit = () => { depositAmountRef.current?.focus(); scrollRef.current?.scrollTo({ y: 999, animated: true }); };
@@ -217,7 +222,7 @@ function TournamentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
   const handleSubmit = async () => {
     if (!name || !sport || !startDate || !endDate || !city || !state || !spots) return;
     const user = auth.currentUser;
-    if (!user) { Alert.alert('Sign in required', 'You need to be logged in to post a tournament.'); return; }
+    if (!user) return;
     setLoading(true);
     const prizesFormatted = formatPrizes();
     try {
@@ -227,9 +232,11 @@ function TournamentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
       await addDoc(collection(db, 'tournaments'), {
         name, sport, date: `${startDate} - ${endDate}`, address, city, state, zip,
         location: `${city}, ${state}`, spots: parseInt(spots),
-        entryFee: entryFee ? `$${entryFee}` : '', spectatorFee: spectatorFee ? `$${spectatorFee}` : '',
-        divisions, gender: genders.join(', '), rosterSize, contactName, contactPhone, contactEmail,
-        prizes: prizesFormatted, depositAmount: depositAmount ? `$${depositAmount}` : '',
+        divisionFees,
+        spectatorFee: spectatorFee ? `$${spectatorFee}` : '',
+        divisions, rosterSize, contactName, contactPhone, contactEmail,
+        prizes: prizesFormatted,
+        depositAmount: depositAmount ? `$${depositAmount}` : '',
         depositDue, status: 'active', createdAt: serverTimestamp(), postedBy: user.uid,
         organizerName, organizerPhoto,
       });
@@ -274,7 +281,7 @@ function TournamentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
           <TextInput style={styles.input} placeholder="Tournament name" placeholderTextColor="#a0b8b8" value={name} onChangeText={setName} returnKeyType="next" blurOnSubmit={false} onSubmitEditing={() => { Keyboard.dismiss(); setShowSportPicker(true); }} />
 
           <Text style={styles.label}>Sport</Text>
-          <TouchableOpacity style={styles.dropdown} onPress={() => { Keyboard.dismiss(); setShowSportPicker(!showSportPicker); setShowStatePicker(false); setShowDivisionPicker(false); setShowGenderPicker(false); }}>
+          <TouchableOpacity style={styles.dropdown} onPress={() => { Keyboard.dismiss(); setShowSportPicker(!showSportPicker); setShowStatePicker(false); setShowDivisionPicker(false); }}>
             <Text style={sport ? styles.dropdownSelected : styles.dropdownPlaceholder}>{sport || 'Select a sport...'}</Text>
             <Text style={styles.dropdownArrow}>{showSportPicker ? '▲' : '▼'}</Text>
           </TouchableOpacity>
@@ -333,43 +340,47 @@ function TournamentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
           ) : null}
 
           <Text style={styles.label}>Divisions</Text>
-          <TouchableOpacity style={styles.dropdown} onPress={() => { Keyboard.dismiss(); setShowDivisionPicker(!showDivisionPicker); setShowSportPicker(false); setShowStatePicker(false); setShowGenderPicker(false); }}>
+          <TouchableOpacity style={styles.dropdown} onPress={() => { Keyboard.dismiss(); setShowDivisionPicker(!showDivisionPicker); setShowSportPicker(false); setShowStatePicker(false); }}>
             <Text style={divisions.length > 0 ? styles.dropdownSelected : styles.dropdownPlaceholder}>{divisions.length > 0 ? divisions.join(', ') : 'Select divisions...'}</Text>
             <Text style={styles.dropdownArrow}>{showDivisionPicker ? '▲' : '▼'}</Text>
           </TouchableOpacity>
           {showDivisionPicker && (
-            <View style={styles.dropdownList}>
+            <ScrollView style={[styles.dropdownList, { maxHeight: 240 }]} nestedScrollEnabled>
               {divisionOptions.map((d) => (
                 <TouchableOpacity key={d} style={styles.dropdownItem} onPress={() => toggleDivision(d)}>
                   <Text style={[styles.dropdownItemText, divisions.includes(d) && styles.dropdownItemActive]}>{divisions.includes(d) ? '✓ ' : ''}{d}</Text>
                 </TouchableOpacity>
               ))}
-              <TouchableOpacity style={[styles.dropdownItem, { backgroundColor: '#e0f5f5' }]} onPress={() => { setShowDivisionPicker(false); setTimeout(() => entryFeeRef.current?.focus(), 100); }}>
+              <TouchableOpacity style={[styles.dropdownItem, { backgroundColor: '#e0f5f5' }]} onPress={() => setShowDivisionPicker(false)}>
                 <Text style={{ color: '#008080', fontWeight: 'bold', textAlign: 'center' }}>Done</Text>
               </TouchableOpacity>
-            </View>
+            </ScrollView>
           )}
 
-          <Text style={styles.label}>Gender</Text>
-          <TouchableOpacity style={styles.dropdown} onPress={() => { Keyboard.dismiss(); setShowGenderPicker(!showGenderPicker); setShowSportPicker(false); setShowStatePicker(false); setShowDivisionPicker(false); }}>
-            <Text style={genders.length > 0 ? styles.dropdownSelected : styles.dropdownPlaceholder}>{genders.length > 0 ? genders.join(', ') : 'Select gender(s)...'}</Text>
-            <Text style={styles.dropdownArrow}>{showGenderPicker ? '▲' : '▼'}</Text>
-          </TouchableOpacity>
-          {showGenderPicker && (
-            <View style={styles.dropdownList}>
-              {genderOptions.map((g) => (
-                <TouchableOpacity key={g} style={styles.dropdownItem} onPress={() => toggleGender(g)}>
-                  <Text style={[styles.dropdownItemText, genders.includes(g) && styles.dropdownItemActive]}>{genders.includes(g) ? '✓ ' : ''}{g}</Text>
-                </TouchableOpacity>
+          {divisions.length > 0 && (
+            <View style={styles.divisionFeesBlock}>
+              <Text style={styles.divisionFeesTitle}>Entry Fee per Division</Text>
+              <Text style={styles.divisionFeesHint}>Leave blank if same for all, or set per division</Text>
+              {divisions.map(d => (
+                <View key={d} style={styles.divisionFeeRow}>
+                  <View style={styles.divisionFeeLabel}>
+                    <Text style={styles.divisionFeeLabelText}>{d}</Text>
+                  </View>
+                  <View style={styles.divisionFeeInputWrapper}>
+                    <Text style={styles.prizeInputPrefix}>$</Text>
+                    <TextInput
+                      style={styles.divisionFeeInput}
+                      placeholder="Amount"
+                      placeholderTextColor="#a0b8b8"
+                      value={divisionFees[d] || ''}
+                      onChangeText={v => setDivisionFees(prev => ({ ...prev, [d]: v.replace(/[^0-9]/g, '') }))}
+                      keyboardType="numeric"
+                    />
+                  </View>
+                </View>
               ))}
-              <TouchableOpacity style={[styles.dropdownItem, { backgroundColor: '#e0f5f5' }]} onPress={() => { setShowGenderPicker(false); setTimeout(() => entryFeeRef.current?.focus(), 100); }}>
-                <Text style={{ color: '#008080', fontWeight: 'bold', textAlign: 'center' }}>Done</Text>
-              </TouchableOpacity>
             </View>
           )}
-
-          <Text style={styles.label}>Entry Fee (per team)</Text>
-          <TextInput ref={entryFeeRef} style={styles.input} placeholder="Amount in dollars" placeholderTextColor="#a0b8b8" value={entryFee} onChangeText={setEntryFee} keyboardType="numeric" returnKeyType="next" blurOnSubmit={false} onSubmitEditing={() => spectatorFeeRef.current?.focus()} />
 
           <Text style={styles.label}>Spectator Entrance Fee <Text style={styles.optional}>(optional)</Text></Text>
           <TextInput ref={spectatorFeeRef} style={styles.input} placeholder="Amount in dollars" placeholderTextColor="#a0b8b8" value={spectatorFee} onChangeText={setSpectatorFee} keyboardType="numeric" returnKeyType="next" blurOnSubmit={false} onSubmitEditing={() => rosterSizeRef.current?.focus()} />
@@ -438,74 +449,91 @@ function BoardForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: () =>
   const [fontsLoaded] = useFonts({ Rajdhani_700Bold });
 
   const [name, setName] = useState('');
-  const [type, setType] = useState('');
-  const [showTypePicker, setShowTypePicker] = useState(false);
-  const [lookingFor, setLookingFor] = useState('');
-  const [showLookingForPicker, setShowLookingForPicker] = useState(false);
-  const [playerAge, setPlayerAge] = useState('');
   const [forTournament, setForTournament] = useState('');
+  const [forTournamentId, setForTournamentId] = useState('');
+  const [forTournamentStartDate, setForTournamentStartDate] = useState('');
+  const [forTournamentDivisions, setForTournamentDivisions] = useState<string[]>([]);
   const [showTournamentPicker, setShowTournamentPicker] = useState(false);
-  const [tournaments, setTournaments] = useState<{ id: string; name: string; sport: string }[]>([]);
+  const [tournaments, setTournaments] = useState<{ id: string; name: string; sport: string; startDate: string; divisions: string[] }[]>([]);
   const [sport, setSport] = useState('');
   const [showSportPicker, setShowSportPicker] = useState(false);
   const [division, setDivision] = useState('');
   const [showDivisionPicker, setShowDivisionPicker] = useState(false);
-  const [genders, setGenders] = useState<string[]>([]);
-  const [showGenderPicker, setShowGenderPicker] = useState(false);
-  const [city, setCity] = useState('');
-  const [state, setState] = useState('');
-  const [showStatePicker, setShowStatePicker] = useState(false);
   const [contactPhone, setContactPhone] = useState('');
   const [contactEmail, setContactEmail] = useState('');
   const [description, setDescription] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const isParent = type === 'Parent/Guardian';
+  const availableDivisions = forTournamentDivisions.length > 0 ? forTournamentDivisions : divisionOptions;
+
+  // Pick a random placeholder on mount
+  const descPlaceholder = boardDescriptionPlaceholders[Math.floor(Math.random() * boardDescriptionPlaceholders.length)];
 
   useEffect(() => {
+    const user = auth.currentUser;
+    if (user?.email) setContactEmail(user.email);
+
     const loadTournaments = async () => {
       try {
         const snap = await getDocs(collection(db, 'tournaments'));
-        const data = snap.docs.map(d => ({ id: d.id, name: d.data().name || 'Unnamed', sport: d.data().sport || '' }));
+        const data = snap.docs.map(d => ({
+          id: d.id,
+          name: d.data().name || 'Unnamed',
+          sport: d.data().sport || '',
+          startDate: d.data().date ? d.data().date.split(' - ')[0] : '',
+          divisions: d.data().divisions || [],
+        }));
         setTournaments(data);
       } catch (e) { console.error(e); }
     };
+
+    const loadName = async () => {
+      if (!user) return;
+      try {
+        const snap = await getDoc(doc(db, 'users', user.uid));
+        if (snap.exists() && snap.data().username) setName(snap.data().username);
+      } catch (_) {}
+    };
+
     loadTournaments();
+    loadName();
   }, []);
 
   const resetFields = () => {
-    setName(''); setType(''); setLookingFor(''); setPlayerAge(''); setForTournament('');
-    setSport(''); setDivision(''); setGenders([]); setCity(''); setState('');
+    setName('');
+    setForTournament(''); setForTournamentId(''); setForTournamentStartDate('');
+    setForTournamentDivisions([]);
+    setSport(''); setDivision('');
     setContactPhone(''); setContactEmail(''); setDescription('');
   };
 
   const closeAll = () => {
-    setShowTypePicker(false); setShowLookingForPicker(false);
-    setShowTournamentPicker(false); setShowSportPicker(false);
-    setShowDivisionPicker(false); setShowGenderPicker(false); setShowStatePicker(false);
-  };
-
-  const toggleGender = (g: string) => {
-    setGenders(prev => prev.includes(g) ? prev.filter(x => x !== g) : [...prev, g]);
+    setShowTournamentPicker(false); setShowSportPicker(false); setShowDivisionPicker(false);
   };
 
   const handleSubmit = async () => {
-    if (!name || !type || !sport || !division || !city || !state) {
-      Alert.alert('Missing fields', 'Please fill out all required fields.');
-      return;
-    }
+    if (!name || !sport || !division) return;
     const user = auth.currentUser;
-    if (!user) { Alert.alert('Sign in required', 'You need to be logged in to post.'); return; }
+    if (!user) return;
     setLoading(true);
     try {
+      let expiresAt: Timestamp;
+      if (forTournamentStartDate) {
+        const parsed = new Date(forTournamentStartDate);
+        expiresAt = Timestamp.fromDate(isNaN(parsed.getTime()) ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) : parsed);
+      } else {
+        expiresAt = Timestamp.fromDate(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000));
+      }
+
       await addDoc(collection(db, 'board'), {
-        name, type,
-        lookingFor: isParent ? 'Team' : lookingFor,
-        playerAge: isParent ? playerAge : '',
-        forTournament, sport, division,
-        gender: genders.join(', '),
-        city, state, contactPhone, contactEmail, description,
-        postedBy: user.uid, createdAt: serverTimestamp(),
+        name,
+        forTournament,
+        forTournamentId,
+        sport, division,
+        contactPhone, contactEmail, description,
+        postedBy: user.uid,
+        createdAt: serverTimestamp(),
+        expiresAt,
       });
       resetFields();
       onSuccess();
@@ -524,7 +552,7 @@ function BoardForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: () =>
         <Text style={styles.dropdownArrow}>{show ? '▲' : '▼'}</Text>
       </TouchableOpacity>
       {show && (
-        <ScrollView style={[styles.dropdownList, scrollable && { maxHeight: 200 }]} nestedScrollEnabled scrollEnabled={!!scrollable}>
+        <ScrollView style={[styles.dropdownList, scrollable && { maxHeight: 240 }]} nestedScrollEnabled scrollEnabled={!!scrollable}>
           {options.map(opt => (
             <TouchableOpacity key={opt} style={styles.dropdownItem} onPress={() => { onSelect(opt); closeAll(); }}>
               <Text style={[styles.dropdownItemText, value === opt && styles.dropdownItemActive]}>{opt}</Text>
@@ -548,38 +576,11 @@ function BoardForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: () =>
 
       <View style={styles.form}>
 
-        <DropdownField
-          label="I am a..."
-          value={type}
-          placeholder="Select type..."
-          show={showTypePicker}
-          onToggle={() => { closeAll(); setShowTypePicker(!showTypePicker); }}
-          options={iAmOptions}
-          onSelect={(v) => { setType(v); if (v === 'Parent/Guardian') setLookingFor('Team'); }}
-        />
-
-        {isParent && (
-          <View style={styles.parentBanner}>
-            <Text style={styles.parentBannerText}>👋 You're posting on behalf of your child. Looking for a team is pre-selected.</Text>
-          </View>
-        )}
-
-        <Text style={styles.label}>{isParent ? "Player's Name" : 'Name'}</Text>
-        <TextInput style={styles.input} placeholder={isParent ? "e.g. Jordan Yazzie" : "e.g. Marcus Webb"} placeholderTextColor="#a0b8b8" value={name} onChangeText={setName} />
-
-        {isParent && (
-          <>
-            <Text style={styles.label}>Player's Age</Text>
-            <TextInput style={styles.input} placeholder="e.g. 10" placeholderTextColor="#a0b8b8" value={playerAge} onChangeText={setPlayerAge} keyboardType="numeric" />
-          </>
-        )}
-
-        {!isParent && (
-          <DropdownField label="Looking for a..." value={lookingFor} placeholder="Select what you need..." show={showLookingForPicker} onToggle={() => { closeAll(); setShowLookingForPicker(!showLookingForPicker); }} options={lookingForOptions} onSelect={setLookingFor} />
-        )}
+        <Text style={styles.label}>Your Name</Text>
+        <TextInput style={styles.input} placeholder="e.g. Marcus Webb" placeholderTextColor="#a0b8b8" value={name} onChangeText={setName} />
 
         <View>
-          <Text style={styles.label}>For... <Text style={styles.optional}>(optional)</Text></Text>
+          <Text style={styles.label}>For Tournament <Text style={styles.optional}>(optional)</Text></Text>
           <TouchableOpacity style={styles.dropdown} onPress={() => { closeAll(); setShowTournamentPicker(!showTournamentPicker); }} activeOpacity={0.8}>
             <Text style={forTournament ? styles.dropdownSelected : styles.dropdownPlaceholder}>{forTournament || 'Select a tournament...'}</Text>
             <Text style={styles.dropdownArrow}>{showTournamentPicker ? '▲' : '▼'}</Text>
@@ -590,7 +591,15 @@ function BoardForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: () =>
                 <View style={styles.dropdownItem}><Text style={styles.dropdownItemText}>No tournaments available</Text></View>
               ) : (
                 tournaments.map(t => (
-                  <TouchableOpacity key={t.id} style={styles.dropdownItem} onPress={() => { setForTournament(t.name); if (t.sport) setSport(t.sport); closeAll(); }}>
+                  <TouchableOpacity key={t.id} style={styles.dropdownItem} onPress={() => {
+                    setForTournament(t.name);
+                    setForTournamentId(t.id);
+                    setForTournamentStartDate(t.startDate);
+                    setForTournamentDivisions(t.divisions || []);
+                    setDivision('');
+                    if (t.sport) setSport(t.sport);
+                    closeAll();
+                  }}>
                     <Text style={[styles.dropdownItemText, forTournament === t.name && styles.dropdownItemActive]}>{t.name}</Text>
                   </TouchableOpacity>
                 ))
@@ -600,30 +609,20 @@ function BoardForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: () =>
         </View>
 
         <DropdownField label="Sport" value={sport} placeholder="Select a sport..." show={showSportPicker} onToggle={() => { closeAll(); setShowSportPicker(!showSportPicker); }} options={sportOptions} onSelect={setSport} />
-        <DropdownField label="Division" value={division} placeholder="Select division..." show={showDivisionPicker} onToggle={() => { closeAll(); setShowDivisionPicker(!showDivisionPicker); }} options={divisionOptions} onSelect={setDivision} />
 
-        <Text style={styles.label}>Gender</Text>
-        <TouchableOpacity style={styles.dropdown} onPress={() => { closeAll(); setShowGenderPicker(!showGenderPicker); }} activeOpacity={0.8}>
-          <Text style={genders.length > 0 ? styles.dropdownSelected : styles.dropdownPlaceholder}>{genders.length > 0 ? genders.join(', ') : 'Select gender(s)...'}</Text>
-          <Text style={styles.dropdownArrow}>{showGenderPicker ? '▲' : '▼'}</Text>
-        </TouchableOpacity>
-        {showGenderPicker && (
-          <View style={styles.dropdownList}>
-            {genderOptions.map((g) => (
-              <TouchableOpacity key={g} style={styles.dropdownItem} onPress={() => toggleGender(g)}>
-                <Text style={[styles.dropdownItemText, genders.includes(g) && styles.dropdownItemActive]}>{genders.includes(g) ? '✓ ' : ''}{g}</Text>
-              </TouchableOpacity>
-            ))}
-            <TouchableOpacity style={[styles.dropdownItem, { backgroundColor: '#e0f5f5' }]} onPress={() => setShowGenderPicker(false)}>
-              <Text style={{ color: '#008080', fontWeight: 'bold', textAlign: 'center' }}>Done</Text>
-            </TouchableOpacity>
-          </View>
+        <DropdownField
+          label="Division"
+          value={division}
+          placeholder="Select division..."
+          show={showDivisionPicker}
+          onToggle={() => { closeAll(); setShowDivisionPicker(!showDivisionPicker); }}
+          options={availableDivisions}
+          onSelect={setDivision}
+          scrollable
+        />
+        {forTournament && forTournamentDivisions.length > 0 && (
+          <Text style={styles.divisionHint}>Showing divisions offered by {forTournament}</Text>
         )}
-
-        <Text style={styles.label}>City</Text>
-        <TextInput style={styles.input} placeholder="e.g. Gallup" placeholderTextColor="#a0b8b8" value={city} onChangeText={setCity} />
-
-        <DropdownField label="State" value={state} placeholder="Select a state..." show={showStatePicker} onToggle={() => { closeAll(); setShowStatePicker(!showStatePicker); }} options={stateOptions} onSelect={setState} scrollable />
 
         <Text style={styles.label}>Contact Phone <Text style={styles.optional}>(optional)</Text></Text>
         <TextInput style={styles.input} placeholder="e.g. 505-555-1234" placeholderTextColor="#a0b8b8" value={contactPhone} onChangeText={v => setContactPhone(formatPhone(v))} keyboardType="phone-pad" maxLength={12} />
@@ -631,8 +630,16 @@ function BoardForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: () =>
         <Text style={styles.label}>Contact Email <Text style={styles.optional}>(optional)</Text></Text>
         <TextInput style={styles.input} placeholder="e.g. john@email.com" placeholderTextColor="#a0b8b8" value={contactEmail} onChangeText={setContactEmail} keyboardType="email-address" autoCapitalize="none" />
 
-        <Text style={styles.label}>Description <Text style={styles.optional}>(optional)</Text></Text>
-        <TextInput style={[styles.input, styles.textArea]} placeholder={isParent ? "e.g. My son plays point guard, looking for a 10U team in Gallup..." : "e.g. Looking for 14U forward for this weekend at Hozho..."} placeholderTextColor="#a0b8b8" value={description} onChangeText={setDescription} multiline numberOfLines={4} />
+        <Text style={styles.label}>What are you looking for?</Text>
+        <TextInput
+          style={[styles.input, styles.textArea]}
+          placeholder={descPlaceholder}
+          placeholderTextColor="#a0b8b8"
+          value={description}
+          onChangeText={setDescription}
+          multiline
+          numberOfLines={5}
+        />
 
         <TouchableOpacity style={[styles.submitBtn, { backgroundColor: '#7A1E1E' }]} onPress={handleSubmit} disabled={loading} activeOpacity={0.85}>
           <Text style={[styles.submitText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>{loading ? 'Posting...' : 'POST TO BOARD'}</Text>
@@ -690,7 +697,7 @@ const styles = StyleSheet.create({
   label: { fontSize: 14, fontWeight: '600', color: '#003333', marginBottom: 6, marginTop: 10 },
   optional: { fontSize: 12, fontWeight: '400', color: '#a0b8b8' },
   input: { backgroundColor: '#fff', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, fontSize: 15, color: '#003333', marginBottom: 4, borderWidth: 1, borderColor: '#e0d8c8' },
-  textArea: { height: 110, textAlignVertical: 'top' },
+  textArea: { height: 120, textAlignVertical: 'top' },
   dropdown: { backgroundColor: '#fff', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderWidth: 1, borderColor: '#e0d8c8', marginBottom: 4 },
   dropdownPlaceholder: { fontSize: 15, color: '#a0b8b8' },
   dropdownSelected: { fontSize: 15, color: '#003333', flex: 1, marginRight: 8 },
@@ -721,13 +728,13 @@ const styles = StyleSheet.create({
   prizeInputPhysical: { backgroundColor: '#fff', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 10, fontSize: 15, color: '#003333', borderWidth: 1, borderColor: '#e0d8c8' },
   addPrizeBtn: { borderWidth: 1, borderColor: '#008080', borderRadius: 10, paddingVertical: 10, alignItems: 'center', marginBottom: 16, backgroundColor: '#e0f5f5' },
   addPrizeBtnText: { color: '#008080', fontWeight: 'bold', fontSize: 15 },
-  toggleRow: { flexDirection: 'row', gap: 10, marginBottom: 12 },
-  toggleBtn: { flex: 1, paddingVertical: 10, borderRadius: 10, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', flexDirection: 'row', borderWidth: 1, borderColor: '#e0d8c8' },
-  toggleBtnActive: { backgroundColor: '#7A1E1E', borderColor: '#7A1E1E' },
-  toggleBtnText: { fontSize: 14, fontWeight: '600', color: '#5a7a7a' },
-  toggleBtnTextActive: { color: '#fff' },
-  prizeRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 8 },
-  prizeLabel: { backgroundColor: '#7A1E1E', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 6, minWidth: 36, alignItems: 'center' },
-  parentBanner: { backgroundColor: '#fff8e1', borderRadius: 10, padding: 12, marginTop: 8, marginBottom: 4, borderLeftWidth: 3, borderLeftColor: '#B8860B' },
-  parentBannerText: { fontSize: 13, color: '#7a5800', lineHeight: 18 },
+  divisionFeesBlock: { backgroundColor: '#f0fafa', borderRadius: 12, padding: 14, marginBottom: 8, borderWidth: 1, borderColor: '#e0f0f0' },
+  divisionFeesTitle: { fontSize: 13, fontWeight: '700', color: '#003333', marginBottom: 2 },
+  divisionFeesHint: { fontSize: 11, color: '#a0b8b8', marginBottom: 10 },
+  divisionFeeRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 10 },
+  divisionFeeLabel: { backgroundColor: '#008080', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, minWidth: 52, alignItems: 'center' },
+  divisionFeeLabelText: { color: '#fff', fontWeight: 'bold', fontSize: 13 },
+  divisionFeeInputWrapper: { flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 10, borderWidth: 1, borderColor: '#e0d8c8', paddingHorizontal: 10 },
+  divisionFeeInput: { flex: 1, paddingVertical: 8, fontSize: 15, color: '#003333' },
+  divisionHint: { fontSize: 11, color: '#a0b8b8', marginTop: -4, marginBottom: 8, paddingLeft: 4 },
 });

@@ -2,8 +2,8 @@ import { Rajdhani_700Bold, useFonts } from '@expo-google-fonts/rajdhani';
 import { useRouter } from 'expo-router';
 import { collection, deleteDoc, doc, onSnapshot, query, updateDoc, where } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, FlatList, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import Svg, { Circle, Path, Polygon } from 'react-native-svg';
+import { ActivityIndicator, FlatList, Image, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import Svg, { Path, Polygon } from 'react-native-svg';
 import { auth, db } from '../../firebaseConfig';
 
 const sportOptions = [
@@ -66,42 +66,6 @@ function NotiTrophyIcon() {
   );
 }
 
-function PersonIcon() {
-  return (
-    <Svg width={13} height={13} viewBox="0 0 24 24" fill="none">
-      <Path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" stroke="#a0b8b8" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-      <Circle cx="12" cy="7" r="4" stroke="#a0b8b8" strokeWidth="1.8" />
-    </Svg>
-  );
-}
-
-function AwardIcon() {
-  return (
-    <Svg width={13} height={13} viewBox="0 0 24 24" fill="none">
-      <Path d="M8 3h8v8a4 4 0 0 1-8 0V3Z" stroke="#a0b8b8" strokeWidth="1.8" strokeLinejoin="round" />
-      <Path d="M8 6H5a2 2 0 0 0 0 4h3M16 6h3a2 2 0 0 1 0 4h-3" stroke="#a0b8b8" strokeWidth="1.8" strokeLinecap="round" />
-      <Path d="M12 15v4M9 21h6" stroke="#a0b8b8" strokeWidth="1.8" strokeLinecap="round" />
-    </Svg>
-  );
-}
-
-function StarIcon() {
-  return (
-    <Svg width={13} height={13} viewBox="0 0 24 24" fill="none">
-      <Path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" stroke="#a0b8b8" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-    </Svg>
-  );
-}
-
-function CalendarIcon() {
-  return (
-    <Svg width={13} height={13} viewBox="0 0 24 24" fill="none">
-      <Path d="M8 2v4M16 2v4" stroke="#a0b8b8" strokeWidth="1.8" strokeLinecap="round" />
-      <Path d="M3 8h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z" stroke="#a0b8b8" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-    </Svg>
-  );
-}
-
 export default function HomeScreen() {
   const [sport, setSport] = useState('All');
   const [showSportPicker, setShowSportPicker] = useState(false);
@@ -140,7 +104,6 @@ export default function HomeScreen() {
     return () => unsub();
   }, []);
 
-  // Watch for unread messages
   useEffect(() => {
     if (!user) return;
     const q = query(collection(db, 'messages'), where('participants', 'array-contains', user.uid));
@@ -173,13 +136,25 @@ export default function HomeScreen() {
   const sportLabel = sportOptions.find(o => o.value === sport)?.label || 'All Sports';
 
   const filtered = tournaments
-    .filter(t => sport === 'All' || t.sport === sport)
-    .filter(t => stateFilter === 'All States' || t.state === stateFilter)
-    .filter(t =>
+    .filter((t: any) => sport === 'All' || t.sport === sport)
+    .filter((t: any) => stateFilter === 'All States' || t.state === stateFilter)
+    .filter((t: any) =>
       t.name?.toLowerCase().includes(search.toLowerCase()) ||
       t.city?.toLowerCase().includes(search.toLowerCase()) ||
       t.state?.toLowerCase().includes(search.toLowerCase())
     );
+
+  const hasActiveFilters = sport !== 'All' || stateFilter !== 'All States' || search.trim() !== '';
+
+  const getEntryFeeDisplay = (t: any): string[] => {
+    if (t.divisionFees && Object.keys(t.divisionFees).length > 0) {
+      return Object.entries(t.divisionFees)
+        .filter(([, fee]) => fee)
+        .map(([div, fee]) => `💵 ${div}: $${fee}`);
+    }
+    if (t.entryFee) return [`💵 ${t.entryFee} entry`];
+    return [];
+  };
 
   return (
     <View style={styles.container}>
@@ -262,16 +237,33 @@ export default function HomeScreen() {
       ) : filtered.length === 0 ? (
         <View style={styles.emptyContainer}>
           <SadFace />
-          <Text style={styles.emptyTitle}>No tournaments found</Text>
-          <Text style={styles.emptySub}>Be the first to post one in your area.</Text>
+          <Text style={styles.emptyTitle}>
+            {hasActiveFilters ? 'No tournaments match your filters' : 'No tournaments yet'}
+          </Text>
+          <Text style={styles.emptySub}>
+            {hasActiveFilters ? 'Try adjusting your search or filters.' : 'Be the first to post one in your area.'}
+          </Text>
+          {hasActiveFilters && (
+            <TouchableOpacity style={styles.clearFiltersBtn} onPress={() => { setSport('All'); setStateFilter('All States'); setSearch(''); }}>
+              <Text style={styles.clearFiltersBtnText}>Clear Filters</Text>
+            </TouchableOpacity>
+          )}
         </View>
       ) : (
         <FlatList
           data={filtered}
-          keyExtractor={t => t.id}
+          keyExtractor={(t: any) => t.id}
           contentContainerStyle={styles.list}
-          renderItem={({ item: t }) => {
+          renderItem={({ item: t }: any) => {
             const sportColor = getSportColor(t.sport);
+            const organizerInitials = t.organizerName
+              ? t.organizerName.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase()
+              : '?';
+            const entryFeeLines = getEntryFeeDisplay(t);
+            const prizeLines: string[] = t.prizes
+              ? t.prizes.split(/\n| · /).map((s: string) => s.trim()).filter(Boolean)
+              : [];
+
             return (
               <TouchableOpacity
                 style={styles.card}
@@ -284,8 +276,24 @@ export default function HomeScreen() {
                 <View style={styles.cardBody}>
                   <Text style={styles.detail}>📅 {t.date}</Text>
                   <Text style={styles.detail}>📍 {t.city}, {t.state}</Text>
-                  {t.entryFee ? <Text style={styles.fee}>💵 {t.entryFee} entry</Text> : null}
+
+                  {entryFeeLines.map((line, i) => (
+                    <Text key={i} style={styles.fee}>{line}</Text>
+                  ))}
+
                   {t.spectatorFee ? <Text style={styles.fee}>🎟 {t.spectatorFee} spectators</Text> : null}
+
+                  {prizeLines.length > 0 && (
+                    <View style={styles.prizesBlock}>
+                      <Text style={styles.prizesLabel}>🏆 Prizes</Text>
+                      {prizeLines.map((line: string, i: number) => (
+                        <View key={i} style={styles.prizeLineRow}>
+                          <Text style={styles.prizeLine}>{line}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  )}
+
                   <View style={styles.spotsRow}>
                     <Text style={[styles.spots, { color: sportColor }]}>{t.spots} spots left</Text>
                     {t.status === 'canceled' && (
@@ -294,6 +302,19 @@ export default function HomeScreen() {
                       </View>
                     )}
                   </View>
+
+                  {t.organizerName ? (
+                    <View style={styles.organizerRow}>
+                      {t.organizerPhoto ? (
+                        <Image source={{ uri: t.organizerPhoto }} style={styles.organizerPhoto} />
+                      ) : (
+                        <View style={[styles.organizerAvatar, { backgroundColor: sportColor }]}>
+                          <Text style={styles.organizerAvatarText}>{organizerInitials}</Text>
+                        </View>
+                      )}
+                      <Text style={styles.organizerName}>by {t.organizerName}</Text>
+                    </View>
+                  ) : null}
                 </View>
               </TouchableOpacity>
             );
@@ -346,9 +367,9 @@ export default function HomeScreen() {
             ) : (
               <FlatList
                 data={notifications}
-                keyExtractor={n => n.id}
+                keyExtractor={(n: any) => n.id}
                 contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 8 }}
-                renderItem={({ item: n }) => {
+                renderItem={({ item: n }: any) => {
                   const isRead = n.read === true;
                   const parts = n.message?.match(/^(.+?) registered (.+?) into (.+?)!$/);
                   const contactName = parts?.[1] || '';
@@ -416,13 +437,24 @@ const styles = StyleSheet.create({
   sportBadge: { fontSize: 11, backgroundColor: '#f5ede0', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, overflow: 'hidden', fontWeight: 'bold' },
   detail: { fontSize: 14, color: '#5a5a5a', marginBottom: 4 },
   fee: { fontSize: 13, color: '#7A1E1E', fontWeight: '600', marginBottom: 2 },
-  spotsRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 },
+  prizesBlock: { marginTop: 6, marginBottom: 4, flexDirection: 'column' },
+  prizesLabel: { fontSize: 12, fontWeight: '700', color: '#003333', marginBottom: 4 },
+  prizeLineRow: { width: '100%', marginBottom: 2 },
+  prizeLine: { fontSize: 12, color: '#5a5a5a', paddingLeft: 4 },
+  spotsRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 6 },
   spots: { fontSize: 13, fontWeight: '600' },
   canceledBadge: { backgroundColor: '#7A1E1E', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 2 },
   canceledBadgeText: { color: '#fff', fontSize: 11, fontWeight: 'bold' },
+  organizerRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#f0f0f0' },
+  organizerPhoto: { width: 20, height: 20, borderRadius: 10 },
+  organizerAvatar: { width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  organizerAvatarText: { fontSize: 8, color: '#fff', fontWeight: 'bold' },
+  organizerName: { fontSize: 11, color: '#a0b8b8', fontWeight: '500' },
   emptyContainer: { alignItems: 'center', marginTop: 60, gap: 10 },
   emptyTitle: { fontSize: 18, fontWeight: 'bold', color: '#a0b8b8', marginTop: 8 },
   emptySub: { fontSize: 14, color: '#a0b8b8', textAlign: 'center', paddingHorizontal: 40 },
+  clearFiltersBtn: { marginTop: 8, backgroundColor: '#008080', borderRadius: 12, paddingHorizontal: 20, paddingVertical: 10 },
+  clearFiltersBtnText: { color: '#fff', fontSize: 14, fontWeight: '600' },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   modalBox: { backgroundColor: '#f5ede0', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, maxHeight: '70%' },
   modalTitle: { fontSize: 18, fontWeight: 'bold', color: '#008080', marginBottom: 12, textAlign: 'center', letterSpacing: 1 },
@@ -449,8 +481,6 @@ const styles = StyleSheet.create({
   notiTopRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 },
   notiTeamName: { fontSize: 13, fontWeight: '700', color: '#111', flex: 1, lineHeight: 18 },
   notiMessageRead: { fontWeight: '500', color: '#666' },
-  notiRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3 },
-  notiSub: { fontSize: 12, color: '#666' },
   notiTime: { fontSize: 10, color: '#aaa', flexShrink: 0 },
   notiDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#8B1A1A', flexShrink: 0 },
   notiDelete: { padding: 4 },

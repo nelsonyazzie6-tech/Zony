@@ -2,16 +2,23 @@ import { Rajdhani_700Bold, useFonts } from '@expo-google-fonts/rajdhani';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { collection, doc, getDoc, getDocs, updateDoc } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { db } from '../firebaseConfig';
+import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import Svg, { Polygon } from 'react-native-svg';
+import { auth, db } from '../firebaseConfig';
 
-const iAmOptions = ['Player', 'Team'];
+const iAmOptions = ['Player', 'Team', 'Parent/Guardian'];
 const lookingForOptions = ['Player', 'Team'];
 const sportOptions = ['Basketball', 'Volleyball', 'Softball'];
-const divisionOptions = ['6U','8U','10U','12U','14U','16U','18U','Adults'];
-const genderOptions = ['Boys', 'Girls', 'Coed', 'Womens', 'Mens'];
-const stateOptions = ['AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY'];
-
+const divisionOptions = [
+  '6U Boys', '6U Girls', '6U Coed',
+  '8U Boys', '8U Girls', '8U Coed',
+  '10U Boys', '10U Girls', '10U Coed',
+  '12U Boys', '12U Girls', '12U Coed',
+  '14U Boys', '14U Girls', '14U Coed',
+  '16U Boys', '16U Girls', '16U Coed',
+  '18U Boys', '18U Girls', '18U Coed',
+  'Adult Men', 'Adult Women', 'Adult Coed',
+];
 function formatPhone(val: string) {
   const digits = val.replace(/\D/g, '').slice(0, 10);
   if (digits.length <= 3) return digits;
@@ -24,6 +31,7 @@ export default function EditBoardScreen() {
   const router = useRouter();
   const [fontsLoaded] = useFonts({ Rajdhani_700Bold });
   const [loading, setLoading] = useState(false);
+  const [headerHeight, setHeaderHeight] = useState(120);
 
   const [name, setName] = useState('');
   const [type, setType] = useState('');
@@ -31,20 +39,20 @@ export default function EditBoardScreen() {
   const [lookingFor, setLookingFor] = useState('');
   const [showLookingForPicker, setShowLookingForPicker] = useState(false);
   const [forTournament, setForTournament] = useState('');
+  const [forTournamentId, setForTournamentId] = useState('');
+  const [forTournamentDivisions, setForTournamentDivisions] = useState<string[]>([]);
   const [showTournamentPicker, setShowTournamentPicker] = useState(false);
-  const [tournaments, setTournaments] = useState<{ id: string; name: string; sport: string }[]>([]);
+  const [tournaments, setTournaments] = useState<{ id: string; name: string; sport: string; divisions: string[] }[]>([]);
   const [sport, setSport] = useState('');
   const [showSportPicker, setShowSportPicker] = useState(false);
   const [division, setDivision] = useState('');
   const [showDivisionPicker, setShowDivisionPicker] = useState(false);
-  const [gender, setGender] = useState('');
-  const [showGenderPicker, setShowGenderPicker] = useState(false);
-  const [city, setCity] = useState('');
-  const [state, setState] = useState('');
-  const [showStatePicker, setShowStatePicker] = useState(false);
   const [contactPhone, setContactPhone] = useState('');
   const [contactEmail, setContactEmail] = useState('');
   const [description, setDescription] = useState('');
+
+  // Available divisions filtered to tournament's if one is selected
+  const availableDivisions = forTournamentDivisions.length > 0 ? forTournamentDivisions : divisionOptions;
 
   useEffect(() => {
     const load = async () => {
@@ -56,23 +64,30 @@ export default function EditBoardScreen() {
         setType(d.type || '');
         setLookingFor(d.lookingFor || '');
         setForTournament(d.forTournament || '');
+        setForTournamentId(d.forTournamentId || '');
         setSport(d.sport || '');
         setDivision(d.division || '');
-        setGender(d.gender || '');
-        setCity(d.city || '');
-        setState(d.state || '');
         setContactPhone(d.contactPhone || '');
-        setContactEmail(d.contactEmail || '');
+        setContactEmail(d.contactEmail || auth.currentUser?.email || '');
         setDescription(d.description || '');
       }
+
       try {
         const tSnap = await getDocs(collection(db, 'tournaments'));
         const data = tSnap.docs.map(d => ({
           id: d.id,
           name: d.data().name || 'Unnamed',
           sport: d.data().sport || '',
+          divisions: d.data().divisions || [],
         }));
         setTournaments(data);
+
+        // If there's already a tournament selected, load its divisions
+        const snap2 = await getDoc(doc(db, 'board', id as string));
+        if (snap2.exists() && snap2.data().forTournamentId) {
+          const linkedTournament = data.find(t => t.id === snap2.data().forTournamentId);
+          if (linkedTournament) setForTournamentDivisions(linkedTournament.divisions || []);
+        }
       } catch (e) { console.error(e); }
     };
     load();
@@ -84,24 +99,20 @@ export default function EditBoardScreen() {
     setShowTournamentPicker(false);
     setShowSportPicker(false);
     setShowDivisionPicker(false);
-    setShowGenderPicker(false);
-    setShowStatePicker(false);
   };
 
   const handleSave = async () => {
-    if (!name || !type || !sport || !division || !city || !state) {
-      Alert.alert('Missing fields', 'Please fill out all required fields.');
-      return;
-    }
+    if (!name || !type || !sport || !division) return;
     setLoading(true);
     try {
       await updateDoc(doc(db, 'board', id as string), {
-        name, type, lookingFor, forTournament, sport, division,
-        gender, city, state, contactPhone, contactEmail, description,
+        name, type, lookingFor, forTournament, forTournamentId,
+        sport, division,
+        contactPhone, contactEmail, description,
       });
       router.back();
     } catch (e: any) {
-      Alert.alert('Error', e.message);
+      console.error(e);
     }
     setLoading(false);
   };
@@ -148,13 +159,29 @@ export default function EditBoardScreen() {
   return (
     <ScrollView style={styles.container} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
 
-      <TouchableOpacity onPress={() => router.back()} style={styles.back}>
-        <Text style={styles.backText}>‹ Back</Text>
-      </TouchableOpacity>
-
-      <View style={styles.headerBlock}>
+      <View style={styles.headerBlock} onLayout={e => setHeaderHeight(e.nativeEvent.layout.height)}>
+        <Svg style={StyleSheet.absoluteFill} width="100%" height={headerHeight} viewBox="0 0 390 130" preserveAspectRatio="xMidYMid slice">
+          <Polygon points="0,0 80,30 40,80" fill="white" opacity={0.04} />
+          <Polygon points="80,30 160,10 120,70" fill="white" opacity={0.07} />
+          <Polygon points="40,80 120,70 80,130" fill="white" opacity={0.05} />
+          <Polygon points="160,10 260,50 180,90" fill="white" opacity={0.06} />
+          <Polygon points="120,70 180,90 100,130" fill="white" opacity={0.08} />
+          <Polygon points="260,50 330,20 310,80" fill="white" opacity={0.05} />
+          <Polygon points="180,90 310,80 240,130" fill="white" opacity={0.07} />
+          <Polygon points="330,20 390,0 390,60" fill="white" opacity={0.04} />
+          <Polygon points="310,80 390,60 390,130" fill="white" opacity={0.06} />
+          <Polygon points="0,60 40,80 0,130" fill="white" opacity={0.05} />
+          <Polygon points="0,0 40,0 80,30" fill="white" opacity={0.08} />
+          <Polygon points="160,10 260,0 260,50" fill="white" opacity={0.04} />
+          <Polygon points="260,0 330,20 390,0" fill="white" opacity={0.06} />
+          <Polygon points="240,130 310,80 390,130" fill="white" opacity={0.05} />
+          <Polygon points="80,130 180,90 240,130" fill="white" opacity={0.04} />
+        </Svg>
+        <TouchableOpacity onPress={() => router.back()} style={styles.back}>
+          <Text style={styles.backText}>‹ Back</Text>
+        </TouchableOpacity>
         <Text style={[styles.header, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>EDIT POST</Text>
-        <Text style={styles.sub}>Update your board post</Text>
+        <Text style={[styles.sub, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>Update your board post</Text>
       </View>
 
       <View style={styles.form}>
@@ -189,9 +216,7 @@ export default function EditBoardScreen() {
         />
 
         <View>
-          <Text style={styles.label}>
-            For... <Text style={styles.optional}>(optional)</Text>
-          </Text>
+          <Text style={styles.label}>For... <Text style={styles.optional}>(optional)</Text></Text>
           <TouchableOpacity
             style={styles.dropdown}
             onPress={() => { closeAll(); setShowTournamentPicker(!showTournamentPicker); }}
@@ -215,6 +240,9 @@ export default function EditBoardScreen() {
                     style={styles.dropdownItem}
                     onPress={() => {
                       setForTournament(t.name);
+                      setForTournamentId(t.id);
+                      setForTournamentDivisions(t.divisions || []);
+                      setDivision('');
                       if (t.sport) setSport(t.sport);
                       closeAll();
                     }}
@@ -245,44 +273,14 @@ export default function EditBoardScreen() {
           placeholder="Select division..."
           show={showDivisionPicker}
           onToggle={() => { closeAll(); setShowDivisionPicker(!showDivisionPicker); }}
-          options={divisionOptions}
+          options={availableDivisions}
           onSelect={setDivision}
         />
+        {forTournament && forTournamentDivisions.length > 0 && (
+          <Text style={styles.divisionHint}>Showing divisions offered by {forTournament}</Text>
+        )}
 
-        <DropdownField
-          label="Gender"
-          value={gender}
-          placeholder="Select gender..."
-          show={showGenderPicker}
-          onToggle={() => { closeAll(); setShowGenderPicker(!showGenderPicker); }}
-          options={genderOptions}
-          onSelect={setGender}
-          optional
-        />
-
-        <Text style={styles.label}>City</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="e.g. Gallup"
-          placeholderTextColor="#a0b8b8"
-          value={city}
-          onChangeText={setCity}
-        />
-
-        <DropdownField
-          label="State"
-          value={state}
-          placeholder="Select a state..."
-          show={showStatePicker}
-          onToggle={() => { closeAll(); setShowStatePicker(!showStatePicker); }}
-          options={stateOptions}
-          onSelect={setState}
-          scrollable
-        />
-
-        <Text style={styles.label}>
-          Contact Phone <Text style={styles.optional}>(optional)</Text>
-        </Text>
+        <Text style={styles.label}>Contact Phone <Text style={styles.optional}>(optional)</Text></Text>
         <TextInput
           style={styles.input}
           placeholder="e.g. 505-555-1234"
@@ -293,9 +291,7 @@ export default function EditBoardScreen() {
           maxLength={12}
         />
 
-        <Text style={styles.label}>
-          Contact Email <Text style={styles.optional}>(optional)</Text>
-        </Text>
+        <Text style={styles.label}>Contact Email <Text style={styles.optional}>(optional)</Text></Text>
         <TextInput
           style={styles.input}
           placeholder="e.g. john@email.com"
@@ -306,9 +302,7 @@ export default function EditBoardScreen() {
           autoCapitalize="none"
         />
 
-        <Text style={styles.label}>
-          Description <Text style={styles.optional}>(optional)</Text>
-        </Text>
+        <Text style={styles.label}>Description <Text style={styles.optional}>(optional)</Text></Text>
         <TextInput
           style={[styles.input, styles.textArea]}
           placeholder="e.g. Looking for 14U forward..."
@@ -331,25 +325,26 @@ export default function EditBoardScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f5ede0', paddingTop: 60 },
-  back: { paddingHorizontal: 20, marginBottom: 6 },
-  backText: { fontSize: 16, color: '#008080', fontWeight: '600' },
-  headerBlock: { paddingHorizontal: 20, paddingBottom: 20, alignItems: 'center' },
-  header: { fontSize: 32, color: '#003333', letterSpacing: 2 },
-  sub: { fontSize: 13, color: '#a0b8b8', marginTop: 2 },
+  container: { flex: 1, backgroundColor: '#f5ede0' },
+  headerBlock: { backgroundColor: '#7A1E1E', paddingTop: 60, paddingBottom: 20, paddingHorizontal: 20 },
+  back: { marginBottom: 12 },
+  backText: { fontSize: 16, color: 'rgba(255,255,255,0.9)', fontWeight: '600' },
+  header: { fontSize: 28, color: '#fff', letterSpacing: 2, fontWeight: '900' },
+  sub: { fontSize: 13, color: 'rgba(255,255,255,0.75)', marginTop: 2 },
   form: { paddingHorizontal: 20, paddingBottom: 48 },
   label: { fontSize: 13, fontWeight: '700', color: '#003333', marginBottom: 6, marginTop: 12 },
   optional: { fontWeight: '400', color: '#a0b8b8' },
-  input: { backgroundColor: '#fff', borderRadius: 16, paddingHorizontal: 16, paddingVertical: 14, fontSize: 14, color: '#1a0f0a', borderWidth: 1, borderColor: '#e8e8e8', shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }, elevation: 1 },
+  input: { backgroundColor: '#fff', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, fontSize: 15, color: '#003333', borderWidth: 1, borderColor: '#e0d8c8', marginBottom: 4 },
   textArea: { height: 110, textAlignVertical: 'top' },
-  dropdown: { backgroundColor: '#fff', borderRadius: 16, paddingHorizontal: 16, paddingVertical: 14, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderWidth: 1, borderColor: '#e8e8e8', shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }, elevation: 1 },
-  dropdownPlaceholder: { fontSize: 14, color: '#a0b8b8' },
-  dropdownSelected: { fontSize: 14, color: '#003333' },
-  dropdownArrow: { fontSize: 11, color: '#008080' },
-  dropdownList: { backgroundColor: '#fff', borderRadius: 16, marginTop: 4, marginBottom: 4, overflow: 'hidden', borderWidth: 1, borderColor: '#e8e8e8', shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 6, shadowOffset: { width: 0, height: 2 }, elevation: 2 },
-  dropdownItem: { paddingHorizontal: 16, paddingVertical: 13, borderBottomWidth: 1, borderBottomColor: '#f5f5f5' },
-  dropdownItemText: { fontSize: 14, color: '#003333' },
+  dropdown: { backgroundColor: '#fff', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderWidth: 1, borderColor: '#e0d8c8', marginBottom: 4 },
+  dropdownPlaceholder: { fontSize: 15, color: '#a0b8b8' },
+  dropdownSelected: { fontSize: 15, color: '#003333', flex: 1, marginRight: 8 },
+  dropdownArrow: { fontSize: 12, color: '#008080' },
+  dropdownList: { backgroundColor: '#fff', borderRadius: 12, marginBottom: 8, overflow: 'hidden', borderWidth: 1, borderColor: '#e0d8c8' },
+  dropdownItem: { paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#f0fafa' },
+  dropdownItemText: { fontSize: 15, color: '#003333' },
   dropdownItemActive: { color: '#008080', fontWeight: '700' },
-  saveBtn: { backgroundColor: '#008080', borderRadius: 16, paddingVertical: 16, alignItems: 'center', marginTop: 20, shadowColor: '#008080', shadowOpacity: 0.3, shadowRadius: 8, shadowOffset: { width: 0, height: 4 }, elevation: 4 },
-  saveBtnText: { color: '#fff', fontSize: 20, letterSpacing: 1 },
+  divisionHint: { fontSize: 11, color: '#a0b8b8', marginTop: -4, marginBottom: 8, paddingLeft: 4 },
+  saveBtn: { backgroundColor: '#7A1E1E', borderRadius: 12, paddingVertical: 16, alignItems: 'center', marginTop: 20 },
+  saveBtnText: { color: '#fff', fontSize: 18, letterSpacing: 1 },
 });

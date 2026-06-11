@@ -1,7 +1,8 @@
 import { Rajdhani_700Bold, useFonts } from '@expo-google-fonts/rajdhani';
+import { useRouter } from 'expo-router';
 import { collection, deleteDoc, doc, onSnapshot, query, updateDoc, where } from 'firebase/firestore';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Animated, FlatList, PanResponder, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Animated, FlatList, Modal, PanResponder, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { auth, db } from '../../firebaseConfig';
 
 function SwipeToDelete({ onDelete, children }: { onDelete: () => void; children: React.ReactNode }) {
@@ -58,7 +59,10 @@ function SwipeToDelete({ onDelete, children }: { onDelete: () => void; children:
 export default function NotificationsScreen() {
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [showClearModal, setShowClearModal] = useState(false);
+  const [clearing, setClearing] = useState(false);
   const [fontsLoaded] = useFonts({ Rajdhani_700Bold });
+  const router = useRouter();
   const user = auth.currentUser;
 
   useEffect(() => {
@@ -79,18 +83,14 @@ export default function NotificationsScreen() {
   const handleDelete = async (id: string) => {
     try {
       await deleteDoc(doc(db, 'notifications', id));
-    } catch (e: any) {
-      Alert.alert('Error', e.message);
-    }
+    } catch (e: any) { console.error(e); }
   };
 
   const handleMarkRead = async (id: string, alreadyRead: boolean) => {
     if (alreadyRead) return;
     try {
       await updateDoc(doc(db, 'notifications', id), { read: true });
-    } catch (e: any) {
-      console.log('Mark read error:', e.message);
-    }
+    } catch (e: any) { console.error(e); }
   };
 
   const handleMarkAllRead = () => {
@@ -99,19 +99,13 @@ export default function NotificationsScreen() {
     });
   };
 
-  const handleClearAll = () => {
-    Alert.alert('Clear All', 'Delete all notifications?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Clear All', style: 'destructive', onPress: async () => {
-          try {
-            await Promise.all(notifications.map((n: any) => deleteDoc(doc(db, 'notifications', n.id))));
-          } catch (e: any) {
-            Alert.alert('Error', e.message);
-          }
-        }
-      }
-    ]);
+  const handleClearAll = async () => {
+    setClearing(true);
+    try {
+      await Promise.all(notifications.map((n: any) => deleteDoc(doc(db, 'notifications', n.id))));
+    } catch (e: any) { console.error(e); }
+    setClearing(false);
+    setShowClearModal(false);
   };
 
   const renderItem = ({ item: n }: any) => {
@@ -120,7 +114,10 @@ export default function NotificationsScreen() {
       <SwipeToDelete onDelete={() => handleDelete(n.id)}>
         <TouchableOpacity
           activeOpacity={0.85}
-          onPress={() => handleMarkRead(n.id, isRead)}
+          onPress={() => {
+            handleMarkRead(n.id, isRead);
+            if (n.link) router.push(n.link);
+          }}
           style={[styles.card, isRead && styles.cardRead]}
         >
           <View style={styles.cardIcon}>
@@ -142,7 +139,7 @@ export default function NotificationsScreen() {
   const renderFooter = () => {
     if (notifications.length === 0) return null;
     return (
-      <TouchableOpacity style={styles.clearAllBtn} onPress={handleClearAll}>
+      <TouchableOpacity style={styles.clearAllBtn} onPress={() => setShowClearModal(true)}>
         <Text style={styles.clearAllText}>Clear All</Text>
       </TouchableOpacity>
     );
@@ -175,6 +172,24 @@ export default function NotificationsScreen() {
           ListFooterComponent={renderFooter}
         />
       )}
+
+      {/* Custom Clear All Modal — item 7 */}
+      <Modal visible={showClearModal} animationType="fade" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalBox}>
+            <Text style={[styles.modalTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>CLEAR ALL</Text>
+            <Text style={styles.modalMsg}>Remove all notifications? This can't be undone.</Text>
+            <View style={styles.modalBtns}>
+              <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setShowClearModal(false)}>
+                <Text style={[styles.modalCancelText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>CANCEL</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.modalConfirmBtn} onPress={handleClearAll} disabled={clearing}>
+                <Text style={[styles.modalConfirmText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>{clearing ? 'CLEARING...' : 'CLEAR ALL'}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -201,9 +216,18 @@ const styles = StyleSheet.create({
   swipeDeleteInner: { flex: 1, width: '100%', backgroundColor: '#cc4444', justifyContent: 'center', alignItems: 'center', borderRadius: 16 },
   swipeDeleteText: { color: '#fff', fontWeight: 'bold', fontSize: 14 },
   clearAllBtn: { alignSelf: 'center', marginTop: 16, paddingHorizontal: 20, paddingVertical: 10 },
-  clearAllText: { fontSize: 13, color: '#aaa', fontWeight: '500' },
+  clearAllText: { fontSize: 13, color: '#bbb', fontWeight: '400' },
   emptyContainer: { alignItems: 'center', marginTop: 60 },
   emptyIcon: { fontSize: 50, marginBottom: 12 },
   emptyTitle: { fontSize: 20, fontWeight: 'bold', color: '#003333', marginBottom: 8 },
   emptySub: { fontSize: 15, color: '#a0b8b8', textAlign: 'center', paddingHorizontal: 40 },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 },
+  modalBox: { backgroundColor: '#f5ede0', borderRadius: 24, padding: 24, width: '100%', shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 16, elevation: 8 },
+  modalTitle: { fontSize: 22, color: '#003333', letterSpacing: 2, marginBottom: 8, textAlign: 'center' },
+  modalMsg: { fontSize: 14, color: '#888', textAlign: 'center', marginBottom: 24, lineHeight: 20 },
+  modalBtns: { flexDirection: 'row', gap: 10 },
+  modalCancelBtn: { flex: 1, backgroundColor: '#fff', borderRadius: 14, paddingVertical: 13, alignItems: 'center', borderWidth: 1, borderColor: '#e0d8c8' },
+  modalCancelText: { fontSize: 15, color: '#555', letterSpacing: 1 },
+  modalConfirmBtn: { flex: 1, backgroundColor: '#003333', borderRadius: 14, paddingVertical: 13, alignItems: 'center' },
+  modalConfirmText: { fontSize: 15, color: '#fff', letterSpacing: 1 },
 });

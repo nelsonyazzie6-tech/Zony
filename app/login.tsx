@@ -1,6 +1,6 @@
 import { Rajdhani_700Bold, useFonts } from '@expo-google-fonts/rajdhani';
 import { useRouter } from 'expo-router';
-import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
+import { createUserWithEmailAndPassword, sendPasswordResetEmail, signInWithEmailAndPassword } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
 import { useState } from 'react';
 import {
@@ -55,8 +55,8 @@ export default function LoginScreen() {
   const [username, setUsername] = useState('');
   const [isSignUp, setIsSignUp] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [resetLoading, setResetLoading] = useState(false);
   const router = useRouter();
-
   const [fontsLoaded] = useFonts({ Rajdhani_700Bold });
 
   const handleSubmit = async () => {
@@ -82,6 +82,21 @@ export default function LoginScreen() {
       Alert.alert('Error', e.message);
     }
     setLoading(false);
+  };
+
+  const handleForgotPassword = async () => {
+    if (!email.trim()) {
+      Alert.alert('Enter your email', 'Type your email address above, then tap "Forgot password?"');
+      return;
+    }
+    setResetLoading(true);
+    try {
+      await sendPasswordResetEmail(auth, email.trim());
+      Alert.alert('Email sent', `A password reset link has been sent to ${email.trim()}.`);
+    } catch (e: any) {
+      Alert.alert('Error', e.message);
+    }
+    setResetLoading(false);
   };
 
   return (
@@ -149,8 +164,8 @@ export default function LoginScreen() {
         </View>
 
         {!isSignUp && (
-          <TouchableOpacity style={styles.forgotRow}>
-            <Text style={styles.forgotText}>Forgot password?</Text>
+          <TouchableOpacity style={styles.forgotRow} onPress={handleForgotPassword} disabled={resetLoading}>
+            <Text style={styles.forgotText}>{resetLoading ? 'Sending...' : 'Forgot password?'}</Text>
           </TouchableOpacity>
         )}
 
@@ -167,24 +182,22 @@ export default function LoginScreen() {
         </View>
 
         <View style={styles.socialRow}>
-  <TouchableOpacity style={styles.socialBtn}>
-    <Svg width={18} height={18} viewBox="0 0 18 18" style={{ marginRight: 8 }}>
-      <Path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 0 1-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615Z" fill="#4285F4"/>
-      <Path d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18Z" fill="#34A853"/>
-      <Path d="M3.964 10.706A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.706V4.962H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.038l3.007-2.332Z" fill="#FBBC05"/>
-      <Path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.962L3.964 7.294C4.672 5.163 6.656 3.58 9 3.58Z" fill="#EA4335"/>
-    </Svg>
-    <Text style={styles.socialBtnText}>Google</Text>
-  </TouchableOpacity>
-  <TouchableOpacity style={styles.socialBtn}>
-    <Svg width={18} height={18} viewBox="0 0 18 18" style={{ marginRight: 8 }}>
-      <Path d="M9 0C4.029 0 0 4.029 0 9c0 3.982 2.579 7.356 6.155 8.555.45.083.615-.195.615-.433 0-.214-.008-.779-.012-1.529-2.504.543-3.033-1.207-3.033-1.207-.409-1.04-1-1.317-1-1.317-.817-.559.062-.547.062-.547.903.063 1.379.928 1.379.928.803 1.376 2.107.979 2.62.748.082-.581.314-.979.572-1.204-2-.227-4.103-1-4.103-4.455 0-.984.351-1.788.928-2.418-.093-.228-.402-1.144.088-2.384 0 0 .757-.242 2.479.924A8.641 8.641 0 0 1 9 4.128c.766.003 1.537.104 2.257.303 1.72-1.166 2.477-.924 2.477-.924.491 1.24.182 2.156.09 2.384.578.63.926 1.434.926 2.418 0 3.464-2.107 4.226-4.115 4.449.323.279.612.829.612 1.671 0 1.206-.011 2.179-.011 2.476 0 .241.162.521.619.433C15.424 16.353 18 12.981 18 9c0-4.971-4.029-9-9-9Z" fill="#111"/>
-    </Svg>
-    <Text style={styles.socialBtnText}>Apple</Text>
-  </TouchableOpacity>
-</View>
-
-
+          <TouchableOpacity style={styles.socialBtn}>
+            <Svg width={18} height={18} viewBox="0 0 18 18" style={{ marginRight: 8 }}>
+              <Path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 0 1-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615Z" fill="#4285F4"/>
+              <Path d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18Z" fill="#34A853"/>
+              <Path d="M3.964 10.706A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.706V4.962H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.038l3.007-2.332Z" fill="#FBBC05"/>
+              <Path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.962L3.964 7.294C4.672 5.163 6.656 3.58 9 3.58Z" fill="#EA4335"/>
+            </Svg>
+            <Text style={styles.socialBtnText}>Google</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.socialBtn}>
+            <Svg width={18} height={18} viewBox="0 0 18 18" style={{ marginRight: 8 }}>
+              <Path d="M9 0C4.029 0 0 4.029 0 9c0 3.982 2.579 7.356 6.155 8.555.45.083.615-.195.615-.433 0-.214-.008-.779-.012-1.529-2.504.543-3.033-1.207-3.033-1.207-.409-1.04-1-1.317-1-1.317-.817-.559.062-.547.062-.547.903.063 1.379.928 1.379.928.803 1.376 2.107.979 2.62.748.082-.581.314-.979.572-1.204-2-.227-4.103-1-4.103-4.455 0-.984.351-1.788.928-2.418-.093-.228-.402-1.144.088-2.384 0 0 .757-.242 2.479.924A8.641 8.641 0 0 1 9 4.128c.766.003 1.537.104 2.257.303 1.72-1.166 2.477-.924 2.477-.924.491 1.24.182 2.156.09 2.384.578.63.926 1.434.926 2.418 0 3.464-2.107 4.226-4.115 4.449.323.279.612.829.612 1.671 0 1.206-.011 2.179-.011 2.476 0 .241.162.521.619.433C15.424 16.353 18 12.981 18 9c0-4.971-4.029-9-9-9Z" fill="#111"/>
+            </Svg>
+            <Text style={styles.socialBtnText}>Apple</Text>
+          </TouchableOpacity>
+        </View>
 
         <TouchableOpacity style={styles.signupRow} onPress={() => { setIsSignUp(!isSignUp); setUsername(''); }}>
           <Text style={styles.bottomText}>
@@ -274,22 +287,22 @@ const styles = StyleSheet.create({
   dividerLine: { flex: 1, height: 1, backgroundColor: '#e0e0e0' },
   dividerText: { marginHorizontal: 10, fontSize: 12, color: '#aaa', fontWeight: '500' },
   socialRow: { flexDirection: 'row', gap: 12 },
-socialBtn: {
-  flex: 1,
-  flexDirection: 'row',
-  backgroundColor: '#fff',
-  borderRadius: 14,
-  paddingVertical: 13,
-  alignItems: 'center',
-  justifyContent: 'center',
-  borderWidth: 1,
-  borderColor: '#e8e8e8',
-  shadowColor: '#000',
-  shadowOpacity: 0.04,
-  shadowRadius: 4,
-  shadowOffset: { width: 0, height: 1 },
-  elevation: 1,
-},
+  socialBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    backgroundColor: '#fff',
+    borderRadius: 14,
+    paddingVertical: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#e8e8e8',
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 1,
+  },
   socialBtnText: { fontSize: 14, fontWeight: '600', color: '#333' },
   signupRow: { alignItems: 'center', marginTop: 8 },
   bottomText: { fontSize: 14, color: '#aaa' },
