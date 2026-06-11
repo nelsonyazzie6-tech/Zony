@@ -2,9 +2,9 @@ import { Rajdhani_700Bold, useFonts } from '@expo-google-fonts/rajdhani';
 import { useRouter } from 'expo-router';
 import { collection, doc, getDoc, onSnapshot } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, FlatList, Image, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, FlatList, Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import Svg, { Path, Polygon } from 'react-native-svg';
-import { auth, db } from '../../firebaseConfig';
+import { db } from '../../firebaseConfig';
 
 function SadFace() {
   return (
@@ -64,20 +64,24 @@ const divisionOptions = [
   { label: 'Adult Coed', value: 'Adult Coed' },
 ];
 
+const sportOptions = [
+  { label: 'All Sports', value: 'All' },
+  { label: 'Basketball', value: 'Basketball' },
+  { label: 'Volleyball', value: 'Volleyball' },
+  { label: 'Softball', value: 'Softball' },
+];
+
 export default function BoardScreen() {
   const [posts, setPosts] = useState([]);
   const [userCache, setUserCache] = useState<Record<string, { username: string; photoURL: string }>>({});
   const [loading, setLoading] = useState(true);
-  const [typeFilter, setTypeFilter] = useState('All');
   const [sportFilter, setSportFilter] = useState('All');
   const [divisionFilter, setDivisionFilter] = useState('All');
   const [search, setSearch] = useState('');
   const [headerHeight, setHeaderHeight] = useState(120);
-  const [showTypeMenu, setShowTypeMenu] = useState(false);
   const [showSportMenu, setShowSportMenu] = useState(false);
   const [showDivisionMenu, setShowDivisionMenu] = useState(false);
   const router = useRouter();
-  const user = auth.currentUser;
   const [fontsLoaded] = useFonts({ Rajdhani_700Bold });
 
   useEffect(() => {
@@ -112,32 +116,18 @@ export default function BoardScreen() {
   }, []);
 
   const filtered = posts
-    .filter((p: any) => typeFilter === 'All' || p.type === typeFilter)
     .filter((p: any) => sportFilter === 'All' || p.sport === sportFilter)
     .filter((p: any) => divisionFilter === 'All' || p.division === divisionFilter)
     .filter((p: any) =>
+      search.trim() === '' ||
       p.name?.toLowerCase().includes(search.toLowerCase()) ||
       p.description?.toLowerCase().includes(search.toLowerCase())
     );
 
-  const typeOptions = [
-    { label: 'All', value: 'All' },
-    { label: 'Player', value: 'Player' },
-    { label: 'Team', value: 'Team' },
-  ];
-
-  const sportOptions = [
-    { label: 'All Sports', value: 'All' },
-    { label: 'Basketball', value: 'Basketball' },
-    { label: 'Volleyball', value: 'Volleyball' },
-    { label: 'Softball', value: 'Softball' },
-  ];
-
-  const typeLabel = typeOptions.find(o => o.value === typeFilter)?.label || 'All';
   const sportLabel = sportOptions.find(o => o.value === sportFilter)?.label || 'All Sports';
   const divisionLabel = divisionOptions.find(o => o.value === divisionFilter)?.label || 'All Divisions';
 
-  const closeAll = () => { setShowTypeMenu(false); setShowSportMenu(false); setShowDivisionMenu(false); };
+  const closeAll = () => { setShowSportMenu(false); setShowDivisionMenu(false); };
 
   return (
     <View style={styles.container}>
@@ -175,24 +165,7 @@ export default function BoardScreen() {
       </View>
 
       <View style={styles.filtersRow}>
-        <View style={styles.dropdownWrapper}>
-          <TouchableOpacity style={styles.dropdownSelect} onPress={() => { closeAll(); setShowTypeMenu(true); }}>
-            <Text style={styles.dropdownSelectText}>{typeLabel}</Text>
-            <Svg width={12} height={12} viewBox="0 0 12 12" fill="none">
-              <Path d="M2 4l4 4 4-4" stroke="#888" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-            </Svg>
-          </TouchableOpacity>
-          {showTypeMenu && (
-            <View style={styles.inlineMenu}>
-              {typeOptions.map(o => (
-                <TouchableOpacity key={o.value} style={[styles.dropdownMenuItem, typeFilter === o.value && styles.dropdownMenuItemActive]} onPress={() => { setTypeFilter(o.value); closeAll(); }}>
-                  <Text style={[styles.dropdownMenuText, typeFilter === o.value && styles.dropdownMenuTextActive]}>{o.label}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
-        </View>
-
+        {/* Sport filter */}
         <View style={styles.dropdownWrapper}>
           <TouchableOpacity style={styles.dropdownSelect} onPress={() => { closeAll(); setShowSportMenu(true); }}>
             <Text style={styles.dropdownSelectText}>{sportLabel}</Text>
@@ -210,23 +183,24 @@ export default function BoardScreen() {
             </View>
           )}
         </View>
-      </View>
 
-      <View style={[styles.filtersRow, { zIndex: 998 }]}>
-        <View style={[styles.dropdownWrapper, { flex: 1 }]}>
+        {/* Division filter */}
+        <View style={styles.dropdownWrapper}>
           <TouchableOpacity style={styles.dropdownSelect} onPress={() => { closeAll(); setShowDivisionMenu(true); }}>
-            <Text style={styles.dropdownSelectText}>{divisionLabel}</Text>
+            <Text style={styles.dropdownSelectText} numberOfLines={1}>{divisionLabel}</Text>
             <Svg width={12} height={12} viewBox="0 0 12 12" fill="none">
               <Path d="M2 4l4 4 4-4" stroke="#888" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
             </Svg>
           </TouchableOpacity>
           {showDivisionMenu && (
-            <View style={[styles.inlineMenu, { maxHeight: 240, overflow: 'scroll' }]}>
-              {divisionOptions.map(o => (
-                <TouchableOpacity key={o.value} style={[styles.dropdownMenuItem, divisionFilter === o.value && styles.dropdownMenuItemActive]} onPress={() => { setDivisionFilter(o.value); closeAll(); }}>
-                  <Text style={[styles.dropdownMenuText, divisionFilter === o.value && styles.dropdownMenuTextActive]}>{o.label}</Text>
-                </TouchableOpacity>
-              ))}
+            <View style={styles.inlineMenuScrollable}>
+              <ScrollView nestedScrollEnabled keyboardShouldPersistTaps="handled">
+                {divisionOptions.map(o => (
+                  <TouchableOpacity key={o.value} style={[styles.dropdownMenuItem, divisionFilter === o.value && styles.dropdownMenuItemActive]} onPress={() => { setDivisionFilter(o.value); closeAll(); }}>
+                    <Text style={[styles.dropdownMenuText, divisionFilter === o.value && styles.dropdownMenuTextActive]}>{o.label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
             </View>
           )}
         </View>
@@ -245,6 +219,7 @@ export default function BoardScreen() {
           data={filtered}
           keyExtractor={(p: any) => p.id}
           contentContainerStyle={styles.list}
+          onScrollBeginDrag={closeAll}
           renderItem={({ item: p }: any) => {
             const sportColor = getSportColor(p.sport);
             const poster = userCache[p.postedBy] || null;
@@ -302,8 +277,9 @@ const styles = StyleSheet.create({
   filtersRow: { flexDirection: 'row', gap: 8, marginHorizontal: 16, marginBottom: 8, zIndex: 999 },
   dropdownWrapper: { flex: 1, zIndex: 999 },
   dropdownSelect: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#fff', borderRadius: 14, paddingHorizontal: 12, paddingVertical: 10, borderWidth: 1, borderColor: '#e8e8e8', shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 4, elevation: 1 },
-  dropdownSelectText: { fontSize: 13, color: '#555', fontWeight: '500' },
+  dropdownSelectText: { fontSize: 13, color: '#555', fontWeight: '500', flex: 1, marginRight: 4 },
   inlineMenu: { position: 'absolute', top: 44, left: 0, right: 0, backgroundColor: '#fff', borderRadius: 14, borderWidth: 1, borderColor: '#e8e8e8', shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 8, elevation: 10, zIndex: 1000 },
+  inlineMenuScrollable: { position: 'absolute', top: 44, left: 0, right: 0, maxHeight: 260, backgroundColor: '#fff', borderRadius: 14, borderWidth: 1, borderColor: '#e8e8e8', shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 8, elevation: 10, zIndex: 1000 },
   dropdownMenuItem: { paddingVertical: 12, paddingHorizontal: 16 },
   dropdownMenuItemActive: { backgroundColor: '#f0fafa' },
   dropdownMenuText: { fontSize: 13, color: '#333' },

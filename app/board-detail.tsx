@@ -2,7 +2,7 @@ import { Rajdhani_700Bold, useFonts } from '@expo-google-fonts/rajdhani';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { deleteDoc, doc, getDoc } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
-import { Image, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Image, Linking, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Svg, { Path, Polygon } from 'react-native-svg';
 import { auth, db } from '../firebaseConfig';
 
@@ -18,6 +18,7 @@ export default function BoardDetailScreen() {
   const router = useRouter();
   const [post, setPost] = useState<any>(null);
   const [poster, setPoster] = useState<{ username: string; photoURL: string } | null>(null);
+const [hideContactInfo, setHideContactInfo] = useState<boolean | null>(null);
   const [fontsLoaded] = useFonts({ Rajdhani_700Bold });
   const [headerHeight, setHeaderHeight] = useState(160);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -39,6 +40,7 @@ export default function BoardDetailScreen() {
                 username: userSnap.data().username || '',
                 photoURL: userSnap.data().photoURL || '',
               });
+              setHideContactInfo(userSnap.data().hideContactInfo === true);
             }
           } catch (_) {}
         }
@@ -58,6 +60,9 @@ export default function BoardDetailScreen() {
   const posterInitials = poster?.username
     ? poster.username.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase()
     : '?';
+
+  // Contact info visible to owner always, hidden to others if toggle is on
+ const showContact = isOwner || hideContactInfo === false;
 
   const handleDelete = async () => {
     setDeleteLoading(true);
@@ -130,11 +135,60 @@ export default function BoardDetailScreen() {
         ) : null}
 
         <View style={styles.infoCard}>
-          {post.division ? <View style={styles.infoRow}><Text style={styles.infoLabel}>Division</Text><Text style={styles.infoValue}>{post.division}</Text></View> : null}
-          {post.sport ? <View style={styles.infoRow}><Text style={styles.infoLabel}>Sport</Text><Text style={styles.infoValue}>{post.sport}</Text></View> : null}
-          {post.forTournament ? <View style={styles.infoRow}><Text style={styles.infoLabel}>For</Text><Text style={styles.infoValue}>{post.forTournament}</Text></View> : null}
-          {post.contactPhone ? <View style={styles.infoRow}><Text style={styles.infoLabel}>Phone</Text><Text style={styles.infoValue}>{post.contactPhone}</Text></View> : null}
-          {post.contactEmail ? <View style={[styles.infoRow, { borderBottomWidth: 0 }]}><Text style={styles.infoLabel}>Email</Text><Text style={styles.infoValue}>{post.contactEmail}</Text></View> : null}
+          {post.division ? (
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Division</Text>
+              <Text style={styles.infoValue}>{post.division}</Text>
+            </View>
+          ) : null}
+          {post.sport ? (
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Sport</Text>
+              <Text style={styles.infoValue}>{post.sport}</Text>
+            </View>
+          ) : null}
+          {post.forTournament ? (
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>For</Text>
+              <Text style={styles.infoValue}>{post.forTournament}</Text>
+            </View>
+          ) : null}
+
+          {/* Phone — hidden if poster has hideContactInfo on */}
+          {post.contactPhone ? (
+            showContact ? (
+              <TouchableOpacity
+                style={styles.infoRow}
+                onPress={() => Linking.openURL(`tel:${post.contactPhone.replace(/\D/g, '')}`)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.infoLabel}>Phone</Text>
+                <Text style={[styles.infoValue, styles.tappableLink]}>📱 {post.contactPhone}</Text>
+              </TouchableOpacity>
+            ) : null
+          ) : null}
+
+          {/* Email — hidden if poster has hideContactInfo on */}
+          {post.contactEmail ? (
+            showContact ? (
+              <TouchableOpacity
+                style={[styles.infoRow, { borderBottomWidth: 0 }]}
+                onPress={() => Linking.openURL(`mailto:${post.contactEmail}`)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.infoLabel}>Email</Text>
+                <Text style={[styles.infoValue, styles.tappableLink]}>✉️ {post.contactEmail}</Text>
+              </TouchableOpacity>
+            ) : null
+          ) : null}
+
+          {/* Nudge shown when contact is hidden */}
+          {!showContact && (post.contactPhone || post.contactEmail) ? (
+            <View style={[styles.infoRow, { borderBottomWidth: 0 }]}>
+              <Text style={styles.infoLabel}>Contact</Text>
+              <Text style={styles.hiddenContactNote}>Message to get contact info</Text>
+            </View>
+          ) : null}
         </View>
 
         {poster && (
@@ -218,6 +272,8 @@ const styles = StyleSheet.create({
   infoRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#f5f5f5' },
   infoLabel: { fontSize: 13, color: '#a0b8b8', fontWeight: '500' },
   infoValue: { fontSize: 13, color: '#111', fontWeight: '600' },
+  tappableLink: { color: '#008080', textDecorationLine: 'underline' },
+  hiddenContactNote: { fontSize: 13, color: '#a0b8b8', fontStyle: 'italic' },
   posterCard: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#fff', borderRadius: 14, padding: 12, marginBottom: 12, borderWidth: 1, borderColor: '#e8e8e8' },
   posterPhoto: { width: 40, height: 40, borderRadius: 20 },
   posterAvatar: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },

@@ -16,6 +16,16 @@ function timeAgo(seconds: number) {
   return 'just now';
 }
 
+async function sendPush(token: string, title: string, body: string) {
+  try {
+    await fetch('https://exp.host/--/api/v2/push/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ to: token, title, body, sound: 'default' }),
+    });
+  } catch (e) { console.log('Push error:', e); }
+}
+
 export default function CommunityPostScreen() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
@@ -51,24 +61,60 @@ export default function CommunityPostScreen() {
       const userSnap = await getDoc(doc(db, 'users', user.uid));
       const username = userSnap.exists() ? (userSnap.data().username || '') : '';
       const initials = username ? username.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase() : '??';
+
       await addDoc(collection(db, 'community', id as string, 'comments'), {
         body: commentText.trim(), authorName: username, authorInitials: initials, authorId: user.uid, createdAt: serverTimestamp(),
       });
       await updateDoc(doc(db, 'community', id as string), { commentCount: increment(1) });
+
+      // Item 4 — notify post author when someone comments (not if they comment on their own post)
+      if (post?.authorId && post.authorId !== user.uid) {
+        await addDoc(collection(db, 'notifications'), {
+          toUserId: post.authorId,
+          message: `${username} commented on your post`,
+          body: commentText.trim().slice(0, 80),
+          link: `/community-post?id=${id}`,
+          createdAt: serverTimestamp(),
+          read: false,
+        });
+        const authorSnap = await getDoc(doc(db, 'users', post.authorId));
+        if (authorSnap.exists() && authorSnap.data().pushToken) {
+          await sendPush(authorSnap.data().pushToken, `💬 ${username} commented`, commentText.trim().slice(0, 80));
+        }
+      }
+
       setCommentText('');
     } catch (e: any) { console.log(e); }
     setSubmitting(false);
   };
 
-  const handleReply = async (commentId: string) => {
+  const handleReply = async (commentId: string, commentAuthorId: string, commentAuthorName: string) => {
     if (!replyText.trim() || !user) return;
     try {
       const userSnap = await getDoc(doc(db, 'users', user.uid));
       const username = userSnap.exists() ? (userSnap.data().username || '') : '';
       const initials = username ? username.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase() : '??';
+
       await addDoc(collection(db, 'community', id as string, 'comments', commentId, 'replies'), {
         body: replyText.trim(), authorName: username, authorInitials: initials, authorId: user.uid, createdAt: serverTimestamp(),
       });
+
+      // Item 5 — notify commenter when someone replies (not if replying to yourself)
+      if (commentAuthorId && commentAuthorId !== user.uid) {
+        await addDoc(collection(db, 'notifications'), {
+          toUserId: commentAuthorId,
+          message: `${username} replied to your comment`,
+          body: replyText.trim().slice(0, 80),
+          link: `/community-post?id=${id}`,
+          createdAt: serverTimestamp(),
+          read: false,
+        });
+        const commenterSnap = await getDoc(doc(db, 'users', commentAuthorId));
+        if (commenterSnap.exists() && commenterSnap.data().pushToken) {
+          await sendPush(commenterSnap.data().pushToken, `↩️ ${username} replied`, replyText.trim().slice(0, 80));
+        }
+      }
+
       setReplyText('');
       setReplyingTo(null);
     } catch (e: any) { console.log(e); }
@@ -171,8 +217,18 @@ export default function CommunityPostScreen() {
                 </TouchableOpacity>
                 {replyingTo === c.id && (
                   <View style={styles.replyInput}>
-                    <TextInput style={styles.replyTextInput} placeholder="Write a reply..." placeholderTextColor="#a0b8b8" value={replyText} onChangeText={setReplyText} autoFocus />
-                    <TouchableOpacity style={styles.replySendBtn} onPress={() => handleReply(c.id)}>
+                    <TextInput
+                      style={styles.replyTextInput}
+                      placeholder="Write a reply..."
+                      placeholderTextColor="#a0b8b8"
+                      value={replyText}
+                      onChangeText={setReplyText}
+                      autoFocus
+                    />
+                    <TouchableOpacity
+                      style={styles.replySendBtn}
+                      onPress={() => handleReply(c.id, c.authorId, c.authorName)}
+                    >
                       <Text style={styles.replySendText}>Send</Text>
                     </TouchableOpacity>
                   </View>
@@ -184,8 +240,18 @@ export default function CommunityPostScreen() {
         </ScrollView>
 
         <View style={styles.commentInputRow}>
-          <TextInput style={styles.commentInput} placeholder="Write a comment..." placeholderTextColor="#a0b8b8" value={commentText} onChangeText={setCommentText} />
-          <TouchableOpacity style={[styles.sendBtn, !commentText.trim() && styles.sendBtnDisabled]} onPress={handleComment} disabled={submitting || !commentText.trim()}>
+          <TextInput
+            style={styles.commentInput}
+            placeholder="Write a comment..."
+            placeholderTextColor="#a0b8b8"
+            value={commentText}
+            onChangeText={setCommentText}
+          />
+          <TouchableOpacity
+            style={[styles.sendBtn, !commentText.trim() && styles.sendBtnDisabled]}
+            onPress={handleComment}
+            disabled={submitting || !commentText.trim()}
+          >
             <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
               <Path d="M22 2L11 13M22 2L15 22l-4-9-9-4 20-7z" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
             </Svg>

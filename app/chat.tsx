@@ -22,7 +22,7 @@ async function sendPushNotification(toToken: string, fromName: string, message: 
 }
 
 export default function ChatScreen() {
-  const { threadId, otherName, prefillMessage } = useLocalSearchParams();
+  const { threadId, otherName, prefillMessage, context } = useLocalSearchParams();
   const router = useRouter();
   const [fontsLoaded] = useFonts({ Rajdhani_700Bold });
   const [messages, setMessages] = useState([]);
@@ -34,7 +34,6 @@ export default function ChatScreen() {
   const user = auth.currentUser;
   const prefillApplied = useRef(false);
 
-  // Pre-fill message input once when arriving from a listing
   useEffect(() => {
     if (prefillMessage && !prefillApplied.current) {
       setText(prefillMessage as string);
@@ -150,6 +149,7 @@ export default function ChatScreen() {
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={0}>
       <View style={styles.container}>
+
         <View style={styles.topBar}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
             <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
@@ -169,6 +169,13 @@ export default function ChatScreen() {
             </View>
           </View>
         </View>
+
+        {/* Item 12 — context banner when DM opened from board post */}
+        {context ? (
+          <View style={styles.contextBanner}>
+            <Text style={styles.contextBannerText}>📋 Re: {context}</Text>
+          </View>
+        ) : null}
 
         <FlatList
           ref={flatRef}
@@ -214,6 +221,8 @@ const styles = StyleSheet.create({
   topAvatar: { width: 38, height: 38, borderRadius: 10, backgroundColor: '#008080', alignItems: 'center', justifyContent: 'center' },
   topAvatarText: { color: '#fff', fontSize: 13, fontWeight: 'bold' },
   topName: { fontSize: 16, fontWeight: '700', color: '#003333', letterSpacing: 0.5 },
+  contextBanner: { backgroundColor: '#e0f5f5', borderBottomWidth: 1, borderBottomColor: '#c0e8e8', paddingHorizontal: 16, paddingVertical: 8 },
+  contextBannerText: { fontSize: 12, color: '#008080', fontWeight: '600' },
   chatList: { paddingHorizontal: 16, paddingVertical: 16, paddingBottom: 24 },
   bubbleRow: { marginBottom: 10, maxWidth: '78%' },
   bubbleRowMe: { alignSelf: 'flex-end', alignItems: 'flex-end' },

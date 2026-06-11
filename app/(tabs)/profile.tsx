@@ -2,9 +2,9 @@ import { Rajdhani_700Bold, useFonts } from '@expo-google-fonts/rajdhani';
 import * as ImageManipulator from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
-import { signOut } from 'firebase/auth';
-import { collection, deleteDoc, doc, getDoc, onSnapshot, query, setDoc, where } from 'firebase/firestore';
-import { deleteObject, getDownloadURL, getStorage, ref, uploadBytes } from 'firebase/storage';
+import { deleteUser, signOut } from 'firebase/auth';
+import { collection, deleteDoc, doc, getDoc, getDocs, onSnapshot, query, setDoc, where } from 'firebase/firestore';
+import { deleteObject, getStorage, ref } from 'firebase/storage';
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Image, Linking, Modal, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
@@ -46,16 +46,17 @@ export default function ProfileScreen() {
   const [showHelpModal, setShowHelpModal] = useState(false);
   const [expandedFaq, setExpandedFaq] = useState<number | null>(null);
 
-  // Item 9 — custom photo action modal
   const [showPhotoModal, setShowPhotoModal] = useState(false);
   const [showRemoveConfirmModal, setShowRemoveConfirmModal] = useState(false);
 
-  // Delete tournament modal
   const [showDeleteTournamentModal, setShowDeleteTournamentModal] = useState(false);
   const [tournamentToDelete, setTournamentToDelete] = useState<any>(null);
 
+  const [showDeleteAccountModal, setShowDeleteAccountModal] = useState(false);
+  const [deletingAccount, setDeletingAccount] = useState(false);
+
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
-  const [showFullName, setShowFullName] = useState(true);
+  const [hideContactInfo, setHideContactInfo] = useState(false);
 
   const avatarColor = useMemo(() => {
     const index = (user?.uid?.charCodeAt(0) || 0) % AVATAR_COLORS.length;
@@ -70,7 +71,7 @@ export default function ProfileScreen() {
         if (snap.data().photoURL) setPhotoURL(snap.data().photoURL);
         if (snap.data().username) setFullName(snap.data().username);
         if (snap.data().notificationsEnabled !== undefined) setNotificationsEnabled(snap.data().notificationsEnabled);
-        if (snap.data().showFullName !== undefined) setShowFullName(snap.data().showFullName);
+        if (snap.data().hideContactInfo !== undefined) setHideContactInfo(snap.data().hideContactInfo);
       }
     };
     loadUserData();
@@ -124,6 +125,7 @@ export default function ProfileScreen() {
       const blob = await response.blob();
       const storage = getStorage();
       const storageRef = ref(storage, `profilePhotos/${user!.uid}.jpg`);
+      const { uploadBytes, getDownloadURL } = await import('firebase/storage');
       await uploadBytes(storageRef, blob);
       const downloadURL = await getDownloadURL(storageRef);
       setPhotoURL(downloadURL);
@@ -167,9 +169,9 @@ export default function ProfileScreen() {
     await setDoc(doc(db, 'users', user!.uid), { notificationsEnabled: val }, { merge: true });
   };
 
-  const handleTogglePrivacy = async (val: boolean) => {
-    setShowFullName(val);
-    await setDoc(doc(db, 'users', user!.uid), { showFullName: val }, { merge: true });
+  const handleToggleHideContact = async (val: boolean) => {
+    setHideContactInfo(val);
+    await setDoc(doc(db, 'users', user!.uid), { hideContactInfo: val }, { merge: true });
   };
 
   const handleDeleteTournament = (tournament: any) => {
@@ -186,6 +188,50 @@ export default function ProfileScreen() {
     } catch (e: any) { console.error(e); }
     setDeletingTournamentId(null);
     setTournamentToDelete(null);
+  };
+
+  // Item 14 — cascade delete account
+  const confirmDeleteAccount = async () => {
+    if (!user) return;
+    setDeletingAccount(true);
+    try {
+      const uid = user.uid;
+
+      // Delete tournaments posted by user
+      const tournamentsSnap = await getDocs(query(collection(db, 'tournaments'), where('postedBy', '==', uid)));
+      await Promise.all(tournamentsSnap.docs.map(d => deleteDoc(d.ref)));
+
+      // Delete board posts
+      const boardSnap = await getDocs(query(collection(db, 'board'), where('postedBy', '==', uid)));
+      await Promise.all(boardSnap.docs.map(d => deleteDoc(d.ref)));
+
+      // Delete community posts
+      const communitySnap = await getDocs(query(collection(db, 'community'), where('authorId', '==', uid)));
+      await Promise.all(communitySnap.docs.map(d => deleteDoc(d.ref)));
+
+      // Delete notifications sent to user
+      const notifsSnap = await getDocs(query(collection(db, 'notifications'), where('toUserId', '==', uid)));
+      await Promise.all(notifsSnap.docs.map(d => deleteDoc(d.ref)));
+
+      // Delete profile photo from storage
+      try {
+        const storage = getStorage();
+        const storageRef = ref(storage, `profilePhotos/${uid}.jpg`);
+        await deleteObject(storageRef);
+      } catch (_) {}
+
+      // Delete user doc
+      await deleteDoc(doc(db, 'users', uid));
+
+      // Delete Firebase Auth account
+      await deleteUser(user);
+
+      router.replace('/login');
+    } catch (e: any) {
+      console.error(e);
+      setDeletingAccount(false);
+      setShowDeleteAccountModal(false);
+    }
   };
 
   const handleLogout = async () => {
@@ -320,9 +366,9 @@ export default function ProfileScreen() {
             <Path d="M5 7V5a3 3 0 1 1 6 0v2" stroke="#666" strokeWidth="1.4" strokeLinecap="round" />
           </Svg>
           <Text style={styles.settingLabel}>Privacy</Text>
-          <Svg width={14} height={14} viewBox="0 0 14 14" fill="none">
-            <Path d="M5 3l4 4-4 4" stroke="#ccc" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
-          </Svg>
+          <View style={[styles.togglePill, { backgroundColor: hideContactInfo ? '#008080' : '#e0e0e0' }]}>
+            <Text style={styles.togglePillText}>{hideContactInfo ? 'ON' : 'OFF'}</Text>
+          </View>
         </TouchableOpacity>
         <View style={styles.divider} />
         <TouchableOpacity style={styles.infoRow} onPress={() => setShowHelpModal(true)}>
@@ -345,7 +391,11 @@ export default function ProfileScreen() {
         <Text style={styles.logoutText}>Log Out</Text>
       </TouchableOpacity>
 
-      {/* Photo Action Modal — item 9, replaces both system alerts */}
+      <TouchableOpacity style={styles.deleteAccountBtn} onPress={() => setShowDeleteAccountModal(true)}>
+        <Text style={styles.deleteAccountText}>Delete Account</Text>
+      </TouchableOpacity>
+
+      {/* Photo Action Modal */}
       <Modal visible={showPhotoModal} animationType="fade" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalBox}>
@@ -364,7 +414,7 @@ export default function ProfileScreen() {
         </View>
       </Modal>
 
-      {/* Remove Photo Confirm Modal — replaces second system alert */}
+      {/* Remove Photo Confirm Modal */}
       <Modal visible={showRemoveConfirmModal} animationType="fade" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalBox}>
@@ -394,6 +444,28 @@ export default function ProfileScreen() {
               </TouchableOpacity>
               <TouchableOpacity style={styles.modalConfirmBtn} onPress={confirmDeleteTournament}>
                 <Text style={[styles.modalConfirmText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>DELETE</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Delete Account Modal */}
+      <Modal visible={showDeleteAccountModal} animationType="fade" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalBox}>
+            <Text style={[styles.modalTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>DELETE ACCOUNT</Text>
+            <Text style={styles.modalSub}>This will permanently delete your account, all your tournaments, board posts, and community posts. This cannot be undone.</Text>
+            <View style={styles.modalBtns}>
+              <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setShowDeleteAccountModal(false)} disabled={deletingAccount}>
+                <Text style={[styles.modalCancelText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>CANCEL</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.modalConfirmBtn, { backgroundColor: '#cc4444' }]} onPress={confirmDeleteAccount} disabled={deletingAccount}>
+                {deletingAccount ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={[styles.modalConfirmText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>DELETE</Text>
+                )}
               </TouchableOpacity>
             </View>
           </View>
@@ -442,12 +514,16 @@ export default function ProfileScreen() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalBox}>
             <Text style={[styles.modalTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>PRIVACY</Text>
-            <Text style={styles.modalSub}>Choose how your name appears on posts.</Text>
+            <Text style={styles.modalSub}>Control who can see your contact info on board posts.</Text>
             <View style={styles.toggleRow}>
-              <Text style={styles.toggleLabel}>Show Full Name</Text>
-              <Switch value={showFullName} onValueChange={handleTogglePrivacy} trackColor={{ false: '#e0e0e0', true: '#008080' }} thumbColor="#fff" />
+              <Text style={styles.toggleLabel}>Hide Contact Info</Text>
+              <Switch value={hideContactInfo} onValueChange={handleToggleHideContact} trackColor={{ false: '#e0e0e0', true: '#008080' }} thumbColor="#fff" />
             </View>
-            <Text style={styles.toggleHint}>{showFullName ? '✓ Your full name is visible to others' : '✗ Only your initials will show'}</Text>
+            <Text style={styles.toggleHint}>
+              {hideContactInfo
+                ? '✓ Your phone and email are hidden on board posts'
+                : '✗ Your contact info is visible to everyone'}
+            </Text>
             <TouchableOpacity style={styles.modalDoneBtn} onPress={() => setShowPrivacyModal(false)}>
               <Text style={[styles.modalDoneText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>DONE</Text>
             </TouchableOpacity>
@@ -508,6 +584,8 @@ const styles = StyleSheet.create({
   divider: { height: 1, backgroundColor: '#f0f0f0', marginLeft: 44 },
   logoutBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff', borderRadius: 16, width: '90%', paddingVertical: 14, borderWidth: 1, borderColor: '#fee2e2', marginTop: 4 },
   logoutText: { color: '#dc2626', fontSize: 14, fontWeight: '600' },
+  deleteAccountBtn: { marginTop: 12, paddingVertical: 10 },
+  deleteAccountText: { fontSize: 12, color: '#ccc', fontWeight: '500' },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '90%', marginBottom: 8, marginTop: 4 },
   sectionTitle: { fontSize: 13, color: '#003333', letterSpacing: 2, fontWeight: '700' },
   sectionCount: { fontSize: 12, color: '#a0b8b8', fontWeight: '500' },

@@ -1,8 +1,8 @@
 import { Rajdhani_700Bold, useFonts } from '@expo-google-fonts/rajdhani';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { addDoc, arrayRemove, arrayUnion, collection, deleteDoc, doc, getDoc, getDocs, increment, onSnapshot, orderBy, query, serverTimestamp, updateDoc } from 'firebase/firestore';
+import { addDoc, arrayRemove, arrayUnion, collection, deleteDoc, doc, getDoc, getDocs, increment, onSnapshot, orderBy, query, runTransaction, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
-import { Clipboard, Image, KeyboardAvoidingView, Modal, Platform, ScrollView, Share, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Clipboard, Image, KeyboardAvoidingView, Linking, Modal, Platform, ScrollView, Share, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { auth, db } from '../firebaseConfig';
 
@@ -39,6 +39,7 @@ export default function TournamentScreen() {
   const router = useRouter();
   const [tournament, setTournament] = useState<any>(null);
   const [joined, setJoined] = useState(false);
+  const [onWaitlist, setOnWaitlist] = useState(false);
   const [spotsLeft, setSpotsLeft] = useState(0);
   const [activeTab, setActiveTab] = useState<'details' | 'teams'>('details');
   const [teams, setTeams] = useState([]);
@@ -46,6 +47,7 @@ export default function TournamentScreen() {
   const [isEditingRegistration, setIsEditingRegistration] = useState(false);
   const [myTeamId, setMyTeamId] = useState<string | null>(null);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [showWaitlistModal, setShowWaitlistModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [successData, setSuccessData] = useState<{ teamName: string; tournamentName: string; depositMsg: string; contactInfo: string } | null>(null);
@@ -57,6 +59,7 @@ export default function TournamentScreen() {
   const [teamLoading, setTeamLoading] = useState(false);
   const [currentUsername, setCurrentUsername] = useState('');
   const [copied, setCopied] = useState(false);
+  const [cancelConfirmVisible, setCancelConfirmVisible] = useState(false);
   const [fontsLoaded] = useFonts({ Rajdhani_700Bold });
   const user = auth.currentUser;
   const isOwner = user?.uid === postedBy;
@@ -74,6 +77,11 @@ export default function TournamentScreen() {
       if (user) {
         const userSnap = await getDoc(doc(db, 'users', user.uid));
         if (userSnap.exists()) setCurrentUsername(userSnap.data().username || user.email || '');
+
+        // Check if user is on waitlist
+        const waitlistSnap = await getDocs(collection(db, 'tournaments', id as string, 'waitlist'));
+        const isOnWaitlist = waitlistSnap.docs.some(d => d.data().userId === user.uid);
+        setOnWaitlist(isOnWaitlist);
       }
     };
     load();
@@ -95,25 +103,101 @@ export default function TournamentScreen() {
   };
 
   const handleCancelRegistration = () => {
-    // Custom modal handled via showDeleteModal pattern — use inline state
     setCancelConfirmVisible(true);
   };
-
-  const [cancelConfirmVisible, setCancelConfirmVisible] = useState(false);
 
   const doCancelRegistration = async () => {
     setCancelConfirmVisible(false);
     try {
       const teamsSnap = await getDocs(collection(db, 'tournaments', id as string, 'teams'));
       const myTeam = teamsSnap.docs.find(d => d.data().registeredBy === user?.uid);
+      const myTeamData = myTeam?.data();
+
       if (myTeam) await deleteDoc(doc(db, 'tournaments', id as string, 'teams', myTeam.id));
-      await updateDoc(doc(db, 'tournaments', id as string), {
-        joinedUsers: arrayRemove(user?.uid),
-        spots: increment(1),
+
+      await runTransaction(db, async (tx) => {
+        const tRef = doc(db, 'tournaments', id as string);
+        const tSnap = await tx.get(tRef);
+        if (!tSnap.exists()) return;
+        tx.update(tRef, {
+          joinedUsers: arrayRemove(user?.uid),
+          spots: increment(1),
+        });
       });
+
       setJoined(false);
       setMyTeamId(null);
       setSpotsLeft(prev => prev + 1);
+
+      // Notify organizer
+      const cancelingName = myTeamData?.contactName || currentUsername || 'A team';
+      const cancelingTeamName = myTeamData?.teamName || 'Unknown team';
+      await addDoc(collection(db, 'notifications'), {
+        toUserId: postedBy as string,
+        message: `${cancelingName} canceled registration for ${tournament?.name}`,
+        body: `${cancelingTeamName} has withdrawn from ${tournament?.name}.`,
+        link: `/tournament?id=${id}&postedBy=${postedBy}`,
+        createdAt: serverTimestamp(),
+        read: false,
+      });
+
+      const ownerSnap = await getDoc(doc(db, 'users', postedBy as string));
+      if (ownerSnap.exists() && ownerSnap.data().pushToken) {
+        await fetch('https://exp.host/--/api/v2/push/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            to: ownerSnap.data().pushToken,
+            title: '❌ Team canceled registration',
+            body: `${cancelingTeamName} withdrew from ${tournament?.name}.`,
+          }),
+        });
+      }
+
+      // Item 10 — notify first person on waitlist that a spot opened
+      const waitlistSnap = await getDocs(
+        query(collection(db, 'tournaments', id as string, 'waitlist'), orderBy('createdAt', 'asc'))
+      );
+      if (waitlistSnap.docs.length > 0) {
+        const first = waitlistSnap.docs[0];
+        const firstUserId = first.data().userId;
+        await addDoc(collection(db, 'notifications'), {
+          toUserId: firstUserId,
+          message: `🎉 A spot opened in ${tournament?.name}!`,
+          body: 'You were next on the waitlist. Register now before it fills up.',
+          link: `/tournament?id=${id}&postedBy=${postedBy}`,
+          createdAt: serverTimestamp(),
+          read: false,
+        });
+        const waitlistUserSnap = await getDoc(doc(db, 'users', firstUserId));
+        if (waitlistUserSnap.exists() && waitlistUserSnap.data().pushToken) {
+          await fetch('https://exp.host/--/api/v2/push/send', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              to: waitlistUserSnap.data().pushToken,
+              title: '🎉 Spot opened up!',
+              body: `A spot opened in ${tournament?.name}. Register now!`,
+            }),
+          });
+        }
+        // Remove them from waitlist so they don't get notified again
+        await deleteDoc(first.ref);
+      }
+    } catch (e: any) { console.error(e); }
+  };
+
+  // Item 10 — join waitlist
+  const handleJoinWaitlist = async () => {
+    if (!user || onWaitlist) return;
+    try {
+      await addDoc(collection(db, 'tournaments', id as string, 'waitlist'), {
+        userId: user.uid,
+        username: currentUsername,
+        createdAt: serverTimestamp(),
+      });
+      setOnWaitlist(true);
+      setShowWaitlistModal(true);
     } catch (e: any) { console.error(e); }
   };
 
@@ -140,7 +224,6 @@ export default function TournamentScreen() {
     setShowTeamModal(false);
   };
 
-  // Division-specific fee lookup
   const getDivisionFee = (div: string): string | null => {
     if (!tournament?.divisionFees) return null;
     const fee = tournament.divisionFees[div];
@@ -162,12 +245,22 @@ export default function TournamentScreen() {
         setIsEditingRegistration(false);
         setMyTeamId(null);
       } else {
-        if (spotsLeft <= 0) { setTeamLoading(false); return; }
-
-        await updateDoc(doc(db, 'tournaments', id as string), {
-          joinedUsers: arrayUnion(user.uid),
-          spots: increment(-1),
+        let registered = false;
+        await runTransaction(db, async (tx) => {
+          const tRef = doc(db, 'tournaments', id as string);
+          const tSnap = await tx.get(tRef);
+          if (!tSnap.exists()) return;
+          const spots = tSnap.data().spots;
+          if (spots <= 0) return;
+          tx.update(tRef, {
+            joinedUsers: arrayUnion(user.uid),
+            spots: increment(-1),
+          });
+          registered = true;
         });
+
+        if (!registered) { setTeamLoading(false); return; }
+
         setJoined(true);
         setSpotsLeft(prev => prev - 1);
 
@@ -178,11 +271,14 @@ export default function TournamentScreen() {
           createdAt: serverTimestamp(),
         });
 
+        // Notify organizer
         await addDoc(collection(db, 'notifications'), {
           toUserId: postedBy as string,
           message: `${contactName} registered ${teamName} into ${tournament?.name}!`,
+          body: `Division: ${teamDivision}`,
           link: `/tournament?id=${id}&postedBy=${postedBy}`,
           createdAt: serverTimestamp(),
+          read: false,
         });
 
         const ownerSnap = await getDoc(doc(db, 'users', postedBy as string));
@@ -198,6 +294,16 @@ export default function TournamentScreen() {
           });
         }
 
+        // Notify registering team
+        await addDoc(collection(db, 'notifications'), {
+          toUserId: user.uid,
+          message: `You're registered for ${tournament?.name}!`,
+          body: `${teamName} is confirmed in the ${teamDivision} division.`,
+          link: `/tournament?id=${id}&postedBy=${postedBy}`,
+          createdAt: serverTimestamp(),
+          read: false,
+        });
+
         setShowTeamModal(false);
         setTeamName(''); setContactName(''); setContactInfo(''); setTeamDivision('');
 
@@ -207,9 +313,7 @@ export default function TournamentScreen() {
           ? `Deposit of ${tournament.depositAmount} required.`
           : '';
 
-        // Build contact info string for payment prompt
         const orgContact = [tournament?.contactName, tournament?.contactPhone].filter(Boolean).join(' · ');
-
         setSuccessData({ teamName, tournamentName: tournament?.name, depositMsg, contactInfo: orgContact });
         setShowSuccessModal(true);
       }
@@ -230,6 +334,7 @@ export default function TournamentScreen() {
               message: `⚠️ ${tournament.name} has been canceled by the organizer.`,
               link: `/`,
               createdAt: serverTimestamp(),
+              read: false,
             });
             const userSnap = await getDoc(doc(db, 'users', teamData.registeredBy));
             if (userSnap.exists() && userSnap.data().pushToken) {
@@ -263,6 +368,7 @@ export default function TournamentScreen() {
 
   if (!tournament) return null;
   const isCanceled = tournament.status === 'canceled';
+  const isFull = spotsLeft <= 0;
 
   const sportColor = tournament.sport === 'Basketball' ? '#008080'
     : tournament.sport === 'Volleyball' ? '#7A1E1E'
@@ -273,7 +379,6 @@ export default function TournamentScreen() {
     ? tournament.organizerName.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase()
     : '?';
 
-  // Divisions available for registration
   const registrationDivisions = tournament.divisions?.length > 0 ? tournament.divisions : [];
 
   return (
@@ -418,16 +523,16 @@ export default function TournamentScreen() {
               ) : null}
 
               {tournament.prizes ? (
-  <>
-    <View style={[styles.row, { marginTop: 16 }]}>
-      <Text style={styles.rowIcon}>🏆</Text>
-      <Text style={styles.rowLabel}>Prizes</Text>
-    </View>
-    {tournament.prizes.split(/\n| · /).map((line: string, i: number) => line.trim() ? (
-      <Text key={i} style={styles.rowValue}>{line.trim()}</Text>
-    ) : null)}
-  </>
-) : null}
+                <>
+                  <View style={[styles.row, { marginTop: 16 }]}>
+                    <Text style={styles.rowIcon}>🏆</Text>
+                    <Text style={styles.rowLabel}>Prizes</Text>
+                  </View>
+                  {tournament.prizes.split(/\n| · /).map((line: string, i: number) => line.trim() ? (
+                    <Text key={i} style={styles.rowValue}>{line.trim()}</Text>
+                  ) : null)}
+                </>
+              ) : null}
 
               {tournament.depositAmount ? (
                 <>
@@ -447,21 +552,23 @@ export default function TournamentScreen() {
                   </View>
                   {tournament.contactName ? <Text style={styles.rowValue}>{tournament.contactName}</Text> : null}
                   {tournament.contactPhone ? (
-                    <View style={styles.contactLine}>
+                    <TouchableOpacity onPress={() => Linking.openURL(`tel:${tournament.contactPhone.replace(/\D/g, '')}`)} style={styles.contactLine}>
                       <Text style={styles.contactLineIcon}>📱</Text>
-                      <Text style={styles.rowValue}>{tournament.contactPhone}</Text>
-                    </View>
+                      <Text style={[styles.rowValue, styles.tappableLink]}>{tournament.contactPhone}</Text>
+                    </TouchableOpacity>
                   ) : null}
                   {tournament.contactEmail ? (
-                    <View style={styles.contactLine}>
+                    <TouchableOpacity onPress={() => Linking.openURL(`mailto:${tournament.contactEmail}`)} style={styles.contactLine}>
                       <Text style={styles.contactLineIcon}>✉️</Text>
-                      <Text style={styles.rowValue}>{tournament.contactEmail}</Text>
-                    </View>
+                      <Text style={[styles.rowValue, styles.tappableLink]}>{tournament.contactEmail}</Text>
+                    </TouchableOpacity>
                   ) : null}
                 </>
               ) : null}
 
-              <Text style={[styles.spotsText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>{spotsLeft} spots left</Text>
+              <Text style={[styles.spotsText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>
+                {isFull ? 'Tournament Full' : `${spotsLeft} spots left`}
+              </Text>
             </View>
 
             {isOwner ? (
@@ -484,14 +591,25 @@ export default function TournamentScreen() {
                       <Text style={styles.cancelRegText}>Cancel Registration</Text>
                     </TouchableOpacity>
                   </>
-                ) : (
+                ) : isFull && !isCanceled ? (
+                  // Item 10 — waitlist button when full
                   <TouchableOpacity
-                    style={[styles.joinBtn, (spotsLeft <= 0 || isCanceled) && styles.joinedBtn]}
-                    onPress={() => { if (!isCanceled && spotsLeft > 0) setShowTeamModal(true); }}
-                    disabled={spotsLeft <= 0 || isCanceled}
+                    style={[styles.joinBtn, { backgroundColor: onWaitlist ? '#a0b8b8' : '#B8860B' }]}
+                    onPress={handleJoinWaitlist}
+                    disabled={onWaitlist}
                   >
                     <Text style={styles.joinText}>
-                      {isCanceled ? 'Canceled' : spotsLeft <= 0 ? 'Full' : 'Register Team'}
+                      {onWaitlist ? '✓ On Waitlist' : 'Join Waitlist'}
+                    </Text>
+                  </TouchableOpacity>
+                ) : (
+                  <TouchableOpacity
+                    style={[styles.joinBtn, isCanceled && styles.joinedBtn]}
+                    onPress={() => { if (!isCanceled) setShowTeamModal(true); }}
+                    disabled={isCanceled}
+                  >
+                    <Text style={styles.joinText}>
+                      {isCanceled ? 'Canceled' : 'Register Team'}
                     </Text>
                   </TouchableOpacity>
                 )}
@@ -545,7 +663,6 @@ export default function TournamentScreen() {
                 </View>
               )}
 
-              {/* Show selected division's fee inline */}
               {teamDivision && getDivisionFee(teamDivision) ? (
                 <View style={styles.selectedDivisionFeeBox}>
                   <Text style={styles.selectedDivisionFeeText}>💵 Entry fee for {teamDivision}: {getDivisionFee(teamDivision)}</Text>
@@ -589,6 +706,20 @@ export default function TournamentScreen() {
         </View>
       </Modal>
 
+      {/* Waitlist Confirmation Modal */}
+      <Modal visible={showWaitlistModal} animationType="fade" transparent>
+        <View style={styles.successOverlay}>
+          <View style={styles.successBox}>
+            <Text style={{ fontSize: 40, marginBottom: 8 }}>⏳</Text>
+            <Text style={[styles.successTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>ON THE WAITLIST</Text>
+            <Text style={styles.successMsg}>You'll get a notification if a spot opens up in {tournament.name}.</Text>
+            <TouchableOpacity style={[styles.successBtn, { backgroundColor: sportColor }]} onPress={() => setShowWaitlistModal(false)}>
+              <Text style={[styles.successBtnText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>GOT IT</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       {/* Delete Tournament Modal */}
       <Modal visible={showDeleteModal} animationType="fade" transparent>
         <View style={styles.successOverlay}>
@@ -624,12 +755,9 @@ export default function TournamentScreen() {
               </View>
             ) : null}
 
-            {/* Item 12 — payment contact prompt */}
             <View style={styles.paymentPromptBox}>
               <Text style={styles.paymentPromptTitle}>💳 Payment Details</Text>
-              <Text style={styles.paymentPromptText}>
-                Contact the organizer for payment instructions and accepted methods.
-              </Text>
+              <Text style={styles.paymentPromptText}>Contact the organizer for payment instructions and accepted methods.</Text>
               {successData?.contactInfo ? (
                 <Text style={styles.paymentContactInfo}>{successData.contactInfo}</Text>
               ) : null}
@@ -671,6 +799,7 @@ const styles = StyleSheet.create({
   contactLine: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 },
   contactLineIcon: { fontSize: 12 },
   contactLineText: { fontSize: 12, color: '#777' },
+  tappableLink: { color: '#008080', textDecorationLine: 'underline' },
   card: { backgroundColor: '#fff', borderRadius: 24, padding: 20, marginBottom: 16, shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 8, elevation: 2 },
   sportBadgeRow: { marginBottom: 12 },
   sportBadge: { alignSelf: 'flex-start', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 4 },
