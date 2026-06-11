@@ -165,7 +165,6 @@ export default function BoardScreen() {
       </View>
 
       <View style={styles.filtersRow}>
-        {/* Sport filter */}
         <View style={styles.dropdownWrapper}>
           <TouchableOpacity style={styles.dropdownSelect} onPress={() => { closeAll(); setShowSportMenu(true); }}>
             <Text style={styles.dropdownSelectText}>{sportLabel}</Text>
@@ -184,7 +183,6 @@ export default function BoardScreen() {
           )}
         </View>
 
-        {/* Division filter */}
         <View style={styles.dropdownWrapper}>
           <TouchableOpacity style={styles.dropdownSelect} onPress={() => { closeAll(); setShowDivisionMenu(true); }}>
             <Text style={styles.dropdownSelectText} numberOfLines={1}>{divisionLabel}</Text>
@@ -234,18 +232,27 @@ export default function BoardScreen() {
                 activeOpacity={0.85}
                 onPress={() => router.push({ pathname: '/board-detail', params: { id: p.id } })}
               >
-                <View style={[styles.cardHeader, { backgroundColor: sportColor }]}>
-                  <Text style={[styles.cardName, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]} numberOfLines={1}>
-                    {p.name ? p.name.toUpperCase() : p.sport?.toUpperCase()}
-                  </Text>
-                  <View style={[styles.sportBadge, { borderColor: sportColor }]}>
-                    <Text style={[styles.sportBadgeText, { color: sportColor }]}>{p.sport}</Text>
+                {/* Item 8 — colored left border accent */}
+                <View style={[styles.cardAccentBar, { backgroundColor: sportColor }]} />
+
+                <View style={styles.cardInner}>
+                  <View style={styles.cardTopRow}>
+                    {/* Item 8 — bold name in sport color */}
+                    <Text
+                      style={[styles.cardName, { color: sportColor }, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}
+                      numberOfLines={1}
+                    >
+                      {p.name ? p.name.toUpperCase() : p.sport?.toUpperCase()}
+                    </Text>
+                    <View style={[styles.sportBadge, { backgroundColor: `${sportColor}15`, borderColor: `${sportColor}40` }]}>
+                      <Text style={[styles.sportBadgeText, { color: sportColor }]}>{p.sport}</Text>
+                    </View>
                   </View>
-                </View>
-                <View style={styles.cardBody}>
+
                   {p.division ? <Text style={styles.detail}>🏅 {p.division}</Text> : null}
                   {p.forTournament ? <Text style={styles.detail}>🏆 {p.forTournament}</Text> : null}
                   {p.description ? <Text style={styles.description} numberOfLines={2}>{p.description}</Text> : null}
+
                   <View style={styles.cardFooter}>
                     {poster?.photoURL ? (
                       <Image source={{ uri: poster.photoURL }} style={styles.posterPhoto} />
@@ -285,14 +292,16 @@ const styles = StyleSheet.create({
   dropdownMenuText: { fontSize: 13, color: '#333' },
   dropdownMenuTextActive: { color: '#008080', fontWeight: '700' },
   list: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 24 },
-  card: { backgroundColor: '#fff', borderRadius: 12, marginBottom: 14, overflow: 'hidden', borderWidth: 1, borderColor: '#e0d8c8', elevation: 3, shadowColor: '#003333', shadowOpacity: 0.1, shadowRadius: 8 },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 10 },
-  cardName: { fontSize: 16, fontWeight: 'bold', color: '#f5ede0', flex: 1, marginRight: 8, letterSpacing: 1 },
-  sportBadge: { backgroundColor: '#f5ede0', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1 },
-  sportBadgeText: { fontSize: 11, fontWeight: 'bold' },
-  cardBody: { paddingHorizontal: 14, paddingTop: 10, paddingBottom: 12 },
-  detail: { fontSize: 14, color: '#5a5a5a', marginBottom: 4 },
-  description: { fontSize: 13, color: '#999', marginTop: 4 },
+  // Item 8 — card now uses left border accent layout
+  card: { backgroundColor: '#fff', borderRadius: 14, marginBottom: 14, overflow: 'hidden', borderWidth: 1, borderColor: '#e0d8c8', elevation: 3, shadowColor: '#003333', shadowOpacity: 0.08, shadowRadius: 8, flexDirection: 'row' },
+  cardAccentBar: { width: 5, alignSelf: 'stretch' },
+  cardInner: { flex: 1, paddingHorizontal: 12, paddingTop: 12, paddingBottom: 12 },
+  cardTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
+  cardName: { fontSize: 17, fontWeight: '900', flex: 1, marginRight: 8, letterSpacing: 0.5 },
+  sportBadge: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1 },
+  sportBadgeText: { fontSize: 11, fontWeight: '700' },
+  detail: { fontSize: 13, color: '#5a5a5a', marginBottom: 3 },
+  description: { fontSize: 13, color: '#888', marginTop: 4, lineHeight: 18 },
   cardFooter: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#f0f0f0' },
   posterPhoto: { width: 22, height: 22, borderRadius: 11 },
   posterAvatar: { width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },

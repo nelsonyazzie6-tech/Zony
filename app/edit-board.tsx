@@ -2,7 +2,7 @@ import { Rajdhani_700Bold, useFonts } from '@expo-google-fonts/rajdhani';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { collection, doc, getDoc, getDocs, updateDoc } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Keyboard, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
 import Svg, { Polygon } from 'react-native-svg';
 import { auth, db } from '../firebaseConfig';
 
@@ -19,6 +19,7 @@ const divisionOptions = [
   '18U Boys', '18U Girls', '18U Coed',
   'Adult Men', 'Adult Women', 'Adult Coed',
 ];
+
 function formatPhone(val: string) {
   const digits = val.replace(/\D/g, '').slice(0, 10);
   if (digits.length <= 3) return digits;
@@ -51,7 +52,6 @@ export default function EditBoardScreen() {
   const [contactEmail, setContactEmail] = useState('');
   const [description, setDescription] = useState('');
 
-  // Available divisions filtered to tournament's if one is selected
   const availableDivisions = forTournamentDivisions.length > 0 ? forTournamentDivisions : divisionOptions;
 
   useEffect(() => {
@@ -82,7 +82,6 @@ export default function EditBoardScreen() {
         }));
         setTournaments(data);
 
-        // If there's already a tournament selected, load its divisions
         const snap2 = await getDoc(doc(db, 'board', id as string));
         if (snap2.exists() && snap2.data().forTournamentId) {
           const linkedTournament = data.find(t => t.id === snap2.data().forTournamentId);
@@ -111,9 +110,7 @@ export default function EditBoardScreen() {
         contactPhone, contactEmail, description,
       });
       router.back();
-    } catch (e: any) {
-      console.error(e);
-    }
+    } catch (e: any) { console.error(e); }
     setLoading(false);
   };
 
@@ -128,7 +125,7 @@ export default function EditBoardScreen() {
       <Text style={styles.label}>
         {label}{optional ? <Text style={styles.optional}> (optional)</Text> : null}
       </Text>
-      <TouchableOpacity style={styles.dropdown} onPress={onToggle} activeOpacity={0.8}>
+      <TouchableOpacity style={styles.dropdown} onPress={() => { Keyboard.dismiss(); onToggle(); }} activeOpacity={0.8}>
         <Text style={value ? styles.dropdownSelected : styles.dropdownPlaceholder}>
           {value || placeholder}
         </Text>
@@ -157,170 +154,174 @@ export default function EditBoardScreen() {
   );
 
   return (
-    <ScrollView style={styles.container} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+        <ScrollView style={styles.container} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
 
-      <View style={styles.headerBlock} onLayout={e => setHeaderHeight(e.nativeEvent.layout.height)}>
-        <Svg style={StyleSheet.absoluteFill} width="100%" height={headerHeight} viewBox="0 0 390 130" preserveAspectRatio="xMidYMid slice">
-          <Polygon points="0,0 80,30 40,80" fill="white" opacity={0.04} />
-          <Polygon points="80,30 160,10 120,70" fill="white" opacity={0.07} />
-          <Polygon points="40,80 120,70 80,130" fill="white" opacity={0.05} />
-          <Polygon points="160,10 260,50 180,90" fill="white" opacity={0.06} />
-          <Polygon points="120,70 180,90 100,130" fill="white" opacity={0.08} />
-          <Polygon points="260,50 330,20 310,80" fill="white" opacity={0.05} />
-          <Polygon points="180,90 310,80 240,130" fill="white" opacity={0.07} />
-          <Polygon points="330,20 390,0 390,60" fill="white" opacity={0.04} />
-          <Polygon points="310,80 390,60 390,130" fill="white" opacity={0.06} />
-          <Polygon points="0,60 40,80 0,130" fill="white" opacity={0.05} />
-          <Polygon points="0,0 40,0 80,30" fill="white" opacity={0.08} />
-          <Polygon points="160,10 260,0 260,50" fill="white" opacity={0.04} />
-          <Polygon points="260,0 330,20 390,0" fill="white" opacity={0.06} />
-          <Polygon points="240,130 310,80 390,130" fill="white" opacity={0.05} />
-          <Polygon points="80,130 180,90 240,130" fill="white" opacity={0.04} />
-        </Svg>
-        <TouchableOpacity onPress={() => router.back()} style={styles.back}>
-          <Text style={styles.backText}>‹ Back</Text>
-        </TouchableOpacity>
-        <Text style={[styles.header, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>EDIT POST</Text>
-        <Text style={[styles.sub, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>Update your board post</Text>
-      </View>
+          <View style={styles.headerBlock} onLayout={e => setHeaderHeight(e.nativeEvent.layout.height)}>
+            <Svg style={StyleSheet.absoluteFill} width="100%" height={headerHeight} viewBox="0 0 390 130" preserveAspectRatio="xMidYMid slice">
+              <Polygon points="0,0 80,30 40,80" fill="white" opacity={0.04} />
+              <Polygon points="80,30 160,10 120,70" fill="white" opacity={0.07} />
+              <Polygon points="40,80 120,70 80,130" fill="white" opacity={0.05} />
+              <Polygon points="160,10 260,50 180,90" fill="white" opacity={0.06} />
+              <Polygon points="120,70 180,90 100,130" fill="white" opacity={0.08} />
+              <Polygon points="260,50 330,20 310,80" fill="white" opacity={0.05} />
+              <Polygon points="180,90 310,80 240,130" fill="white" opacity={0.07} />
+              <Polygon points="330,20 390,0 390,60" fill="white" opacity={0.04} />
+              <Polygon points="310,80 390,60 390,130" fill="white" opacity={0.06} />
+              <Polygon points="0,60 40,80 0,130" fill="white" opacity={0.05} />
+              <Polygon points="0,0 40,0 80,30" fill="white" opacity={0.08} />
+              <Polygon points="160,10 260,0 260,50" fill="white" opacity={0.04} />
+              <Polygon points="260,0 330,20 390,0" fill="white" opacity={0.06} />
+              <Polygon points="240,130 310,80 390,130" fill="white" opacity={0.05} />
+              <Polygon points="80,130 180,90 240,130" fill="white" opacity={0.04} />
+            </Svg>
+            <TouchableOpacity onPress={() => router.back()} style={styles.back}>
+              <Text style={styles.backText}>‹ Back</Text>
+            </TouchableOpacity>
+            <Text style={[styles.header, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>EDIT POST</Text>
+            <Text style={[styles.sub, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>Update your board post</Text>
+          </View>
 
-      <View style={styles.form}>
+          <View style={styles.form}>
 
-        <Text style={styles.label}>Name</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="e.g. Marcus Webb"
-          placeholderTextColor="#a0b8b8"
-          value={name}
-          onChangeText={setName}
-        />
+            <Text style={styles.label}>Name</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="e.g. Marcus Webb"
+              placeholderTextColor="#a0b8b8"
+              value={name}
+              onChangeText={setName}
+            />
 
-        <DropdownField
-          label="I am a..."
-          value={type}
-          placeholder="Select type..."
-          show={showTypePicker}
-          onToggle={() => { closeAll(); setShowTypePicker(!showTypePicker); }}
-          options={iAmOptions}
-          onSelect={setType}
-        />
+            <DropdownField
+              label="I am a..."
+              value={type}
+              placeholder="Select type..."
+              show={showTypePicker}
+              onToggle={() => { closeAll(); setShowTypePicker(!showTypePicker); }}
+              options={iAmOptions}
+              onSelect={setType}
+            />
 
-        <DropdownField
-          label="Looking for a..."
-          value={lookingFor}
-          placeholder="Select what you need..."
-          show={showLookingForPicker}
-          onToggle={() => { closeAll(); setShowLookingForPicker(!showLookingForPicker); }}
-          options={lookingForOptions}
-          onSelect={setLookingFor}
-        />
+            <DropdownField
+              label="Looking for a..."
+              value={lookingFor}
+              placeholder="Select what you need..."
+              show={showLookingForPicker}
+              onToggle={() => { closeAll(); setShowLookingForPicker(!showLookingForPicker); }}
+              options={lookingForOptions}
+              onSelect={setLookingFor}
+            />
 
-        <View>
-          <Text style={styles.label}>For... <Text style={styles.optional}>(optional)</Text></Text>
-          <TouchableOpacity
-            style={styles.dropdown}
-            onPress={() => { closeAll(); setShowTournamentPicker(!showTournamentPicker); }}
-            activeOpacity={0.8}
-          >
-            <Text style={forTournament ? styles.dropdownSelected : styles.dropdownPlaceholder}>
-              {forTournament || 'Select a tournament...'}
-            </Text>
-            <Text style={styles.dropdownArrow}>{showTournamentPicker ? '▲' : '▼'}</Text>
-          </TouchableOpacity>
-          {showTournamentPicker && (
-            <ScrollView style={[styles.dropdownList, { maxHeight: 200 }]} nestedScrollEnabled>
-              {tournaments.length === 0 ? (
-                <View style={styles.dropdownItem}>
-                  <Text style={styles.dropdownItemText}>No tournaments available</Text>
-                </View>
-              ) : (
-                tournaments.map(t => (
-                  <TouchableOpacity
-                    key={t.id}
-                    style={styles.dropdownItem}
-                    onPress={() => {
-                      setForTournament(t.name);
-                      setForTournamentId(t.id);
-                      setForTournamentDivisions(t.divisions || []);
-                      setDivision('');
-                      if (t.sport) setSport(t.sport);
-                      closeAll();
-                    }}
-                  >
-                    <Text style={[styles.dropdownItemText, forTournament === t.name && styles.dropdownItemActive]}>
-                      {t.name}
-                    </Text>
-                  </TouchableOpacity>
-                ))
+            <View>
+              <Text style={styles.label}>For... <Text style={styles.optional}>(optional)</Text></Text>
+              <TouchableOpacity
+                style={styles.dropdown}
+                onPress={() => { Keyboard.dismiss(); closeAll(); setShowTournamentPicker(!showTournamentPicker); }}
+                activeOpacity={0.8}
+              >
+                <Text style={forTournament ? styles.dropdownSelected : styles.dropdownPlaceholder}>
+                  {forTournament || 'Select a tournament...'}
+                </Text>
+                <Text style={styles.dropdownArrow}>{showTournamentPicker ? '▲' : '▼'}</Text>
+              </TouchableOpacity>
+              {showTournamentPicker && (
+                <ScrollView style={[styles.dropdownList, { maxHeight: 200 }]} nestedScrollEnabled>
+                  {tournaments.length === 0 ? (
+                    <View style={styles.dropdownItem}>
+                      <Text style={styles.dropdownItemText}>No tournaments available</Text>
+                    </View>
+                  ) : (
+                    tournaments.map(t => (
+                      <TouchableOpacity
+                        key={t.id}
+                        style={styles.dropdownItem}
+                        onPress={() => {
+                          setForTournament(t.name);
+                          setForTournamentId(t.id);
+                          setForTournamentDivisions(t.divisions || []);
+                          setDivision('');
+                          if (t.sport) setSport(t.sport);
+                          closeAll();
+                        }}
+                      >
+                        <Text style={[styles.dropdownItemText, forTournament === t.name && styles.dropdownItemActive]}>
+                          {t.name}
+                        </Text>
+                      </TouchableOpacity>
+                    ))
+                  )}
+                </ScrollView>
               )}
-            </ScrollView>
-          )}
-        </View>
+            </View>
 
-        <DropdownField
-          label="Sport"
-          value={sport}
-          placeholder="Select a sport..."
-          show={showSportPicker}
-          onToggle={() => { closeAll(); setShowSportPicker(!showSportPicker); }}
-          options={sportOptions}
-          onSelect={setSport}
-        />
+            <DropdownField
+              label="Sport"
+              value={sport}
+              placeholder="Select a sport..."
+              show={showSportPicker}
+              onToggle={() => { closeAll(); setShowSportPicker(!showSportPicker); }}
+              options={sportOptions}
+              onSelect={setSport}
+            />
 
-        <DropdownField
-          label="Division"
-          value={division}
-          placeholder="Select division..."
-          show={showDivisionPicker}
-          onToggle={() => { closeAll(); setShowDivisionPicker(!showDivisionPicker); }}
-          options={availableDivisions}
-          onSelect={setDivision}
-        />
-        {forTournament && forTournamentDivisions.length > 0 && (
-          <Text style={styles.divisionHint}>Showing divisions offered by {forTournament}</Text>
-        )}
+            <DropdownField
+              label="Division"
+              value={division}
+              placeholder="Select division..."
+              show={showDivisionPicker}
+              onToggle={() => { closeAll(); setShowDivisionPicker(!showDivisionPicker); }}
+              options={availableDivisions}
+              onSelect={setDivision}
+            />
+            {forTournament && forTournamentDivisions.length > 0 && (
+              <Text style={styles.divisionHint}>Showing divisions offered by {forTournament}</Text>
+            )}
 
-        <Text style={styles.label}>Contact Phone <Text style={styles.optional}>(optional)</Text></Text>
-        <TextInput
-          style={styles.input}
-          placeholder="e.g. 505-555-1234"
-          placeholderTextColor="#a0b8b8"
-          value={contactPhone}
-          onChangeText={v => setContactPhone(formatPhone(v))}
-          keyboardType="phone-pad"
-          maxLength={12}
-        />
+            <Text style={styles.label}>Contact Phone <Text style={styles.optional}>(optional)</Text></Text>
+            <TextInput
+              style={styles.input}
+              placeholder="e.g. 505-555-1234"
+              placeholderTextColor="#a0b8b8"
+              value={contactPhone}
+              onChangeText={v => setContactPhone(formatPhone(v))}
+              keyboardType="phone-pad"
+              maxLength={12}
+            />
 
-        <Text style={styles.label}>Contact Email <Text style={styles.optional}>(optional)</Text></Text>
-        <TextInput
-          style={styles.input}
-          placeholder="e.g. john@email.com"
-          placeholderTextColor="#a0b8b8"
-          value={contactEmail}
-          onChangeText={setContactEmail}
-          keyboardType="email-address"
-          autoCapitalize="none"
-        />
+            <Text style={styles.label}>Contact Email <Text style={styles.optional}>(optional)</Text></Text>
+            <TextInput
+              style={styles.input}
+              placeholder="e.g. john@email.com"
+              placeholderTextColor="#a0b8b8"
+              value={contactEmail}
+              onChangeText={setContactEmail}
+              keyboardType="email-address"
+              autoCapitalize="none"
+            />
 
-        <Text style={styles.label}>Description <Text style={styles.optional}>(optional)</Text></Text>
-        <TextInput
-          style={[styles.input, styles.textArea]}
-          placeholder="e.g. Looking for 14U forward..."
-          placeholderTextColor="#a0b8b8"
-          value={description}
-          onChangeText={setDescription}
-          multiline
-          numberOfLines={4}
-        />
+            <Text style={styles.label}>Description <Text style={styles.optional}>(optional)</Text></Text>
+            <TextInput
+              style={[styles.input, styles.textArea]}
+              placeholder="e.g. Looking for 14U forward..."
+              placeholderTextColor="#a0b8b8"
+              value={description}
+              onChangeText={setDescription}
+              multiline
+              numberOfLines={4}
+            />
 
-        <TouchableOpacity style={styles.saveBtn} onPress={handleSave} disabled={loading} activeOpacity={0.85}>
-          <Text style={[styles.saveBtnText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>
-            {loading ? 'Saving...' : 'SAVE CHANGES'}
-          </Text>
-        </TouchableOpacity>
+            <TouchableOpacity style={styles.saveBtn} onPress={handleSave} disabled={loading} activeOpacity={0.85}>
+              <Text style={[styles.saveBtnText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>
+                {loading ? 'Saving...' : 'SAVE CHANGES'}
+              </Text>
+            </TouchableOpacity>
 
-      </View>
-    </ScrollView>
+          </View>
+        </ScrollView>
+      </TouchableWithoutFeedback>
+    </KeyboardAvoidingView>
   );
 }
 

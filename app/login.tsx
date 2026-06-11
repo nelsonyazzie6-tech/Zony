@@ -4,7 +4,7 @@ import { createUserWithEmailAndPassword, sendPasswordResetEmail, signInWithEmail
 import { doc, setDoc } from 'firebase/firestore';
 import { useState } from 'react';
 import {
-  Alert, KeyboardAvoidingView, Platform, StyleSheet, Text,
+  KeyboardAvoidingView, Platform, StyleSheet, Text,
   TextInput, TouchableOpacity, View
 } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
@@ -49,6 +49,28 @@ function UserIcon() {
   );
 }
 
+function getAuthErrorMessage(code: string): string {
+  switch (code) {
+    case 'auth/invalid-email':
+      return 'That email address doesn\'t look right. Double-check and try again.';
+    case 'auth/user-not-found':
+    case 'auth/invalid-credential':
+      return 'No account found with that email and password.';
+    case 'auth/wrong-password':
+      return 'Incorrect password. Try again or use "Forgot password?" below.';
+    case 'auth/email-already-in-use':
+      return 'An account with this email already exists. Try logging in instead.';
+    case 'auth/weak-password':
+      return 'Password must be at least 6 characters.';
+    case 'auth/too-many-requests':
+      return 'Too many attempts. Please wait a moment and try again.';
+    case 'auth/network-request-failed':
+      return 'No internet connection. Check your network and try again.';
+    default:
+      return 'Something went wrong. Please try again.';
+  }
+}
+
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -56,13 +78,20 @@ export default function LoginScreen() {
   const [isSignUp, setIsSignUp] = useState(false);
   const [loading, setLoading] = useState(false);
   const [resetLoading, setResetLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
+  const [successMsg, setSuccessMsg] = useState('');
   const router = useRouter();
   const [fontsLoaded] = useFonts({ Rajdhani_700Bold });
 
   const handleSubmit = async () => {
-    if (!email || !password) return;
+    setErrorMsg('');
+    setSuccessMsg('');
+    if (!email || !password) {
+      setErrorMsg('Please enter your email and password.');
+      return;
+    }
     if (isSignUp && !username.trim()) {
-      Alert.alert('Missing info', 'Please enter a username.');
+      setErrorMsg('Please enter a username.');
       return;
     }
     setLoading(true);
@@ -79,22 +108,24 @@ export default function LoginScreen() {
       }
       router.replace('/');
     } catch (e: any) {
-      Alert.alert('Error', e.message);
+      setErrorMsg(getAuthErrorMessage(e.code));
     }
     setLoading(false);
   };
 
   const handleForgotPassword = async () => {
+    setErrorMsg('');
+    setSuccessMsg('');
     if (!email.trim()) {
-      Alert.alert('Enter your email', 'Type your email address above, then tap "Forgot password?"');
+      setErrorMsg('Enter your email address above, then tap "Forgot password?"');
       return;
     }
     setResetLoading(true);
     try {
       await sendPasswordResetEmail(auth, email.trim());
-      Alert.alert('Email sent', `A password reset link has been sent to ${email.trim()}.`);
+      setSuccessMsg(`Reset link sent to ${email.trim()}. Check your inbox.`);
     } catch (e: any) {
-      Alert.alert('Error', e.message);
+      setErrorMsg(getAuthErrorMessage(e.code));
     }
     setResetLoading(false);
   };
@@ -125,7 +156,7 @@ export default function LoginScreen() {
                 placeholder="yourname"
                 placeholderTextColor="#bbb"
                 value={username}
-                onChangeText={setUsername}
+                onChangeText={t => { setUsername(t); setErrorMsg(''); }}
                 autoCapitalize="none"
               />
             </View>
@@ -141,7 +172,7 @@ export default function LoginScreen() {
               placeholder="jordan@email.com"
               placeholderTextColor="#bbb"
               value={email}
-              onChangeText={setEmail}
+              onChangeText={t => { setEmail(t); setErrorMsg(''); setSuccessMsg(''); }}
               autoCapitalize="none"
               keyboardType="email-address"
             />
@@ -157,11 +188,25 @@ export default function LoginScreen() {
               placeholder="••••••••"
               placeholderTextColor="#bbb"
               value={password}
-              onChangeText={setPassword}
+              onChangeText={t => { setPassword(t); setErrorMsg(''); }}
               secureTextEntry
             />
           </View>
         </View>
+
+        {/* Error message */}
+        {errorMsg ? (
+          <View style={styles.errorBox}>
+            <Text style={styles.errorText}>⚠️  {errorMsg}</Text>
+          </View>
+        ) : null}
+
+        {/* Success message (reset email sent) */}
+        {successMsg ? (
+          <View style={styles.successBox}>
+            <Text style={styles.successText}>✓  {successMsg}</Text>
+          </View>
+        ) : null}
 
         {!isSignUp && (
           <TouchableOpacity style={styles.forgotRow} onPress={handleForgotPassword} disabled={resetLoading}>
@@ -199,7 +244,7 @@ export default function LoginScreen() {
           </TouchableOpacity>
         </View>
 
-        <TouchableOpacity style={styles.signupRow} onPress={() => { setIsSignUp(!isSignUp); setUsername(''); }}>
+        <TouchableOpacity style={styles.signupRow} onPress={() => { setIsSignUp(!isSignUp); setUsername(''); setErrorMsg(''); setSuccessMsg(''); }}>
           <Text style={styles.bottomText}>
             {isSignUp ? 'Already have an account? ' : "Don't have an account? "}
             <Text style={styles.bottomLink}>{isSignUp ? 'Log in' : 'Sign up'}</Text>
@@ -268,6 +313,38 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   input: { flex: 1, fontSize: 15, color: '#003333' },
+  errorBox: {
+    backgroundColor: '#fff0f0',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: '#fecaca',
+    marginTop: 2,
+    marginBottom: 2,
+  },
+  errorText: {
+    fontSize: 13,
+    color: '#cc2222',
+    fontWeight: '600',
+    lineHeight: 18,
+  },
+  successBox: {
+    backgroundColor: '#e0f5f5',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: '#a0d8d8',
+    marginTop: 2,
+    marginBottom: 2,
+  },
+  successText: {
+    fontSize: 13,
+    color: '#006060',
+    fontWeight: '600',
+    lineHeight: 18,
+  },
   forgotRow: { alignItems: 'flex-end', marginBottom: 4 },
   forgotText: { fontSize: 12, color: '#008080', fontWeight: '600' },
   signInBtn: {

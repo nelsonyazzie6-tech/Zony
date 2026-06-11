@@ -56,6 +56,21 @@ function SwipeToDelete({ onDelete, children }: { onDelete: () => void; children:
   );
 }
 
+function parseLink(link: string): { pathname: string; params?: Record<string, string> } {
+  try {
+    const [pathname, search] = link.split('?');
+    if (!search) return { pathname };
+    const params: Record<string, string> = {};
+    search.split('&').forEach(pair => {
+      const [key, val] = pair.split('=');
+      if (key && val) params[decodeURIComponent(key)] = decodeURIComponent(val);
+    });
+    return { pathname, params };
+  } catch {
+    return { pathname: link };
+  }
+}
+
 export default function NotificationsScreen() {
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -108,16 +123,24 @@ export default function NotificationsScreen() {
     setShowClearModal(false);
   };
 
+  const handleNotificationPress = (n: any) => {
+    handleMarkRead(n.id, n.read === true);
+    if (!n.link) return;
+    try {
+      const parsed = parseLink(n.link);
+      router.push(parsed as any);
+    } catch {
+      console.log('Navigation failed for link:', n.link);
+    }
+  };
+
   const renderItem = ({ item: n }: any) => {
     const isRead = n.read === true;
     return (
       <SwipeToDelete onDelete={() => handleDelete(n.id)}>
         <TouchableOpacity
           activeOpacity={0.85}
-          onPress={() => {
-            handleMarkRead(n.id, isRead);
-            if (n.link) router.push(n.link);
-          }}
+          onPress={() => handleNotificationPress(n)}
           style={[styles.card, isRead && styles.cardRead]}
         >
           <View style={styles.cardIcon}>
@@ -173,7 +196,6 @@ export default function NotificationsScreen() {
         />
       )}
 
-      {/* Custom Clear All Modal — item 7 */}
       <Modal visible={showClearModal} animationType="fade" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalBox}>

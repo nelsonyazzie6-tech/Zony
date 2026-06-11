@@ -2,7 +2,7 @@ import { Rajdhani_700Bold, useFonts } from '@expo-google-fonts/rajdhani';
 import { useRouter } from 'expo-router';
 import { collection, doc, getDoc, onSnapshot, orderBy, query } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, FlatList, Image, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, FlatList, Image, Keyboard, StyleSheet, Text, TextInput, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
 import Svg, { Path, Polygon } from 'react-native-svg';
 import { auth, db } from '../../firebaseConfig';
 
@@ -74,140 +74,144 @@ export default function CommunityScreen() {
     );
 
   return (
-    <View style={styles.container}>
+    <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+      <View style={styles.container}>
 
-      <View style={styles.headerBlock} onLayout={e => setHeaderHeight(e.nativeEvent.layout.height)}>
-        <Svg style={StyleSheet.absoluteFill} width="100%" height={headerHeight} viewBox="0 0 390 130" preserveAspectRatio="xMidYMid slice">
-          <Polygon points="0,0 80,30 40,80" fill="white" opacity={0.04} />
-          <Polygon points="80,30 160,10 120,70" fill="white" opacity={0.07} />
-          <Polygon points="40,80 120,70 80,130" fill="white" opacity={0.05} />
-          <Polygon points="160,10 260,50 180,90" fill="white" opacity={0.06} />
-          <Polygon points="120,70 180,90 100,130" fill="white" opacity={0.08} />
-          <Polygon points="260,50 330,20 310,80" fill="white" opacity={0.05} />
-          <Polygon points="180,90 310,80 240,130" fill="white" opacity={0.07} />
-          <Polygon points="330,20 390,0 390,60" fill="white" opacity={0.04} />
-          <Polygon points="310,80 390,60 390,130" fill="white" opacity={0.06} />
-          <Polygon points="0,60 40,80 0,130" fill="white" opacity={0.05} />
-          <Polygon points="0,0 40,0 80,30" fill="white" opacity={0.08} />
-          <Polygon points="160,10 260,0 260,50" fill="white" opacity={0.04} />
-          <Polygon points="260,0 330,20 390,0" fill="white" opacity={0.06} />
-          <Polygon points="240,130 310,80 390,130" fill="white" opacity={0.05} />
-          <Polygon points="80,130 180,90 240,130" fill="white" opacity={0.04} />
-        </Svg>
-        <Text style={[styles.header, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>COMMUNITY</Text>
-        <Text style={[styles.sub, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>Connect beyond the game</Text>
-      </View>
-
-      <TouchableOpacity style={styles.composer} onPress={() => router.push('/new-post')} activeOpacity={0.8}>
-        {myPhotoURL ? (
-          <Image source={{ uri: myPhotoURL }} style={styles.composerAvatarImg} />
-        ) : (
-          <View style={styles.composerAvatar}>
-            <Text style={[styles.composerAvatarText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>{initials}</Text>
-          </View>
-        )}
-        <View style={styles.composerInput}>
-          <Text style={styles.composerPlaceholder}>Ask a question or post gear for sale...</Text>
+        <View style={styles.headerBlock} onLayout={e => setHeaderHeight(e.nativeEvent.layout.height)}>
+          <Svg style={StyleSheet.absoluteFill} width="100%" height={headerHeight} viewBox="0 0 390 130" preserveAspectRatio="xMidYMid slice">
+            <Polygon points="0,0 80,30 40,80" fill="white" opacity={0.04} />
+            <Polygon points="80,30 160,10 120,70" fill="white" opacity={0.07} />
+            <Polygon points="40,80 120,70 80,130" fill="white" opacity={0.05} />
+            <Polygon points="160,10 260,50 180,90" fill="white" opacity={0.06} />
+            <Polygon points="120,70 180,90 100,130" fill="white" opacity={0.08} />
+            <Polygon points="260,50 330,20 310,80" fill="white" opacity={0.05} />
+            <Polygon points="180,90 310,80 240,130" fill="white" opacity={0.07} />
+            <Polygon points="330,20 390,0 390,60" fill="white" opacity={0.04} />
+            <Polygon points="310,80 390,60 390,130" fill="white" opacity={0.06} />
+            <Polygon points="0,60 40,80 0,130" fill="white" opacity={0.05} />
+            <Polygon points="0,0 40,0 80,30" fill="white" opacity={0.08} />
+            <Polygon points="160,10 260,0 260,50" fill="white" opacity={0.04} />
+            <Polygon points="260,0 330,20 390,0" fill="white" opacity={0.06} />
+            <Polygon points="240,130 310,80 390,130" fill="white" opacity={0.05} />
+            <Polygon points="80,130 180,90 240,130" fill="white" opacity={0.04} />
+          </Svg>
+          <Text style={[styles.header, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>COMMUNITY</Text>
+          <Text style={[styles.sub, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>Connect beyond the game</Text>
         </View>
-      </TouchableOpacity>
 
-      <View style={styles.searchRow}>
-        <TextInput
-          style={styles.search}
-          placeholder="Search posts..."
-          placeholderTextColor="#a0b8b8"
-          value={search}
-          onChangeText={setSearch}
-        />
-      </View>
-
-      <View style={styles.filterRow}>
-        <View style={styles.dropdownWrapper}>
-          <TouchableOpacity style={styles.dropdownSelect} onPress={() => setShowFilter(!showFilter)}>
-            <Text style={styles.dropdownSelectText}>{filterLabel}</Text>
-            <Svg width={12} height={12} viewBox="0 0 12 12" fill="none">
-              <Path d="M2 4l4 4 4-4" stroke="#888" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-            </Svg>
-          </TouchableOpacity>
-          {showFilter && (
-            <View style={styles.inlineMenu}>
-              {filterOptions.map(o => (
-                <TouchableOpacity
-                  key={o.value}
-                  style={[styles.dropdownMenuItem, filter === o.value && styles.dropdownMenuItemActive]}
-                  onPress={() => { setFilter(o.value); setShowFilter(false); }}
-                >
-                  <Text style={[styles.dropdownMenuText, filter === o.value && styles.dropdownMenuTextActive]}>{o.label}</Text>
-                </TouchableOpacity>
-              ))}
+        <TouchableOpacity style={styles.composer} onPress={() => router.push('/new-post')} activeOpacity={0.8}>
+          {myPhotoURL ? (
+            <Image source={{ uri: myPhotoURL }} style={styles.composerAvatarImg} />
+          ) : (
+            <View style={styles.composerAvatar}>
+              <Text style={[styles.composerAvatarText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>{initials}</Text>
             </View>
           )}
-        </View>
-      </View>
+          <View style={styles.composerInput}>
+            <Text style={styles.composerPlaceholder}>Ask a question or post gear for sale...</Text>
+          </View>
+        </TouchableOpacity>
 
-      {loading ? (
-        <ActivityIndicator size="large" color="#008080" style={{ marginTop: 60 }} />
-      ) : filtered.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <SadFace />
-          <Text style={styles.emptyTitle}>
-            {search.trim() || filter !== 'All' ? 'No posts match your search' : 'Nothing posted yet'}
-          </Text>
-          <Text style={styles.emptySub}>
-            {search.trim() || filter !== 'All' ? 'Try a different search or filter.' : 'Be the first to post in the community.'}
-          </Text>
+        <View style={styles.searchRow}>
+          <TextInput
+            style={styles.search}
+            placeholder="Search posts..."
+            placeholderTextColor="#a0b8b8"
+            value={search}
+            onChangeText={setSearch}
+          />
         </View>
-      ) : (
-        <FlatList
-          data={filtered}
-          keyExtractor={(p: any) => p.id}
-          contentContainerStyle={styles.list}
-          renderItem={({ item: p }: any) => {
-            const ago = p.createdAt?.seconds ? timeAgo(Math.floor(Date.now() / 1000) - p.createdAt.seconds) : '';
-            const isSale = p.type === 'Sale';
-            const avatarColor = isSale ? '#7A1E1E' : '#008080';
-            const badgeBg = isSale ? 'rgba(122,30,30,0.1)' : 'rgba(0,128,128,0.1)';
-            const badgeColor = isSale ? '#7A1E1E' : '#008080';
-            return (
-              <TouchableOpacity
-                style={styles.card}
-                activeOpacity={0.85}
-                onPress={() => router.push({ pathname: '/community-post', params: { id: p.id } })}
-              >
-                <View style={styles.cardTop}>
-                  {p.authorPhotoURL ? (
-                    <Image source={{ uri: p.authorPhotoURL }} style={styles.avatarImg} />
-                  ) : (
-                    <View style={[styles.avatar, { backgroundColor: avatarColor }]}>
-                      <Text style={[styles.avatarText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>
-                        {p.authorInitials || '??'}
+
+        <View style={styles.filterRow}>
+          <View style={styles.dropdownWrapper}>
+            <TouchableOpacity style={styles.dropdownSelect} onPress={() => { Keyboard.dismiss(); setShowFilter(!showFilter); }}>
+              <Text style={styles.dropdownSelectText}>{filterLabel}</Text>
+              <Svg width={12} height={12} viewBox="0 0 12 12" fill="none">
+                <Path d="M2 4l4 4 4-4" stroke="#888" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              </Svg>
+            </TouchableOpacity>
+            {showFilter && (
+              <View style={styles.inlineMenu}>
+                {filterOptions.map(o => (
+                  <TouchableOpacity
+                    key={o.value}
+                    style={[styles.dropdownMenuItem, filter === o.value && styles.dropdownMenuItemActive]}
+                    onPress={() => { setFilter(o.value); setShowFilter(false); }}
+                  >
+                    <Text style={[styles.dropdownMenuText, filter === o.value && styles.dropdownMenuTextActive]}>{o.label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+          </View>
+        </View>
+
+        {loading ? (
+          <ActivityIndicator size="large" color="#008080" style={{ marginTop: 60 }} />
+        ) : filtered.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <SadFace />
+            <Text style={styles.emptyTitle}>
+              {search.trim() || filter !== 'All' ? 'No posts match your search' : 'Nothing posted yet'}
+            </Text>
+            <Text style={styles.emptySub}>
+              {search.trim() || filter !== 'All' ? 'Try a different search or filter.' : 'Be the first to post in the community.'}
+            </Text>
+          </View>
+        ) : (
+          <FlatList
+            data={filtered}
+            keyExtractor={(p: any) => p.id}
+            contentContainerStyle={styles.list}
+            keyboardShouldPersistTaps="handled"
+            onScrollBeginDrag={Keyboard.dismiss}
+            renderItem={({ item: p }: any) => {
+              const ago = p.createdAt?.seconds ? timeAgo(Math.floor(Date.now() / 1000) - p.createdAt.seconds) : '';
+              const isSale = p.type === 'Sale';
+              const avatarColor = isSale ? '#7A1E1E' : '#008080';
+              const badgeBg = isSale ? 'rgba(122,30,30,0.1)' : 'rgba(0,128,128,0.1)';
+              const badgeColor = isSale ? '#7A1E1E' : '#008080';
+              return (
+                <TouchableOpacity
+                  style={styles.card}
+                  activeOpacity={0.85}
+                  onPress={() => router.push({ pathname: '/community-post', params: { id: p.id } })}
+                >
+                  <View style={styles.cardTop}>
+                    {p.authorPhotoURL ? (
+                      <Image source={{ uri: p.authorPhotoURL }} style={styles.avatarImg} />
+                    ) : (
+                      <View style={[styles.avatar, { backgroundColor: avatarColor }]}>
+                        <Text style={[styles.avatarText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>
+                          {p.authorInitials || '??'}
+                        </Text>
+                      </View>
+                    )}
+                    <View style={styles.cardMeta}>
+                      <Text style={[styles.cardAuthor, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>
+                        {p.authorName ? p.authorName.toUpperCase() : 'ANONYMOUS'}
+                      </Text>
+                      <Text style={styles.cardTime}>{ago}</Text>
+                    </View>
+                    <View style={[styles.typeBadge, { backgroundColor: badgeBg }]}>
+                      <Text style={[styles.typeBadgeText, { color: badgeColor }]}>
+                        {isSale ? 'For Sale' : 'Question'}
                       </Text>
                     </View>
-                  )}
-                  <View style={styles.cardMeta}>
-                    <Text style={[styles.cardAuthor, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>
-                      {p.authorName ? p.authorName.toUpperCase() : 'ANONYMOUS'}
-                    </Text>
-                    <Text style={styles.cardTime}>{ago}</Text>
                   </View>
-                  <View style={[styles.typeBadge, { backgroundColor: badgeBg }]}>
-                    <Text style={[styles.typeBadgeText, { color: badgeColor }]}>
-                      {isSale ? 'For Sale' : 'Question'}
-                    </Text>
+                  {p.title ? <Text style={styles.cardTitle}>{p.title}</Text> : null}
+                  <Text style={styles.cardBody} numberOfLines={3}>{p.body}</Text>
+                  <View style={styles.cardFooter}>
+                    {isSale && p.price ? <Text style={styles.cardPrice}>{p.price}</Text> : <View />}
+                    <Text style={styles.commentCount}>💬 {p.commentCount || 0} comments</Text>
                   </View>
-                </View>
-                {p.title ? <Text style={styles.cardTitle}>{p.title}</Text> : null}
-                <Text style={styles.cardBody} numberOfLines={3}>{p.body}</Text>
-                <View style={styles.cardFooter}>
-                  {isSale && p.price ? <Text style={styles.cardPrice}>{p.price}</Text> : <View />}
-                  <Text style={styles.commentCount}>💬 {p.commentCount || 0} comments</Text>
-                </View>
-              </TouchableOpacity>
-            );
-          }}
-        />
-      )}
-    </View>
+                </TouchableOpacity>
+              );
+            }}
+          />
+        )}
+      </View>
+    </TouchableWithoutFeedback>
   );
 }
 

@@ -2,7 +2,7 @@ import { Rajdhani_700Bold, useFonts } from '@expo-google-fonts/rajdhani';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { useEffect, useRef, useState } from 'react';
-import { Keyboard, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Keyboard, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
 import { GooglePlacesAutocomplete } from 'react-native-google-places-autocomplete';
 import DateTimePickerModal from 'react-native-modal-datetime-picker';
 import { auth, db } from '../firebaseConfig';
@@ -224,9 +224,7 @@ export default function EditTournamentScreen() {
         organizerPhoto,
       });
       router.back();
-    } catch (e) {
-      console.error(e);
-    }
+    } catch (e) { console.error(e); }
     setLoading(false);
   };
 
@@ -234,177 +232,179 @@ export default function EditTournamentScreen() {
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView ref={scrollRef} style={styles.container} keyboardShouldPersistTaps="handled">
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Text style={styles.backText}>← Back</Text>
-        </TouchableOpacity>
-        <Text style={[styles.header, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>EDIT TOURNAMENT</Text>
-        <Text style={styles.sub}>Update the details below</Text>
-
-        <View style={styles.form}>
-
-          <Text style={styles.label}>Tournament Name</Text>
-          <TextInput style={styles.input} placeholder="Tournament name" placeholderTextColor="#a0b8b8" value={name} onChangeText={setName} returnKeyType="next" blurOnSubmit={false} onSubmitEditing={() => Keyboard.dismiss()} />
-
-          <Text style={styles.label}>Sport</Text>
-          <TouchableOpacity style={styles.dropdown} onPress={() => { Keyboard.dismiss(); setShowSportPicker(!showSportPicker); setShowDivisionPicker(false); }}>
-            <Text style={sport ? styles.dropdownSelected : styles.dropdownPlaceholder}>{sport || 'Select a sport...'}</Text>
-            <Text style={styles.dropdownArrow}>{showSportPicker ? '▲' : '▼'}</Text>
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+        <ScrollView ref={scrollRef} style={styles.container} keyboardShouldPersistTaps="handled">
+          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+            <Text style={styles.backText}>← Back</Text>
           </TouchableOpacity>
-          {showSportPicker && (
-            <View style={styles.dropdownList}>
-              {sportOptions.map((s) => (
-                <TouchableOpacity key={s} style={styles.dropdownItem} onPress={() => { setSport(s); setShowSportPicker(false); }}>
-                  <Text style={[styles.dropdownItemText, sport === s && styles.dropdownItemActive]}>{s}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
+          <Text style={[styles.header, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>EDIT TOURNAMENT</Text>
+          <Text style={styles.sub}>Update the details below</Text>
 
-          <Text style={styles.label}>Start Date</Text>
-          <TouchableOpacity style={styles.dropdown} onPress={() => { Keyboard.dismiss(); setShowStartPicker(true); }}>
-            <Text style={startDate ? styles.dropdownSelected : styles.dropdownPlaceholder}>{startDate || 'Select start date...'}</Text>
-            <Text style={styles.dropdownArrow}>📅</Text>
-          </TouchableOpacity>
-          <DateTimePickerModal isVisible={showStartPicker} mode="date" onConfirm={handleStartConfirm} onCancel={() => setShowStartPicker(false)} />
+          <View style={styles.form}>
 
-          <Text style={styles.label}>End Date</Text>
-          <TouchableOpacity style={styles.dropdown} onPress={() => { Keyboard.dismiss(); setShowEndPicker(true); }}>
-            <Text style={endDate ? styles.dropdownSelected : styles.dropdownPlaceholder}>{endDate || 'Select end date...'}</Text>
-            <Text style={styles.dropdownArrow}>📅</Text>
-          </TouchableOpacity>
-          <DateTimePickerModal isVisible={showEndPicker} mode="date" onConfirm={handleEndConfirm} onCancel={() => setShowEndPicker(false)} />
+            <Text style={styles.label}>Tournament Name</Text>
+            <TextInput style={styles.input} placeholder="Tournament name" placeholderTextColor="#a0b8b8" value={name} onChangeText={setName} returnKeyType="next" blurOnSubmit={false} onSubmitEditing={() => Keyboard.dismiss()} />
 
-          <Text style={styles.label}>Venue / Address</Text>
-          <View style={styles.placesWrapper}>
-            <GooglePlacesAutocomplete
-              placeholder="Search gym, school, or address..."
-              onPress={handlePlaceSelect}
-              fetchDetails={true}
-              minLength={2}
-              listViewDisplayed="auto"
-              query={{ key: GOOGLE_API_KEY, language: 'en', components: 'country:us' }}
-              styles={{
-                textInputContainer: { backgroundColor: 'transparent' },
-                textInput: { backgroundColor: '#fff', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, fontSize: 15, color: '#003333', borderWidth: 1, borderColor: '#e0d8c8', height: 48 },
-                listView: { backgroundColor: '#fff', borderRadius: 12, borderWidth: 1, borderColor: '#e0d8c8', marginTop: 4 },
-                row: { paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#fff' },
-                description: { fontSize: 14, color: '#003333' },
-                separator: { backgroundColor: '#f0fafa' },
-              }}
-              enablePoweredByContainer={false}
-            />
-          </View>
-          {(address || city || state) ? (
-            <View style={styles.autoFilledBox}>
-              <Text style={styles.autoFilledText}>📍 {[address, city, state, zip].filter(Boolean).join(', ')}</Text>
-              <TouchableOpacity onPress={() => { setAddress(''); setCity(''); setState(''); setZip(''); }}>
-                <Text style={styles.clearText}>Clear</Text>
-              </TouchableOpacity>
-            </View>
-          ) : null}
-
-          <Text style={styles.label}>Divisions</Text>
-          <TouchableOpacity style={styles.dropdown} onPress={() => { Keyboard.dismiss(); setShowDivisionPicker(!showDivisionPicker); setShowSportPicker(false); }}>
-            <Text style={divisions.length > 0 ? styles.dropdownSelected : styles.dropdownPlaceholder}>{divisions.length > 0 ? divisions.join(', ') : 'Select divisions...'}</Text>
-            <Text style={styles.dropdownArrow}>{showDivisionPicker ? '▲' : '▼'}</Text>
-          </TouchableOpacity>
-          {showDivisionPicker && (
-            <View style={styles.dropdownList}>
-              {divisionOptions.map((d) => (
-                <TouchableOpacity key={d} style={styles.dropdownItem} onPress={() => toggleDivision(d)}>
-                  <Text style={[styles.dropdownItemText, divisions.includes(d) && styles.dropdownItemActive]}>{divisions.includes(d) ? '✓ ' : ''}{d}</Text>
-                </TouchableOpacity>
-              ))}
-              <TouchableOpacity style={[styles.dropdownItem, { backgroundColor: '#e0f5f5' }]} onPress={() => setShowDivisionPicker(false)}>
-                <Text style={{ color: '#008080', fontWeight: 'bold', textAlign: 'center' }}>Done</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-
-          {divisions.length > 0 && (
-            <View style={styles.divisionFeesBlock}>
-              <Text style={styles.divisionFeesTitle}>Entry Fee per Division</Text>
-              <Text style={styles.divisionFeesHint}>Leave blank if same for all, or set per division</Text>
-              {divisions.map(d => (
-                <View key={d} style={styles.divisionFeeRow}>
-                  <View style={styles.divisionFeeLabel}>
-                    <Text style={styles.divisionFeeLabelText}>{d}</Text>
-                  </View>
-                  <View style={styles.divisionFeeInputWrapper}>
-                    <Text style={styles.prizeInputPrefix}>$</Text>
-                    <TextInput
-                      style={styles.divisionFeeInput}
-                      placeholder="Amount"
-                      placeholderTextColor="#a0b8b8"
-                      value={divisionFees[d] || ''}
-                      onChangeText={v => setDivisionFees(prev => ({ ...prev, [d]: v.replace(/[^0-9]/g, '') }))}
-                      keyboardType="numeric"
-                    />
-                  </View>
-                </View>
-              ))}
-            </View>
-          )}
-
-          <Text style={styles.label}>Spectator Entrance Fee <Text style={styles.optional}>(optional)</Text></Text>
-          <TextInput ref={spectatorFeeRef} style={styles.input} placeholder="Amount in dollars" placeholderTextColor="#a0b8b8" value={spectatorFee} onChangeText={setSpectatorFee} keyboardType="numeric" returnKeyType="next" blurOnSubmit={false} onSubmitEditing={() => rosterSizeRef.current?.focus()} />
-
-          <Text style={styles.label}>Roster Size</Text>
-          <TextInput ref={rosterSizeRef} style={styles.input} placeholder="Number of players" placeholderTextColor="#a0b8b8" value={rosterSize} onChangeText={setRosterSize} keyboardType="numeric" returnKeyType="next" blurOnSubmit={false} onSubmitEditing={() => spotsRef.current?.focus()} />
-
-          <Text style={styles.label}>Available Spots</Text>
-          <TextInput ref={spotsRef} style={styles.input} placeholder="Number of teams" placeholderTextColor="#a0b8b8" value={spots} onChangeText={setSpots} keyboardType="numeric" returnKeyType="next" blurOnSubmit={false} onSubmitEditing={() => contactNameRef.current?.focus()} />
-
-          <Text style={styles.label}>Contact Name</Text>
-          <TextInput ref={contactNameRef} style={styles.input} placeholder="Contact name" placeholderTextColor="#a0b8b8" value={contactName} onChangeText={setContactName} returnKeyType="next" blurOnSubmit={false} onSubmitEditing={() => contactPhoneRef.current?.focus()} />
-
-          <Text style={styles.label}>Contact Phone <Text style={styles.optional}>(optional)</Text></Text>
-          <TextInput ref={contactPhoneRef} style={styles.input} placeholder="Phone number" placeholderTextColor="#a0b8b8" value={contactPhone} onChangeText={v => setContactPhone(formatPhone(v))} keyboardType="phone-pad" maxLength={12} returnKeyType="next" blurOnSubmit={false} onSubmitEditing={() => contactEmailRef.current?.focus()} />
-
-          <Text style={styles.label}>Contact Email <Text style={styles.optional}>(optional)</Text></Text>
-          <TextInput ref={contactEmailRef} style={styles.input} placeholder="Email address" placeholderTextColor="#a0b8b8" value={contactEmail} onChangeText={setContactEmail} keyboardType="email-address" autoCapitalize="none" returnKeyType="next" blurOnSubmit={false} onSubmitEditing={() => Keyboard.dismiss()} />
-
-          <Text style={styles.label}>Prizes / Awards</Text>
-          <Text style={styles.prizesHint}>Fill in cash, physical prizes, or both per place</Text>
-
-          {prizeRows.map((row, i) => (
-            <View key={i} style={styles.prizeRowBlock}>
-              <View style={styles.prizePlaceLabel}>
-                <Text style={styles.prizeLabelText}>{placeLabels[i]}</Text>
-              </View>
-              <View style={styles.prizeInputs}>
-                <View style={styles.prizeInputWrapper}>
-                  <Text style={styles.prizeInputPrefix}>$</Text>
-                  <TextInput style={styles.prizeInputCash} placeholder="Cash amount" placeholderTextColor="#a0b8b8" value={row.cash} onChangeText={(t) => updatePrizeCash(i, t)} keyboardType="numeric" returnKeyType="next" blurOnSubmit={false} />
-                </View>
-                <TextInput style={styles.prizeInputPhysical} placeholder="Trophy, Jacket, etc." placeholderTextColor="#a0b8b8" value={row.physical} onChangeText={(t) => updatePrizePhysical(i, t)} returnKeyType="next" blurOnSubmit={false} onSubmitEditing={i === prizeRows.length - 1 ? focusDeposit : undefined} />
-              </View>
-            </View>
-          ))}
-
-          {prizeRows.length < 8 && (
-            <TouchableOpacity style={styles.addPrizeBtn} onPress={addPrizeRow}>
-              <Text style={styles.addPrizeBtnText}>+ Add Place</Text>
+            <Text style={styles.label}>Sport</Text>
+            <TouchableOpacity style={styles.dropdown} onPress={() => { Keyboard.dismiss(); setShowSportPicker(!showSportPicker); setShowDivisionPicker(false); }}>
+              <Text style={sport ? styles.dropdownSelected : styles.dropdownPlaceholder}>{sport || 'Select a sport...'}</Text>
+              <Text style={styles.dropdownArrow}>{showSportPicker ? '▲' : '▼'}</Text>
             </TouchableOpacity>
-          )}
+            {showSportPicker && (
+              <View style={styles.dropdownList}>
+                {sportOptions.map((s) => (
+                  <TouchableOpacity key={s} style={styles.dropdownItem} onPress={() => { setSport(s); setShowSportPicker(false); }}>
+                    <Text style={[styles.dropdownItemText, sport === s && styles.dropdownItemActive]}>{s}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
 
-          <Text style={styles.label}>Deposit Amount <Text style={styles.optional}>(optional)</Text></Text>
-          <TextInput ref={depositAmountRef} style={styles.input} placeholder="Amount in dollars" placeholderTextColor="#a0b8b8" value={depositAmount} onChangeText={setDepositAmount} keyboardType="numeric" returnKeyType="next" blurOnSubmit={false} onSubmitEditing={() => { Keyboard.dismiss(); setShowDepositDuePicker(true); }} />
+            <Text style={styles.label}>Start Date</Text>
+            <TouchableOpacity style={styles.dropdown} onPress={() => { Keyboard.dismiss(); setShowStartPicker(true); }}>
+              <Text style={startDate ? styles.dropdownSelected : styles.dropdownPlaceholder}>{startDate || 'Select start date...'}</Text>
+              <Text style={styles.dropdownArrow}>📅</Text>
+            </TouchableOpacity>
+            <DateTimePickerModal isVisible={showStartPicker} mode="date" onConfirm={handleStartConfirm} onCancel={() => setShowStartPicker(false)} />
 
-          <Text style={styles.label}>Deposit Due Date <Text style={styles.optional}>(optional)</Text></Text>
-          <TouchableOpacity style={styles.dropdown} onPress={() => { Keyboard.dismiss(); setShowDepositDuePicker(true); }}>
-            <Text style={depositDue ? styles.dropdownSelected : styles.dropdownPlaceholder}>{depositDue || 'Select deposit due date...'}</Text>
-            <Text style={styles.dropdownArrow}>📅</Text>
-          </TouchableOpacity>
-          <DateTimePickerModal isVisible={showDepositDuePicker} mode="date" onConfirm={handleDepositDueConfirm} onCancel={() => setShowDepositDuePicker(false)} />
+            <Text style={styles.label}>End Date</Text>
+            <TouchableOpacity style={styles.dropdown} onPress={() => { Keyboard.dismiss(); setShowEndPicker(true); }}>
+              <Text style={endDate ? styles.dropdownSelected : styles.dropdownPlaceholder}>{endDate || 'Select end date...'}</Text>
+              <Text style={styles.dropdownArrow}>📅</Text>
+            </TouchableOpacity>
+            <DateTimePickerModal isVisible={showEndPicker} mode="date" onConfirm={handleEndConfirm} onCancel={() => setShowEndPicker(false)} />
 
-          <TouchableOpacity style={styles.submitBtn} onPress={handleSave} disabled={loading}>
-            <Text style={[styles.submitText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>{loading ? 'Saving...' : 'SAVE CHANGES'}</Text>
-          </TouchableOpacity>
+            <Text style={styles.label}>Venue / Address</Text>
+            <View style={styles.placesWrapper}>
+              <GooglePlacesAutocomplete
+                placeholder="Search gym, school, or address..."
+                onPress={handlePlaceSelect}
+                fetchDetails={true}
+                minLength={2}
+                listViewDisplayed="auto"
+                query={{ key: GOOGLE_API_KEY, language: 'en', components: 'country:us' }}
+                styles={{
+                  textInputContainer: { backgroundColor: 'transparent' },
+                  textInput: { backgroundColor: '#fff', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, fontSize: 15, color: '#003333', borderWidth: 1, borderColor: '#e0d8c8', height: 48 },
+                  listView: { backgroundColor: '#fff', borderRadius: 12, borderWidth: 1, borderColor: '#e0d8c8', marginTop: 4 },
+                  row: { paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#fff' },
+                  description: { fontSize: 14, color: '#003333' },
+                  separator: { backgroundColor: '#f0fafa' },
+                }}
+                enablePoweredByContainer={false}
+              />
+            </View>
+            {(address || city || state) ? (
+              <View style={styles.autoFilledBox}>
+                <Text style={styles.autoFilledText}>📍 {[address, city, state, zip].filter(Boolean).join(', ')}</Text>
+                <TouchableOpacity onPress={() => { setAddress(''); setCity(''); setState(''); setZip(''); }}>
+                  <Text style={styles.clearText}>Clear</Text>
+                </TouchableOpacity>
+              </View>
+            ) : null}
 
-        </View>
-      </ScrollView>
+            <Text style={styles.label}>Divisions</Text>
+            <TouchableOpacity style={styles.dropdown} onPress={() => { Keyboard.dismiss(); setShowDivisionPicker(!showDivisionPicker); setShowSportPicker(false); }}>
+              <Text style={divisions.length > 0 ? styles.dropdownSelected : styles.dropdownPlaceholder}>{divisions.length > 0 ? divisions.join(', ') : 'Select divisions...'}</Text>
+              <Text style={styles.dropdownArrow}>{showDivisionPicker ? '▲' : '▼'}</Text>
+            </TouchableOpacity>
+            {showDivisionPicker && (
+              <View style={styles.dropdownList}>
+                {divisionOptions.map((d) => (
+                  <TouchableOpacity key={d} style={styles.dropdownItem} onPress={() => toggleDivision(d)}>
+                    <Text style={[styles.dropdownItemText, divisions.includes(d) && styles.dropdownItemActive]}>{divisions.includes(d) ? '✓ ' : ''}{d}</Text>
+                  </TouchableOpacity>
+                ))}
+                <TouchableOpacity style={[styles.dropdownItem, { backgroundColor: '#e0f5f5' }]} onPress={() => setShowDivisionPicker(false)}>
+                  <Text style={{ color: '#008080', fontWeight: 'bold', textAlign: 'center' }}>Done</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {divisions.length > 0 && (
+              <View style={styles.divisionFeesBlock}>
+                <Text style={styles.divisionFeesTitle}>Entry Fee per Division</Text>
+                <Text style={styles.divisionFeesHint}>Leave blank if same for all, or set per division</Text>
+                {divisions.map(d => (
+                  <View key={d} style={styles.divisionFeeRow}>
+                    <View style={styles.divisionFeeLabel}>
+                      <Text style={styles.divisionFeeLabelText}>{d}</Text>
+                    </View>
+                    <View style={styles.divisionFeeInputWrapper}>
+                      <Text style={styles.prizeInputPrefix}>$</Text>
+                      <TextInput
+                        style={styles.divisionFeeInput}
+                        placeholder="Amount"
+                        placeholderTextColor="#a0b8b8"
+                        value={divisionFees[d] || ''}
+                        onChangeText={v => setDivisionFees(prev => ({ ...prev, [d]: v.replace(/[^0-9]/g, '') }))}
+                        keyboardType="numeric"
+                      />
+                    </View>
+                  </View>
+                ))}
+              </View>
+            )}
+
+            <Text style={styles.label}>Spectator Entrance Fee <Text style={styles.optional}>(optional)</Text></Text>
+            <TextInput ref={spectatorFeeRef} style={styles.input} placeholder="Amount in dollars" placeholderTextColor="#a0b8b8" value={spectatorFee} onChangeText={setSpectatorFee} keyboardType="numeric" returnKeyType="next" blurOnSubmit={false} onSubmitEditing={() => rosterSizeRef.current?.focus()} />
+
+            <Text style={styles.label}>Roster Size</Text>
+            <TextInput ref={rosterSizeRef} style={styles.input} placeholder="Number of players" placeholderTextColor="#a0b8b8" value={rosterSize} onChangeText={setRosterSize} keyboardType="numeric" returnKeyType="next" blurOnSubmit={false} onSubmitEditing={() => spotsRef.current?.focus()} />
+
+            <Text style={styles.label}>Available Spots</Text>
+            <TextInput ref={spotsRef} style={styles.input} placeholder="Number of teams" placeholderTextColor="#a0b8b8" value={spots} onChangeText={setSpots} keyboardType="numeric" returnKeyType="next" blurOnSubmit={false} onSubmitEditing={() => contactNameRef.current?.focus()} />
+
+            <Text style={styles.label}>Contact Name</Text>
+            <TextInput ref={contactNameRef} style={styles.input} placeholder="Contact name" placeholderTextColor="#a0b8b8" value={contactName} onChangeText={setContactName} returnKeyType="next" blurOnSubmit={false} onSubmitEditing={() => contactPhoneRef.current?.focus()} />
+
+            <Text style={styles.label}>Contact Phone <Text style={styles.optional}>(optional)</Text></Text>
+            <TextInput ref={contactPhoneRef} style={styles.input} placeholder="Phone number" placeholderTextColor="#a0b8b8" value={contactPhone} onChangeText={v => setContactPhone(formatPhone(v))} keyboardType="phone-pad" maxLength={12} returnKeyType="next" blurOnSubmit={false} onSubmitEditing={() => contactEmailRef.current?.focus()} />
+
+            <Text style={styles.label}>Contact Email <Text style={styles.optional}>(optional)</Text></Text>
+            <TextInput ref={contactEmailRef} style={styles.input} placeholder="Email address" placeholderTextColor="#a0b8b8" value={contactEmail} onChangeText={setContactEmail} keyboardType="email-address" autoCapitalize="none" returnKeyType="next" blurOnSubmit={false} onSubmitEditing={() => Keyboard.dismiss()} />
+
+            <Text style={styles.label}>Prizes / Awards</Text>
+            <Text style={styles.prizesHint}>Fill in cash, physical prizes, or both per place</Text>
+
+            {prizeRows.map((row, i) => (
+              <View key={i} style={styles.prizeRowBlock}>
+                <View style={styles.prizePlaceLabel}>
+                  <Text style={styles.prizeLabelText}>{placeLabels[i]}</Text>
+                </View>
+                <View style={styles.prizeInputs}>
+                  <View style={styles.prizeInputWrapper}>
+                    <Text style={styles.prizeInputPrefix}>$</Text>
+                    <TextInput style={styles.prizeInputCash} placeholder="Cash amount" placeholderTextColor="#a0b8b8" value={row.cash} onChangeText={(t) => updatePrizeCash(i, t)} keyboardType="numeric" returnKeyType="next" blurOnSubmit={false} />
+                  </View>
+                  <TextInput style={styles.prizeInputPhysical} placeholder="Trophy, Jacket, etc." placeholderTextColor="#a0b8b8" value={row.physical} onChangeText={(t) => updatePrizePhysical(i, t)} returnKeyType="next" blurOnSubmit={false} onSubmitEditing={i === prizeRows.length - 1 ? focusDeposit : undefined} />
+                </View>
+              </View>
+            ))}
+
+            {prizeRows.length < 8 && (
+              <TouchableOpacity style={styles.addPrizeBtn} onPress={addPrizeRow}>
+                <Text style={styles.addPrizeBtnText}>+ Add Place</Text>
+              </TouchableOpacity>
+            )}
+
+            <Text style={styles.label}>Deposit Amount <Text style={styles.optional}>(optional)</Text></Text>
+            <TextInput ref={depositAmountRef} style={styles.input} placeholder="Amount in dollars" placeholderTextColor="#a0b8b8" value={depositAmount} onChangeText={setDepositAmount} keyboardType="numeric" returnKeyType="next" blurOnSubmit={false} onSubmitEditing={() => { Keyboard.dismiss(); setShowDepositDuePicker(true); }} />
+
+            <Text style={styles.label}>Deposit Due Date <Text style={styles.optional}>(optional)</Text></Text>
+            <TouchableOpacity style={styles.dropdown} onPress={() => { Keyboard.dismiss(); setShowDepositDuePicker(true); }}>
+              <Text style={depositDue ? styles.dropdownSelected : styles.dropdownPlaceholder}>{depositDue || 'Select deposit due date...'}</Text>
+              <Text style={styles.dropdownArrow}>📅</Text>
+            </TouchableOpacity>
+            <DateTimePickerModal isVisible={showDepositDuePicker} mode="date" onConfirm={handleDepositDueConfirm} onCancel={() => setShowDepositDuePicker(false)} />
+
+            <TouchableOpacity style={styles.submitBtn} onPress={handleSave} disabled={loading}>
+              <Text style={[styles.submitText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>{loading ? 'Saving...' : 'SAVE CHANGES'}</Text>
+            </TouchableOpacity>
+
+          </View>
+        </ScrollView>
+      </TouchableWithoutFeedback>
     </KeyboardAvoidingView>
   );
 }

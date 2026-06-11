@@ -49,6 +49,8 @@ export default function TournamentScreen() {
   const [myTeamId, setMyTeamId] = useState<string | null>(null);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [showWaitlistModal, setShowWaitlistModal] = useState(false);
+  const [showLeaveWaitlistModal, setShowLeaveWaitlistModal] = useState(false);
+  const [leaveWaitlistLoading, setLeaveWaitlistLoading] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [successData, setSuccessData] = useState<{ teamName: string; tournamentName: string; depositMsg: string; contactInfo: string } | null>(null);
@@ -62,6 +64,7 @@ export default function TournamentScreen() {
   const [copied, setCopied] = useState(false);
   const [cancelConfirmVisible, setCancelConfirmVisible] = useState(false);
   const [fontsLoaded] = useFonts({ Rajdhani_700Bold });
+  const [waitlistPhone, setWaitlistPhone] = useState('');
   const user = auth.currentUser;
   const isOwner = user?.uid === postedBy;
 
@@ -106,9 +109,7 @@ export default function TournamentScreen() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleCancelRegistration = () => {
-    setCancelConfirmVisible(true);
-  };
+  const handleCancelRegistration = () => setCancelConfirmVisible(true);
 
   const doCancelRegistration = async () => {
     setCancelConfirmVisible(false);
@@ -123,10 +124,7 @@ export default function TournamentScreen() {
         const tRef = doc(db, 'tournaments', id as string);
         const tSnap = await tx.get(tRef);
         if (!tSnap.exists()) return;
-        tx.update(tRef, {
-          joinedUsers: arrayRemove(user?.uid),
-          spots: increment(1),
-        });
+        tx.update(tRef, { joinedUsers: arrayRemove(user?.uid), spots: increment(1) });
       });
 
       setJoined(false);
@@ -135,6 +133,7 @@ export default function TournamentScreen() {
 
       const cancelingName = myTeamData?.contactName || currentUsername || 'A team';
       const cancelingTeamName = myTeamData?.teamName || 'Unknown team';
+
       await addDoc(collection(db, 'notifications'), {
         toUserId: postedBy as string,
         message: `${cancelingName} canceled registration for ${tournament?.name}`,
@@ -162,15 +161,37 @@ export default function TournamentScreen() {
       );
       if (waitlistSnap.docs.length > 0) {
         const first = waitlistSnap.docs[0];
-        const firstUserId = first.data().userId;
+        const firstData = first.data();
+        const firstUserId = firstData.userId;
+
+        await runTransaction(db, async (tx) => {
+          const tRef = doc(db, 'tournaments', id as string);
+          const tSnap = await tx.get(tRef);
+          if (!tSnap.exists()) return;
+          tx.update(tRef, { joinedUsers: arrayUnion(firstUserId), spots: increment(-1) });
+        });
+
+        await addDoc(collection(db, 'tournaments', id as string, 'teams'), {
+          teamName: firstData.username || 'Waitlist Team',
+          contactName: firstData.username || '',
+          contactInfo: firstData.phone || '',
+          division: '',
+          registeredBy: firstUserId,
+          fromWaitlist: true,
+          createdAt: serverTimestamp(),
+        });
+
+        await deleteDoc(first.ref);
+
         await addDoc(collection(db, 'notifications'), {
           toUserId: firstUserId,
-          message: `🎉 A spot opened in ${tournament?.name}!`,
-          body: 'You were next on the waitlist. Register now before it fills up.',
+          message: `🎉 You've been added to ${tournament?.name}!`,
+          body: "A spot opened and you were next on the waitlist. You're in — check your registration.",
           link: `/tournament?id=${id}&postedBy=${postedBy}`,
           createdAt: serverTimestamp(),
           read: false,
         });
+
         const waitlistUserSnap = await getDoc(doc(db, 'users', firstUserId));
         if (waitlistUserSnap.exists() && waitlistUserSnap.data().pushToken) {
           await fetch('https://exp.host/--/api/v2/push/send', {
@@ -178,12 +199,20 @@ export default function TournamentScreen() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               to: waitlistUserSnap.data().pushToken,
-              title: '🎉 Spot opened up!',
-              body: `A spot opened in ${tournament?.name}. Register now!`,
+              title: "🎉 You're in!",
+              body: `A spot opened in ${tournament?.name} and you've been automatically registered.`,
             }),
           });
         }
-        await deleteDoc(first.ref);
+
+        await addDoc(collection(db, 'notifications'), {
+          toUserId: postedBy as string,
+          message: `${firstData.username || 'A waitlisted user'} was auto-added to ${tournament?.name}`,
+          body: 'They were next on the waitlist and have been registered automatically.',
+          link: `/tournament?id=${id}&postedBy=${postedBy}`,
+          createdAt: serverTimestamp(),
+          read: false,
+        });
       }
     } catch (e: any) { console.error(e); }
   };
@@ -194,6 +223,7 @@ export default function TournamentScreen() {
       await addDoc(collection(db, 'tournaments', id as string, 'waitlist'), {
         userId: user.uid,
         username: currentUsername,
+        phone: waitlistPhone.trim() || null,
         createdAt: serverTimestamp(),
       });
       setOnWaitlist(true);
@@ -202,7 +232,7 @@ export default function TournamentScreen() {
       await addDoc(collection(db, 'notifications'), {
         toUserId: postedBy as string,
         message: `${currentUsername} joined the waitlist for ${tournament?.name}`,
-        body: 'A spot opening up will automatically notify them.',
+        body: "They'll be automatically added if a spot opens.",
         link: `/tournament?id=${id}&postedBy=${postedBy}`,
         createdAt: serverTimestamp(),
         read: false,
@@ -221,6 +251,29 @@ export default function TournamentScreen() {
         });
       }
     } catch (e: any) { console.error(e); }
+  };
+
+  // Leave waitlist
+  const doLeaveWaitlist = async () => {
+    if (!user) return;
+    setLeaveWaitlistLoading(true);
+    try {
+      const waitlistSnap = await getDocs(collection(db, 'tournaments', id as string, 'waitlist'));
+      const myEntry = waitlistSnap.docs.find(d => d.data().userId === user.uid);
+      if (myEntry) await deleteDoc(myEntry.ref);
+      setOnWaitlist(false);
+      setShowLeaveWaitlistModal(false);
+
+      await addDoc(collection(db, 'notifications'), {
+        toUserId: postedBy as string,
+        message: `${currentUsername} left the waitlist for ${tournament?.name}`,
+        body: 'They have removed themselves from the waitlist.',
+        link: `/tournament?id=${id}&postedBy=${postedBy}`,
+        createdAt: serverTimestamp(),
+        read: false,
+      });
+    } catch (e: any) { console.error(e); }
+    setLeaveWaitlistLoading(false);
   };
 
   const openEditRegistration = async () => {
@@ -255,7 +308,6 @@ export default function TournamentScreen() {
   const handleRegisterTeam = async () => {
     if (!teamName || !contactName || !contactInfo || !teamDivision) return;
     if (!user) return;
-
     setTeamLoading(true);
     try {
       if (isEditingRegistration && myTeamId) {
@@ -274,10 +326,7 @@ export default function TournamentScreen() {
           if (!tSnap.exists()) return;
           const spots = tSnap.data().spots;
           if (spots <= 0) return;
-          tx.update(tRef, {
-            joinedUsers: arrayUnion(user.uid),
-            spots: increment(-1),
-          });
+          tx.update(tRef, { joinedUsers: arrayUnion(user.uid), spots: increment(-1) });
           registered = true;
         });
 
@@ -329,9 +378,7 @@ export default function TournamentScreen() {
 
         const depositMsg = tournament?.depositAmount && tournament?.depositDue
           ? `Deposit of ${tournament.depositAmount} due by ${tournament.depositDue}.`
-          : tournament?.depositAmount
-          ? `Deposit of ${tournament.depositAmount} required.`
-          : '';
+          : tournament?.depositAmount ? `Deposit of ${tournament.depositAmount} required.` : '';
 
         const orgContact = [tournament?.contactName, tournament?.contactPhone].filter(Boolean).join(' · ');
         setSuccessData({ teamName, tournamentName: tournament?.name, depositMsg, contactInfo: orgContact });
@@ -428,7 +475,7 @@ export default function TournamentScreen() {
             <TouchableOpacity style={[styles.tab, activeTab === 'teams' && { backgroundColor: sportColor }]} onPress={() => setActiveTab('teams')}>
               <Text style={[styles.tabText, activeTab === 'teams' && styles.tabTextActive]}>Teams {teams.length > 0 ? `(${teams.length})` : ''}</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.tab, activeTab === 'waitlist' && { backgroundColor: '#B8860B' }]} onPress={() => setActiveTab('waitlist')}>
+            <TouchableOpacity style={[styles.tab, activeTab === 'waitlist' && { backgroundColor: sportColor }]} onPress={() => setActiveTab('waitlist')}>
               <Text style={[styles.tabText, activeTab === 'waitlist' && styles.tabTextActive]}>Waitlist {waitlistEntries.length > 0 ? `(${waitlistEntries.length})` : ''}</Text>
             </TouchableOpacity>
           </View>
@@ -438,17 +485,23 @@ export default function TournamentScreen() {
           <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 40 }}>
             <Text style={styles.teamsCount}>{teams.length} {teams.length === 1 ? 'team' : 'teams'} registered</Text>
             {teams.length === 0 ? (
-              <View style={styles.emptyTeams}>
-                <SadFace />
-                <Text style={styles.emptyTeamsText}>No teams registered yet.</Text>
-              </View>
+              <View style={styles.emptyTeams}><SadFace /><Text style={styles.emptyTeamsText}>No teams registered yet.</Text></View>
             ) : (
               teams.map((t: any) => (
                 <View key={t.id} style={styles.teamCard}>
                   <View style={styles.teamCardTop}>
                     <Text style={[styles.teamName, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>{t.teamName}</Text>
-                    <View style={[styles.teamDivisionBadge, { backgroundColor: `${sportColor}20`, borderColor: sportColor }]}>
-                      <Text style={[styles.teamDivisionText, { color: sportColor }]}>{t.division}</Text>
+                    <View style={styles.teamCardBadges}>
+                      {t.fromWaitlist && (
+                        <View style={styles.waitlistAutoTag}>
+                          <Text style={styles.waitlistAutoTagText}>Auto-added</Text>
+                        </View>
+                      )}
+                      {t.division ? (
+                        <View style={[styles.teamDivisionBadge, { backgroundColor: `${sportColor}20`, borderColor: sportColor }]}>
+                          <Text style={[styles.teamDivisionText, { color: sportColor }]}>{t.division}</Text>
+                        </View>
+                      ) : null}
                     </View>
                   </View>
                   <View style={styles.divider} />
@@ -469,20 +522,22 @@ export default function TournamentScreen() {
           <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 40 }}>
             <Text style={styles.teamsCount}>{waitlistEntries.length} {waitlistEntries.length === 1 ? 'person' : 'people'} waiting</Text>
             {waitlistEntries.length === 0 ? (
-              <View style={styles.emptyTeams}>
-                <SadFace />
-                <Text style={styles.emptyTeamsText}>No one on the waitlist.</Text>
-              </View>
+              <View style={styles.emptyTeams}><SadFace /><Text style={styles.emptyTeamsText}>No one on the waitlist.</Text></View>
             ) : (
               waitlistEntries.map((w: any, index: number) => {
                 const joinedDate = w.createdAt?.toDate?.()?.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) || '';
                 return (
                   <View key={w.id} style={styles.waitlistCard}>
-                    <View style={styles.waitlistPosition}>
-                      <Text style={[styles.waitlistPositionText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>#{index + 1}</Text>
+                    <View style={[styles.waitlistPosition, { backgroundColor: `${sportColor}15`, borderColor: `${sportColor}40` }]}>
+                      <Text style={[styles.waitlistPositionText, { color: sportColor }, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>#{index + 1}</Text>
                     </View>
                     <View style={styles.waitlistInfo}>
                       <Text style={[styles.waitlistName, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>{w.username || 'Unknown'}</Text>
+                      {w.phone ? (
+                        <TouchableOpacity onPress={() => Linking.openURL(`tel:${w.phone.replace(/\D/g, '')}`)}>
+                          <Text style={[styles.waitlistPhone, { color: sportColor }]}>📱 {w.phone}</Text>
+                        </TouchableOpacity>
+                      ) : null}
                       {joinedDate ? <Text style={styles.waitlistDate}>Joined {joinedDate}</Text> : null}
                     </View>
                   </View>
@@ -519,16 +574,10 @@ export default function TournamentScreen() {
 
               <View style={styles.divider} />
 
-              <View style={styles.row}>
-                <Text style={styles.rowIcon}>📅</Text>
-                <Text style={styles.rowLabel}>Date</Text>
-              </View>
+              <View style={styles.row}><Text style={styles.rowIcon}>📅</Text><Text style={styles.rowLabel}>Date</Text></View>
               <Text style={styles.rowValue}>{tournament.date}</Text>
 
-              <View style={[styles.row, { marginTop: 16 }]}>
-                <Text style={styles.rowIcon}>📍</Text>
-                <Text style={styles.rowLabel}>Location</Text>
-              </View>
+              <View style={[styles.row, { marginTop: 16 }]}><Text style={styles.rowIcon}>📍</Text><Text style={styles.rowLabel}>Location</Text></View>
               {tournament.address ? <Text style={styles.rowValue}>{tournament.address}</Text> : null}
               <Text style={styles.rowValue}>{tournament.city}, {tournament.state} {tournament.zip}</Text>
               <TouchableOpacity style={styles.copyBtn} onPress={handleCopyAddress}>
@@ -537,47 +586,31 @@ export default function TournamentScreen() {
 
               {tournament.divisions?.length > 0 && (
                 <>
-                  <View style={[styles.row, { marginTop: 16 }]}>
-                    <Text style={styles.rowIcon}>🏅</Text>
-                    <Text style={styles.rowLabel}>Divisions</Text>
-                  </View>
+                  <View style={[styles.row, { marginTop: 16 }]}><Text style={styles.rowIcon}>🏅</Text><Text style={styles.rowLabel}>Divisions</Text></View>
                   {tournament.divisions.map((d: string) => {
                     const fee = getDivisionFee(d);
-                    return (
-                      <Text key={d} style={styles.rowValue}>
-                        {d}{fee ? `  —  ${fee}` : ''}
-                      </Text>
-                    );
+                    return <Text key={d} style={styles.rowValue}>{d}{fee ? `  —  ${fee}` : ''}</Text>;
                   })}
                 </>
               )}
 
               {tournament.spectatorFee ? (
                 <>
-                  <View style={[styles.row, { marginTop: 16 }]}>
-                    <Text style={styles.rowIcon}>🎟️</Text>
-                    <Text style={styles.rowLabel}>Spectator Fee</Text>
-                  </View>
+                  <View style={[styles.row, { marginTop: 16 }]}><Text style={styles.rowIcon}>🎟️</Text><Text style={styles.rowLabel}>Spectator Fee</Text></View>
                   <Text style={styles.rowValue}>{tournament.spectatorFee} at the door</Text>
                 </>
               ) : null}
 
               {tournament.rosterSize ? (
                 <>
-                  <View style={[styles.row, { marginTop: 16 }]}>
-                    <Text style={styles.rowIcon}>👥</Text>
-                    <Text style={styles.rowLabel}>Roster Size</Text>
-                  </View>
+                  <View style={[styles.row, { marginTop: 16 }]}><Text style={styles.rowIcon}>👥</Text><Text style={styles.rowLabel}>Roster Size</Text></View>
                   <Text style={styles.rowValue}>{tournament.rosterSize} players</Text>
                 </>
               ) : null}
 
               {tournament.prizes ? (
                 <>
-                  <View style={[styles.row, { marginTop: 16 }]}>
-                    <Text style={styles.rowIcon}>🏆</Text>
-                    <Text style={styles.rowLabel}>Prizes</Text>
-                  </View>
+                  <View style={[styles.row, { marginTop: 16 }]}><Text style={styles.rowIcon}>🏆</Text><Text style={styles.rowLabel}>Prizes</Text></View>
                   {tournament.prizes.split(/\n| · /).map((line: string, i: number) => line.trim() ? (
                     <Text key={i} style={styles.rowValue}>{line.trim()}</Text>
                   ) : null)}
@@ -586,20 +619,14 @@ export default function TournamentScreen() {
 
               {tournament.depositAmount ? (
                 <>
-                  <View style={[styles.row, { marginTop: 16 }]}>
-                    <Text style={styles.rowIcon}>💳</Text>
-                    <Text style={styles.rowLabel}>Deposit</Text>
-                  </View>
+                  <View style={[styles.row, { marginTop: 16 }]}><Text style={styles.rowIcon}>💳</Text><Text style={styles.rowLabel}>Deposit</Text></View>
                   <Text style={styles.rowValue}>{tournament.depositAmount}{tournament.depositDue ? ` due by ${tournament.depositDue}` : ''}</Text>
                 </>
               ) : null}
 
               {(tournament.contactName || tournament.contactPhone || tournament.contactEmail) ? (
                 <>
-                  <View style={[styles.row, { marginTop: 16 }]}>
-                    <Text style={styles.rowIcon}>📞</Text>
-                    <Text style={styles.rowLabel}>Contact</Text>
-                  </View>
+                  <View style={[styles.row, { marginTop: 16 }]}><Text style={styles.rowIcon}>📞</Text><Text style={styles.rowLabel}>Contact</Text></View>
                   {tournament.contactName ? <Text style={styles.rowValue}>{tournament.contactName}</Text> : null}
                   {tournament.contactPhone ? (
                     <TouchableOpacity onPress={() => Linking.openURL(`tel:${tournament.contactPhone.replace(/\D/g, '')}`)} style={styles.contactLine}>
@@ -620,10 +647,9 @@ export default function TournamentScreen() {
                 {isFull ? 'Tournament Full' : `${spotsLeft} spots left`}
               </Text>
 
-              {/* Waitlist indicator for players */}
               {onWaitlist && !isOwner && (
                 <View style={styles.waitlistBanner}>
-                  <Text style={styles.waitlistBannerText}>📋 You're on the waitlist — we'll notify you if a spot opens.</Text>
+                  <Text style={styles.waitlistBannerText}>📋 You're on the waitlist — you'll be automatically added if a spot opens.</Text>
                 </View>
               )}
             </View>
@@ -649,24 +675,29 @@ export default function TournamentScreen() {
                     </TouchableOpacity>
                   </>
                 ) : isFull && !isCanceled ? (
-                  <TouchableOpacity
-                    style={[styles.joinBtn, { backgroundColor: onWaitlist ? '#a0b8b8' : '#B8860B' }]}
-                    onPress={handleJoinWaitlist}
-                    disabled={onWaitlist}
-                  >
-                    <Text style={styles.joinText}>
-                      {onWaitlist ? '✓ On Waitlist' : 'Join Waitlist'}
-                    </Text>
-                  </TouchableOpacity>
+                  onWaitlist ? (
+                    // Leave waitlist button
+                    <TouchableOpacity
+                      style={styles.leaveWaitlistBtn}
+                      onPress={() => setShowLeaveWaitlistModal(true)}
+                    >
+                      <Text style={styles.leaveWaitlistText}>✓ On Waitlist  ·  Leave</Text>
+                    </TouchableOpacity>
+                  ) : (
+                    <TouchableOpacity
+                      style={[styles.joinBtn, { backgroundColor: sportColor }]}
+                      onPress={() => setShowWaitlistModal(true)}
+                    >
+                      <Text style={styles.joinText}>Join Waitlist</Text>
+                    </TouchableOpacity>
+                  )
                 ) : (
                   <TouchableOpacity
                     style={[styles.joinBtn, isCanceled && styles.joinedBtn]}
                     onPress={() => { if (!isCanceled) setShowTeamModal(true); }}
                     disabled={isCanceled}
                   >
-                    <Text style={styles.joinText}>
-                      {isCanceled ? 'Canceled' : 'Register Team'}
-                    </Text>
+                    <Text style={styles.joinText}>{isCanceled ? 'Canceled' : 'Register Team'}</Text>
                   </TouchableOpacity>
                 )}
               </View>
@@ -689,16 +720,12 @@ export default function TournamentScreen() {
                   <Text style={styles.modalCloseText}>✕</Text>
                 </TouchableOpacity>
               </View>
-
               <Text style={styles.modalLabel}>Team Name</Text>
               <TextInput style={styles.modalInput} placeholder="e.g. Gallup Ballers" placeholderTextColor="#a0b8b8" value={teamName} onChangeText={setTeamName} />
-
               <Text style={styles.modalLabel}>Your Name</Text>
               <TextInput style={styles.modalInput} placeholder="e.g. John Begay" placeholderTextColor="#a0b8b8" value={contactName} onChangeText={setContactName} />
-
               <Text style={styles.modalLabel}>Your Contact Info</Text>
               <TextInput style={styles.modalInput} placeholder="e.g. 928-555-1234" placeholderTextColor="#a0b8b8" value={contactInfo} onChangeText={v => setContactInfo(formatPhone(v))} keyboardType="phone-pad" maxLength={12} />
-
               <Text style={styles.modalLabel}>Division</Text>
               <TouchableOpacity style={styles.modalDropdown} onPress={() => setShowDivisionPicker(!showDivisionPicker)}>
                 <Text style={teamDivision ? styles.modalDropdownSelected : styles.modalDropdownPlaceholder}>{teamDivision || 'Select division...'}</Text>
@@ -716,19 +743,16 @@ export default function TournamentScreen() {
                   ))}
                 </View>
               )}
-
               {teamDivision && getDivisionFee(teamDivision) ? (
                 <View style={styles.selectedDivisionFeeBox}>
                   <Text style={styles.selectedDivisionFeeText}>💵 Entry fee for {teamDivision}: {getDivisionFee(teamDivision)}</Text>
                 </View>
               ) : null}
-
               {tournament.depositAmount && !isEditingRegistration ? (
                 <View style={styles.depositNotice}>
                   <Text style={styles.depositNoticeText}>💰 Non-refundable deposit of {tournament.depositAmount}{tournament.depositDue ? ` due by ${tournament.depositDue}` : ' required'}.</Text>
                 </View>
               ) : null}
-
               <View style={styles.modalBtns}>
                 <TouchableOpacity style={styles.modalCancelBtn} onPress={tryCloseModal}>
                   <Text style={styles.modalCancelText}>Cancel</Text>
@@ -760,16 +784,61 @@ export default function TournamentScreen() {
         </View>
       </Modal>
 
-      {/* Waitlist Confirmation Modal */}
+      {/* Leave Waitlist Confirm Modal */}
+      <Modal visible={showLeaveWaitlistModal} animationType="fade" transparent>
+        <View style={styles.successOverlay}>
+          <View style={styles.deleteBox}>
+            <Text style={[styles.deleteModalTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>LEAVE WAITLIST?</Text>
+            <Text style={styles.deleteModalMsg}>You'll lose your spot in line for {tournament.name}. If a spot opens, someone else will be added first.</Text>
+            <View style={styles.deleteModalBtns}>
+              <TouchableOpacity style={styles.deleteModalCancelBtn} onPress={() => setShowLeaveWaitlistModal(false)}>
+                <Text style={[styles.deleteModalCancelText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>KEEP SPOT</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.deleteModalConfirmBtn} onPress={doLeaveWaitlist} disabled={leaveWaitlistLoading}>
+                <Text style={[styles.deleteModalConfirmText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>{leaveWaitlistLoading ? 'LEAVING...' : 'LEAVE'}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Waitlist Join Modal */}
       <Modal visible={showWaitlistModal} animationType="fade" transparent>
         <View style={styles.successOverlay}>
           <View style={styles.successBox}>
-            <Text style={{ fontSize: 40, marginBottom: 8 }}>⏳</Text>
-            <Text style={[styles.successTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>ON THE WAITLIST</Text>
-            <Text style={styles.successMsg}>You'll get a notification if a spot opens up in {tournament.name}.</Text>
-            <TouchableOpacity style={[styles.successBtn, { backgroundColor: sportColor }]} onPress={() => setShowWaitlistModal(false)}>
-              <Text style={[styles.successBtnText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>GOT IT</Text>
-            </TouchableOpacity>
+            {onWaitlist ? (
+              <>
+                <Text style={{ fontSize: 40, marginBottom: 8 }}>⏳</Text>
+                <Text style={[styles.successTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>ON THE WAITLIST</Text>
+                <Text style={styles.successMsg}>You'll be automatically added to {tournament.name} if a spot opens.</Text>
+                <TouchableOpacity style={[styles.successBtn, { backgroundColor: sportColor }]} onPress={() => setShowWaitlistModal(false)}>
+                  <Text style={[styles.successBtnText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>GOT IT</Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <>
+                <Text style={{ fontSize: 40, marginBottom: 8 }}>📋</Text>
+                <Text style={[styles.successTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>JOIN WAITLIST</Text>
+                <Text style={styles.successMsg}>You'll be automatically added if a spot opens. Add your phone so the organizer can reach you.</Text>
+                <TextInput
+                  style={styles.waitlistPhoneInput}
+                  placeholder="Phone number (optional)"
+                  placeholderTextColor="#a0b8b8"
+                  value={waitlistPhone}
+                  onChangeText={v => setWaitlistPhone(formatPhone(v))}
+                  keyboardType="phone-pad"
+                  maxLength={12}
+                />
+                <View style={styles.waitlistModalBtns}>
+                  <TouchableOpacity style={styles.waitlistModalCancelBtn} onPress={() => setShowWaitlistModal(false)}>
+                    <Text style={styles.waitlistModalCancelText}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={[styles.waitlistModalConfirmBtn, { backgroundColor: sportColor }]} onPress={handleJoinWaitlist}>
+                    <Text style={[styles.successBtnText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>JOIN</Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            )}
           </View>
         </View>
       </Modal>
@@ -802,21 +871,16 @@ export default function TournamentScreen() {
             <SuccessTrophy />
             <Text style={[styles.successTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>TEAM REGISTERED!</Text>
             <Text style={styles.successMsg}>{successData?.teamName} is registered for {successData?.tournamentName}.</Text>
-
             {successData?.depositMsg ? (
               <View style={styles.successDepositBox}>
                 <Text style={styles.successDepositText}>💰 {successData.depositMsg}</Text>
               </View>
             ) : null}
-
             <View style={styles.paymentPromptBox}>
               <Text style={styles.paymentPromptTitle}>💳 Payment Details</Text>
               <Text style={styles.paymentPromptText}>Contact the organizer for payment instructions and accepted methods.</Text>
-              {successData?.contactInfo ? (
-                <Text style={styles.paymentContactInfo}>{successData.contactInfo}</Text>
-              ) : null}
+              {successData?.contactInfo ? <Text style={styles.paymentContactInfo}>{successData.contactInfo}</Text> : null}
             </View>
-
             <TouchableOpacity style={[styles.successBtn, { backgroundColor: sportColor }]} onPress={() => setShowSuccessModal(false)}>
               <Text style={[styles.successBtnText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>GOT IT</Text>
             </TouchableOpacity>
@@ -846,6 +910,9 @@ const styles = StyleSheet.create({
   teamCard: { backgroundColor: '#fff', borderRadius: 16, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: '#f0f0f0', shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 4, elevation: 1 },
   teamCardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
   teamName: { fontSize: 17, fontWeight: '900', color: '#111', flex: 1 },
+  teamCardBadges: { flexDirection: 'row', gap: 6, alignItems: 'center' },
+  waitlistAutoTag: { backgroundColor: '#e0f5f5', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1, borderColor: '#a0d8d8' },
+  waitlistAutoTagText: { fontSize: 11, color: '#008080', fontWeight: '600' },
   teamDivisionBadge: { borderRadius: 20, paddingHorizontal: 10, paddingVertical: 3, borderWidth: 1 },
   teamDivisionText: { fontSize: 12, fontWeight: '600' },
   submittedLabel: { fontSize: 10, color: '#aaa', fontWeight: '600', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 },
@@ -855,10 +922,11 @@ const styles = StyleSheet.create({
   contactLineText: { fontSize: 12, color: '#777' },
   tappableLink: { color: '#008080', textDecorationLine: 'underline' },
   waitlistCard: { flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: '#fff', borderRadius: 16, padding: 16, marginBottom: 10, borderWidth: 1, borderColor: '#f0f0f0', shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 4, elevation: 1 },
-  waitlistPosition: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#fff8e0', borderWidth: 1, borderColor: '#f0d080', alignItems: 'center', justifyContent: 'center' },
-  waitlistPositionText: { fontSize: 16, color: '#B8860B', fontWeight: '900' },
+  waitlistPosition: { width: 36, height: 36, borderRadius: 10, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  waitlistPositionText: { fontSize: 16, fontWeight: '900' },
   waitlistInfo: { flex: 1 },
   waitlistName: { fontSize: 15, color: '#111', fontWeight: '700', letterSpacing: 0.5 },
+  waitlistPhone: { fontSize: 12, fontWeight: '600', marginTop: 2 },
   waitlistDate: { fontSize: 12, color: '#a0b8b8', marginTop: 2 },
   waitlistBanner: { backgroundColor: '#fff8e0', borderRadius: 12, padding: 12, marginTop: 12, borderWidth: 1, borderColor: '#f0d080' },
   waitlistBannerText: { fontSize: 13, color: '#7a5a00', fontWeight: '600', lineHeight: 18 },
@@ -890,6 +958,8 @@ const styles = StyleSheet.create({
   joinBtn: { backgroundColor: '#008080', borderRadius: 16, paddingVertical: 16, alignItems: 'center' },
   joinedBtn: { backgroundColor: '#a0b8b8' },
   joinText: { color: '#fff', fontSize: 17, fontWeight: 'bold' },
+  leaveWaitlistBtn: { borderRadius: 16, paddingVertical: 16, alignItems: 'center', borderWidth: 1.5, borderColor: '#a0b8b8', backgroundColor: '#f5ede0' },
+  leaveWaitlistText: { fontSize: 15, color: '#5a7a7a', fontWeight: '600' },
   cancelRegBtn: { borderRadius: 16, paddingVertical: 14, alignItems: 'center', borderWidth: 1, borderColor: '#cc4444' },
   cancelRegText: { fontSize: 15, color: '#cc4444', fontWeight: '600' },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
@@ -940,4 +1010,9 @@ const styles = StyleSheet.create({
   deleteModalCancelText: { fontSize: 16, color: '#555', letterSpacing: 1 },
   deleteModalConfirmBtn: { flex: 1, backgroundColor: '#1a1a2e', borderRadius: 14, paddingVertical: 14, alignItems: 'center' },
   deleteModalConfirmText: { color: '#fff', fontSize: 16, letterSpacing: 1 },
+  waitlistPhoneInput: { backgroundColor: '#fff', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, fontSize: 15, color: '#003333', borderWidth: 1, borderColor: '#e0d8c8', width: '100%', marginBottom: 16 },
+  waitlistModalBtns: { flexDirection: 'row', gap: 10, width: '100%' },
+  waitlistModalCancelBtn: { flex: 1, borderRadius: 14, paddingVertical: 14, alignItems: 'center', borderWidth: 1, borderColor: '#e0d8c8' },
+  waitlistModalCancelText: { fontSize: 16, color: '#5a7a7a', fontWeight: '600' },
+  waitlistModalConfirmBtn: { flex: 1, borderRadius: 14, paddingVertical: 14, alignItems: 'center' },
 });

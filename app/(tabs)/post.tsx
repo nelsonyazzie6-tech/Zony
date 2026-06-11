@@ -138,6 +138,14 @@ function TournamentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
   const [showDepositDuePicker, setShowDepositDuePicker] = useState(false);
   const [loading, setLoading] = useState(false);
 
+  // Item 1 — manual location fallback
+  const [useManualLocation, setUseManualLocation] = useState(false);
+  const [manualVenue, setManualVenue] = useState('');
+  const [manualAddress, setManualAddress] = useState('');
+  const [manualCity, setManualCity] = useState('');
+  const [manualState, setManualState] = useState('');
+  const [manualZip, setManualZip] = useState('');
+
   const spectatorFeeRef = useRef<TextInput>(null);
   const rosterSizeRef = useRef<TextInput>(null);
   const spotsRef = useRef<TextInput>(null);
@@ -146,9 +154,20 @@ function TournamentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
   const contactEmailRef = useRef<TextInput>(null);
   const depositAmountRef = useRef<TextInput>(null);
 
+  // Item 2 — auto-fill contact name from account
   useEffect(() => {
-    const user = auth.currentUser;
-    if (user?.email) setContactEmail(user.email);
+    const load = async () => {
+      const user = auth.currentUser;
+      if (!user) return;
+      if (user.email) setContactEmail(user.email);
+      try {
+        const snap = await getDoc(doc(db, 'users', user.uid));
+        if (snap.exists() && snap.data().username) {
+          setContactName(snap.data().username);
+        }
+      } catch (_) {}
+    };
+    load();
   }, []);
 
   const resetFields = () => {
@@ -159,6 +178,8 @@ function TournamentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
     setContactName(''); setContactPhone(''); setContactEmail('');
     setPrizeRows([{ cash: '', physical: '' }, { cash: '', physical: '' }, { cash: '', physical: '' }]);
     setDepositAmount(''); setDepositDue('');
+    setUseManualLocation(false);
+    setManualVenue(''); setManualAddress(''); setManualCity(''); setManualState(''); setManualZip('');
   };
 
   const handlePlaceSelect = (data: any, details: any) => {
@@ -220,7 +241,12 @@ function TournamentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
   const handleDepositDueConfirm = (date: Date) => { setDepositDue(date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })); setShowDepositDuePicker(false); };
 
   const handleSubmit = async () => {
-    if (!name || !sport || !startDate || !endDate || !city || !state || !spots) return;
+    const finalCity = useManualLocation ? manualCity : city;
+    const finalState = useManualLocation ? manualState : state;
+    const finalAddress = useManualLocation ? (manualVenue ? `${manualVenue}${manualAddress ? ', ' + manualAddress : ''}` : manualAddress) : address;
+    const finalZip = useManualLocation ? manualZip : zip;
+
+    if (!name || !sport || !startDate || !endDate || !finalCity || !finalState || !spots) return;
     const user = auth.currentUser;
     if (!user) return;
     setLoading(true);
@@ -230,8 +256,9 @@ function TournamentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
       const organizerName = userSnap.exists() ? (userSnap.data().username || '') : '';
       const organizerPhoto = userSnap.exists() ? (userSnap.data().photoURL || '') : '';
       await addDoc(collection(db, 'tournaments'), {
-        name, sport, date: `${startDate} - ${endDate}`, address, city, state, zip,
-        location: `${city}, ${state}`, spots: parseInt(spots),
+        name, sport, date: `${startDate} - ${endDate}`,
+        address: finalAddress, city: finalCity, state: finalState, zip: finalZip,
+        location: `${finalCity}, ${finalState}`, spots: parseInt(spots),
         divisionFees,
         spectatorFee: spectatorFee ? `$${spectatorFee}` : '',
         divisions, rosterSize, contactName, contactPhone, contactEmail,
@@ -307,37 +334,100 @@ function TournamentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
           </TouchableOpacity>
           <DateTimePickerModal isVisible={showEndPicker} mode="date" onConfirm={(date) => { handleEndConfirm(date); setTimeout(() => scrollRef.current?.scrollTo({ y: 420, animated: true }), 300); }} onCancel={() => setShowEndPicker(false)} />
 
+          {/* Item 1 — Venue / Address with manual fallback */}
           <Text style={styles.label}>Venue / Address</Text>
-          <View style={styles.placesWrapper}>
-            <GooglePlacesAutocomplete
-              placeholder="Search gym, school, or address..."
-              onPress={handlePlaceSelect}
-              fetchDetails={true}
-              minLength={2}
-              listViewDisplayed="auto"
-              textInputProps={{ placeholderTextColor: '#a0b8b8' }}
-              query={{ key: GOOGLE_API_KEY, language: 'en', components: 'country:us' }}
-              styles={{
-                textInputContainer: { backgroundColor: 'transparent' },
-                textInput: { backgroundColor: '#fff', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, fontSize: 15, color: '#003333', borderWidth: 1, borderColor: '#e0d8c8', height: 48 },
-                listView: { backgroundColor: '#fff', borderRadius: 12, borderWidth: 1, borderColor: '#e0d8c8', marginTop: 4 },
-                row: { paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#fff' },
-                description: { fontSize: 14, color: '#003333' },
-                separator: { backgroundColor: '#f0fafa' },
-                predefinedPlacesDescription: { color: '#003333' },
-              }}
-              enablePoweredByContainer={false}
-            />
-          </View>
 
-          {(address || city || state) ? (
-            <View style={styles.autoFilledBox}>
-              <Text style={styles.autoFilledText}>📍 {[address, city, state, zip].filter(Boolean).join(', ')}</Text>
-              <TouchableOpacity onPress={() => { setAddress(''); setCity(''); setState(''); setZip(''); }}>
-                <Text style={styles.clearText}>Clear</Text>
+          {!useManualLocation ? (
+            <>
+              <View style={styles.placesWrapper}>
+                <GooglePlacesAutocomplete
+                  placeholder="Search gym, school, or address..."
+                  onPress={handlePlaceSelect}
+                  fetchDetails={true}
+                  minLength={2}
+                  listViewDisplayed="auto"
+                  textInputProps={{ placeholderTextColor: '#a0b8b8' }}
+                  query={{ key: GOOGLE_API_KEY, language: 'en', components: 'country:us' }}
+                  styles={{
+                    textInputContainer: { backgroundColor: 'transparent' },
+                    textInput: { backgroundColor: '#fff', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, fontSize: 15, color: '#003333', borderWidth: 1, borderColor: '#e0d8c8', height: 48 },
+                    listView: { backgroundColor: '#fff', borderRadius: 12, borderWidth: 1, borderColor: '#e0d8c8', marginTop: 4 },
+                    row: { paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#fff' },
+                    description: { fontSize: 14, color: '#003333' },
+                    separator: { backgroundColor: '#f0fafa' },
+                    predefinedPlacesDescription: { color: '#003333' },
+                  }}
+                  enablePoweredByContainer={false}
+                />
+              </View>
+              {(address || city || state) ? (
+                <View style={styles.autoFilledBox}>
+                  <Text style={styles.autoFilledText}>📍 {[address, city, state, zip].filter(Boolean).join(', ')}</Text>
+                  <TouchableOpacity onPress={() => { setAddress(''); setCity(''); setState(''); setZip(''); }}>
+                    <Text style={styles.clearText}>Clear</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : null}
+              <TouchableOpacity style={styles.manualToggleBtn} onPress={() => setUseManualLocation(true)}>
+                <Text style={styles.manualToggleText}>Can't find your venue? Enter manually</Text>
               </TouchableOpacity>
+            </>
+          ) : (
+            <View style={styles.manualLocationBlock}>
+              <View style={styles.manualLocationHeader}>
+                <Text style={styles.manualLocationTitle}>Manual Location Entry</Text>
+                <TouchableOpacity onPress={() => { setUseManualLocation(false); setManualVenue(''); setManualAddress(''); setManualCity(''); setManualState(''); setManualZip(''); }}>
+                  <Text style={styles.manualLocationSwitch}>Use Search Instead</Text>
+                </TouchableOpacity>
+              </View>
+              <TextInput
+                style={styles.input}
+                placeholder="Venue name (e.g. Gallup High School Gym)"
+                placeholderTextColor="#a0b8b8"
+                value={manualVenue}
+                onChangeText={setManualVenue}
+                returnKeyType="next"
+              />
+              <TextInput
+                style={styles.input}
+                placeholder="Street address (optional)"
+                placeholderTextColor="#a0b8b8"
+                value={manualAddress}
+                onChangeText={setManualAddress}
+                returnKeyType="next"
+              />
+              <View style={styles.manualCityRow}>
+                <TextInput
+                  style={[styles.input, { flex: 2 }]}
+                  placeholder="City"
+                  placeholderTextColor="#a0b8b8"
+                  value={manualCity}
+                  onChangeText={setManualCity}
+                  returnKeyType="next"
+                />
+                <TextInput
+                  style={[styles.input, { flex: 1 }]}
+                  placeholder="State"
+                  placeholderTextColor="#a0b8b8"
+                  value={manualState}
+                  onChangeText={t => setManualState(t.toUpperCase().slice(0, 2))}
+                  autoCapitalize="characters"
+                  maxLength={2}
+                  returnKeyType="next"
+                />
+                <TextInput
+                  style={[styles.input, { flex: 1 }]}
+                  placeholder="ZIP"
+                  placeholderTextColor="#a0b8b8"
+                  value={manualZip}
+                  onChangeText={setManualZip}
+                  keyboardType="numeric"
+                  maxLength={5}
+                  returnKeyType="next"
+                />
+              </View>
             </View>
-          ) : null}
+          )}
 
           <Text style={styles.label}>Divisions</Text>
           <TouchableOpacity style={styles.dropdown} onPress={() => { Keyboard.dismiss(); setShowDivisionPicker(!showDivisionPicker); setShowSportPicker(false); setShowStatePicker(false); }}>
@@ -465,8 +555,6 @@ function BoardForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: () =>
   const [loading, setLoading] = useState(false);
 
   const availableDivisions = forTournamentDivisions.length > 0 ? forTournamentDivisions : divisionOptions;
-
-  // Pick a random placeholder on mount
   const descPlaceholder = boardDescriptionPlaceholders[Math.floor(Math.random() * boardDescriptionPlaceholders.length)];
 
   useEffect(() => {
@@ -714,9 +802,16 @@ const styles = StyleSheet.create({
   backBtn: { backgroundColor: '#008080', borderRadius: 12, paddingVertical: 16, paddingHorizontal: 32, marginTop: 20 },
   backText: { color: '#fff', fontSize: 16, letterSpacing: 1 },
   placesWrapper: { marginBottom: 12, zIndex: 10 },
-  autoFilledBox: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#e0f5f5', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, marginBottom: 12 },
+  autoFilledBox: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#e0f5f5', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, marginBottom: 8 },
   autoFilledText: { fontSize: 13, color: '#003333', flex: 1, marginRight: 8 },
   clearText: { fontSize: 13, color: '#008080', fontWeight: 'bold' },
+  manualToggleBtn: { paddingVertical: 10, alignItems: 'center', marginBottom: 4 },
+  manualToggleText: { fontSize: 13, color: '#008080', fontWeight: '600', textDecorationLine: 'underline' },
+  manualLocationBlock: { backgroundColor: '#f0fafa', borderRadius: 14, padding: 14, marginBottom: 8, borderWidth: 1, borderColor: '#e0f0f0', gap: 4 },
+  manualLocationHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  manualLocationTitle: { fontSize: 13, fontWeight: '700', color: '#003333' },
+  manualLocationSwitch: { fontSize: 12, color: '#008080', fontWeight: '600', textDecorationLine: 'underline' },
+  manualCityRow: { flexDirection: 'row', gap: 6 },
   prizesHint: { fontSize: 12, color: '#a0b8b8', marginBottom: 10, marginTop: -4 },
   prizeRowBlock: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 10, gap: 8 },
   prizePlaceLabel: { backgroundColor: '#7A1E1E', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 8, minWidth: 36, alignItems: 'center', marginTop: 2 },

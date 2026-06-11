@@ -31,13 +31,16 @@ export default function ProfileScreen() {
   const router = useRouter();
   const user = auth.currentUser;
   const [myPosted, setMyPosted] = useState<any[]>([]);
-  const [myJoined, setMyJoined] = useState([]);
+  const [myRegistered, setMyRegistered] = useState<any[]>([]);
   const [photoURL, setPhotoURL] = useState<string | null>(null);
   const [fullName, setFullName] = useState('');
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [removingPhoto, setRemovingPhoto] = useState(false);
   const [fontsLoaded] = useFonts({ Rajdhani_700Bold });
   const [deletingTournamentId, setDeletingTournamentId] = useState<string | null>(null);
+
+  // Item 6 — profile tab state
+  const [profileTab, setProfileTab] = useState<'posted' | 'registered'>('posted');
 
   const [showNameModal, setShowNameModal] = useState(false);
   const [nameInput, setNameInput] = useState('');
@@ -94,9 +97,23 @@ export default function ProfileScreen() {
       setMyPosted(active);
     });
 
+    // Item 6 — listen for registered tournaments
     const joinedQuery = query(collection(db, 'tournaments'), where('joinedUsers', 'array-contains', user.uid));
     const unsubJoined = onSnapshot(joinedQuery, snap => {
-      setMyJoined(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      const now = new Date();
+      const active = snap.docs
+        .map(d => ({ id: d.id, ...d.data() }))
+        .filter((t: any) => {
+          if (t.status === 'canceled') return false;
+          if (t.date) {
+            const parts = t.date.split(' - ');
+            const endStr = parts[1] || parts[0];
+            const endDate = new Date(endStr);
+            if (!isNaN(endDate.getTime())) return endDate >= now;
+          }
+          return true;
+        });
+      setMyRegistered(active);
     });
 
     return () => { unsubPosted(); unsubJoined(); };
@@ -190,42 +207,26 @@ export default function ProfileScreen() {
     setTournamentToDelete(null);
   };
 
-  // Item 14 — cascade delete account
   const confirmDeleteAccount = async () => {
     if (!user) return;
     setDeletingAccount(true);
     try {
       const uid = user.uid;
-
-      // Delete tournaments posted by user
       const tournamentsSnap = await getDocs(query(collection(db, 'tournaments'), where('postedBy', '==', uid)));
       await Promise.all(tournamentsSnap.docs.map(d => deleteDoc(d.ref)));
-
-      // Delete board posts
       const boardSnap = await getDocs(query(collection(db, 'board'), where('postedBy', '==', uid)));
       await Promise.all(boardSnap.docs.map(d => deleteDoc(d.ref)));
-
-      // Delete community posts
       const communitySnap = await getDocs(query(collection(db, 'community'), where('authorId', '==', uid)));
       await Promise.all(communitySnap.docs.map(d => deleteDoc(d.ref)));
-
-      // Delete notifications sent to user
       const notifsSnap = await getDocs(query(collection(db, 'notifications'), where('toUserId', '==', uid)));
       await Promise.all(notifsSnap.docs.map(d => deleteDoc(d.ref)));
-
-      // Delete profile photo from storage
       try {
         const storage = getStorage();
         const storageRef = ref(storage, `profilePhotos/${uid}.jpg`);
         await deleteObject(storageRef);
       } catch (_) {}
-
-      // Delete user doc
       await deleteDoc(doc(db, 'users', uid));
-
-      // Delete Firebase Auth account
       await deleteUser(user);
-
       router.replace('/login');
     } catch (e: any) {
       console.error(e);
@@ -302,50 +303,101 @@ export default function ProfileScreen() {
         </View>
       </View>
 
-      <View style={styles.sectionHeader}>
-        <Text style={[styles.sectionTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>MY TOURNAMENTS</Text>
-        <Text style={styles.sectionCount}>{myPosted.length} active</Text>
+      {/* Item 6 — My Tournaments tab switcher */}
+      <View style={styles.tournamentTabRow}>
+        <TouchableOpacity
+          style={[styles.tournamentTab, profileTab === 'posted' && styles.tournamentTabActive]}
+          onPress={() => setProfileTab('posted')}
+        >
+          <Text style={[styles.tournamentTabText, profileTab === 'posted' && styles.tournamentTabTextActive, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>
+            POSTED ({myPosted.length})
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tournamentTab, profileTab === 'registered' && styles.tournamentTabActive]}
+          onPress={() => setProfileTab('registered')}
+        >
+          <Text style={[styles.tournamentTabText, profileTab === 'registered' && styles.tournamentTabTextActive, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>
+            REGISTERED ({myRegistered.length})
+          </Text>
+        </TouchableOpacity>
       </View>
 
-      {myPosted.length === 0 ? (
-        <View style={styles.emptyTournaments}>
-          <Text style={styles.emptyTournamentsText}>No active tournaments posted.</Text>
-        </View>
-      ) : (
-        myPosted.map((t: any) => {
-          const sportColor = getSportColor(t.sport);
-          const isDeleting = deletingTournamentId === t.id;
-          return (
-            <View key={t.id} style={styles.tournamentCard}>
-              <TouchableOpacity
-                style={styles.tournamentCardInner}
-                activeOpacity={0.85}
-                onPress={() => router.push({ pathname: '/tournament', params: { id: t.id, postedBy: t.postedBy } })}
-              >
-                <View style={[styles.tournamentSportBar, { backgroundColor: sportColor }]} />
-                <View style={styles.tournamentCardContent}>
-                  <Text style={[styles.tournamentCardName, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]} numberOfLines={1}>{t.name}</Text>
-                  <Text style={styles.tournamentCardDate}>{t.date}</Text>
-                  <Text style={styles.tournamentCardLocation}>{t.city}, {t.state}</Text>
-                </View>
-                <View style={[styles.tournamentSportBadge, { backgroundColor: `${sportColor}20` }]}>
-                  <Text style={[styles.tournamentSportBadgeText, { color: sportColor }]}>{t.sport}</Text>
-                </View>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.tournamentDeleteBtn}
-                onPress={() => handleDeleteTournament(t)}
-                disabled={isDeleting}
-              >
-                {isDeleting ? (
-                  <ActivityIndicator size="small" color="#cc4444" />
-                ) : (
-                  <Text style={styles.tournamentDeleteText}>Delete</Text>
-                )}
-              </TouchableOpacity>
+      {profileTab === 'posted' ? (
+        <>
+          {myPosted.length === 0 ? (
+            <View style={styles.emptyTournaments}>
+              <Text style={styles.emptyTournamentsText}>No active tournaments posted.</Text>
             </View>
-          );
-        })
+          ) : (
+            myPosted.map((t: any) => {
+              const sportColor = getSportColor(t.sport);
+              const isDeleting = deletingTournamentId === t.id;
+              return (
+                <View key={t.id} style={styles.tournamentCard}>
+                  <TouchableOpacity
+                    style={styles.tournamentCardInner}
+                    activeOpacity={0.85}
+                    onPress={() => router.push({ pathname: '/tournament', params: { id: t.id, postedBy: t.postedBy } })}
+                  >
+                    <View style={[styles.tournamentSportBar, { backgroundColor: sportColor }]} />
+                    <View style={styles.tournamentCardContent}>
+                      <Text style={[styles.tournamentCardName, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]} numberOfLines={1}>{t.name}</Text>
+                      <Text style={styles.tournamentCardDate}>{t.date}</Text>
+                      <Text style={styles.tournamentCardLocation}>{t.city}, {t.state}</Text>
+                    </View>
+                    <View style={[styles.tournamentSportBadge, { backgroundColor: `${sportColor}20` }]}>
+                      <Text style={[styles.tournamentSportBadgeText, { color: sportColor }]}>{t.sport}</Text>
+                    </View>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.tournamentDeleteBtn}
+                    onPress={() => handleDeleteTournament(t)}
+                    disabled={isDeleting}
+                  >
+                    {isDeleting ? (
+                      <ActivityIndicator size="small" color="#cc4444" />
+                    ) : (
+                      <Text style={styles.tournamentDeleteText}>Delete</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              );
+            })
+          )}
+        </>
+      ) : (
+        <>
+          {myRegistered.length === 0 ? (
+            <View style={styles.emptyTournaments}>
+              <Text style={styles.emptyTournamentsText}>No registered tournaments.</Text>
+            </View>
+          ) : (
+            myRegistered.map((t: any) => {
+              const sportColor = getSportColor(t.sport);
+              return (
+                <TouchableOpacity
+                  key={t.id}
+                  style={styles.tournamentCard}
+                  activeOpacity={0.85}
+                  onPress={() => router.push({ pathname: '/tournament', params: { id: t.id, postedBy: t.postedBy } })}
+                >
+                  <View style={styles.tournamentCardInner}>
+                    <View style={[styles.tournamentSportBar, { backgroundColor: sportColor }]} />
+                    <View style={styles.tournamentCardContent}>
+                      <Text style={[styles.tournamentCardName, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]} numberOfLines={1}>{t.name}</Text>
+                      <Text style={styles.tournamentCardDate}>{t.date}</Text>
+                      <Text style={styles.tournamentCardLocation}>{t.city}, {t.state}</Text>
+                    </View>
+                    <View style={[styles.tournamentSportBadge, { backgroundColor: `${sportColor}20` }]}>
+                      <Text style={[styles.tournamentSportBadgeText, { color: sportColor }]}>{t.sport}</Text>
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              );
+            })
+          )}
+        </>
       )}
 
       <View style={[styles.card, { marginTop: 16 }]}>
@@ -586,9 +638,12 @@ const styles = StyleSheet.create({
   logoutText: { color: '#dc2626', fontSize: 14, fontWeight: '600' },
   deleteAccountBtn: { marginTop: 12, paddingVertical: 10 },
   deleteAccountText: { fontSize: 12, color: '#ccc', fontWeight: '500' },
-  sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '90%', marginBottom: 8, marginTop: 4 },
-  sectionTitle: { fontSize: 13, color: '#003333', letterSpacing: 2, fontWeight: '700' },
-  sectionCount: { fontSize: 12, color: '#a0b8b8', fontWeight: '500' },
+  // Item 6 — tournament tab styles
+  tournamentTabRow: { flexDirection: 'row', width: '90%', backgroundColor: '#e8e8e8', borderRadius: 12, padding: 3, marginBottom: 10, marginTop: 4 },
+  tournamentTab: { flex: 1, paddingVertical: 9, borderRadius: 10, alignItems: 'center' },
+  tournamentTabActive: { backgroundColor: '#008080' },
+  tournamentTabText: { fontSize: 12, color: '#888', letterSpacing: 0.5 },
+  tournamentTabTextActive: { color: '#fff' },
   emptyTournaments: { width: '90%', backgroundColor: '#fff', borderRadius: 14, padding: 16, alignItems: 'center', marginBottom: 12, borderWidth: 1, borderColor: '#e8e8e8' },
   emptyTournamentsText: { fontSize: 13, color: '#a0b8b8' },
   tournamentCard: { width: '90%', backgroundColor: '#fff', borderRadius: 14, marginBottom: 10, borderWidth: 1, borderColor: '#e8e8e8', overflow: 'hidden', shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 4, elevation: 1 },
