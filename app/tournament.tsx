@@ -1,6 +1,6 @@
 import { Rajdhani_700Bold, useFonts } from '@expo-google-fonts/rajdhani';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { addDoc, arrayRemove, arrayUnion, collection, deleteDoc, doc, getDoc, getDocs, increment, onSnapshot, orderBy, query, runTransaction, serverTimestamp, updateDoc } from 'firebase/firestore';
+import { addDoc, arrayRemove, arrayUnion, collection, deleteDoc, doc, getDoc, getDocs, increment, onSnapshot, orderBy, query, runTransaction, serverTimestamp, updateDoc, where } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 import { Clipboard, Image, KeyboardAvoidingView, Linking, Modal, Platform, ScrollView, Share, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
@@ -34,13 +34,36 @@ function formatPhone(val: string) {
   return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}`;
 }
 
+// Reusable styled info modal matching app theme
+function InfoModal({ visible, title, message, onClose }: { visible: boolean; title: string; message: string; onClose: () => void }) {
+  const [fontsLoaded] = useFonts({ Rajdhani_700Bold });
+  return (
+    <Modal visible={visible} animationType="fade" transparent>
+      <View style={styles.successOverlay}>
+        <View style={styles.deleteBox}>
+          <Text style={[styles.deleteModalTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>{title}</Text>
+          <Text style={styles.deleteModalMsg}>{message}</Text>
+          <TouchableOpacity style={[styles.successBtn, { backgroundColor: '#008080', alignSelf: 'stretch' }]} onPress={onClose}>
+            <Text style={[styles.successBtnText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>OK</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
 export default function TournamentScreen() {
   const { id, postedBy } = useLocalSearchParams();
   const router = useRouter();
   const [tournament, setTournament] = useState<any>(null);
   const [joined, setJoined] = useState(false);
   const [onWaitlist, setOnWaitlist] = useState(false);
+  const [myWaitlistDivision, setMyWaitlistDivision] = useState<string | null>(null);
+
+  // spotsLeft is per-division when the tournament has divisions, otherwise a single number
+  const [divisionSpotsLeft, setDivisionSpotsLeft] = useState<Record<string, number>>({});
   const [spotsLeft, setSpotsLeft] = useState(0);
+
   const [activeTab, setActiveTab] = useState<'details' | 'teams' | 'waitlist'>('details');
   const [teams, setTeams] = useState([]);
   const [waitlistEntries, setWaitlistEntries] = useState([]);
@@ -65,8 +88,18 @@ export default function TournamentScreen() {
   const [cancelConfirmVisible, setCancelConfirmVisible] = useState(false);
   const [fontsLoaded] = useFonts({ Rajdhani_700Bold });
   const [waitlistPhone, setWaitlistPhone] = useState('');
+  const [waitlistDivision, setWaitlistDivision] = useState('');
+  const [showWaitlistDivisionPicker, setShowWaitlistDivisionPicker] = useState(false);
+
+  // Info modal (replaces silent failures for "division full" etc.)
+  const [infoModal, setInfoModal] = useState<{ visible: boolean; title: string; message: string }>({
+    visible: false, title: '', message: '',
+  });
+
   const user = auth.currentUser;
   const isOwner = user?.uid === postedBy;
+
+  const hasDivisionSpots = (data: any) => data?.divisionSpots && Object.keys(data.divisionSpots).length > 0;
 
   useEffect(() => {
     const load = async () => {
@@ -75,15 +108,22 @@ export default function TournamentScreen() {
       if (snap.exists()) {
         const data = snap.data();
         setTournament(data);
-        setSpotsLeft(data.spots);
+        if (hasDivisionSpots(data)) {
+          setDivisionSpotsLeft(data.divisionSpots);
+        } else {
+          setSpotsLeft(data.spots);
+        }
         if (data.joinedUsers?.includes(user?.uid)) setJoined(true);
       }
       if (user) {
         const userSnap = await getDoc(doc(db, 'users', user.uid));
         if (userSnap.exists()) setCurrentUsername(userSnap.data().username || user.email || '');
         const waitlistSnap = await getDocs(collection(db, 'tournaments', id as string, 'waitlist'));
-        const isOnWaitlist = waitlistSnap.docs.some(d => d.data().userId === user.uid);
-        setOnWaitlist(isOnWaitlist);
+        const myEntry = waitlistSnap.docs.find(d => d.data().userId === user.uid);
+        if (myEntry) {
+          setOnWaitlist(true);
+          setMyWaitlistDivision(myEntry.data().division || null);
+        }
       }
     };
     load();
@@ -117,19 +157,33 @@ export default function TournamentScreen() {
       const teamsSnap = await getDocs(collection(db, 'tournaments', id as string, 'teams'));
       const myTeam = teamsSnap.docs.find(d => d.data().registeredBy === user?.uid);
       const myTeamData = myTeam?.data();
+      const cancelingDivision: string = myTeamData?.division || '';
 
       if (myTeam) await deleteDoc(doc(db, 'tournaments', id as string, 'teams', myTeam.id));
+
+      const usesDivisionSpots = hasDivisionSpots(tournament);
 
       await runTransaction(db, async (tx) => {
         const tRef = doc(db, 'tournaments', id as string);
         const tSnap = await tx.get(tRef);
         if (!tSnap.exists()) return;
-        tx.update(tRef, { joinedUsers: arrayRemove(user?.uid), spots: increment(1) });
+        if (usesDivisionSpots && cancelingDivision) {
+          tx.update(tRef, {
+            joinedUsers: arrayRemove(user?.uid),
+            [`divisionSpots.${cancelingDivision}`]: increment(1),
+          });
+        } else {
+          tx.update(tRef, { joinedUsers: arrayRemove(user?.uid), spots: increment(1) });
+        }
       });
 
       setJoined(false);
       setMyTeamId(null);
-      setSpotsLeft(prev => prev + 1);
+      if (usesDivisionSpots && cancelingDivision) {
+        setDivisionSpotsLeft(prev => ({ ...prev, [cancelingDivision]: (prev[cancelingDivision] || 0) + 1 }));
+      } else {
+        setSpotsLeft(prev => prev + 1);
+      }
 
       const cancelingName = myTeamData?.contactName || currentUsername || 'A team';
       const cancelingTeamName = myTeamData?.teamName || 'Unknown team';
@@ -156,26 +210,50 @@ export default function TournamentScreen() {
         });
       }
 
-      const waitlistSnap = await getDocs(
-        query(collection(db, 'tournaments', id as string, 'waitlist'), orderBy('createdAt', 'asc'))
-      );
+      // Promote next waitlisted person FOR THE SAME DIVISION (or any, if no divisions)
+      let waitlistQueryRef;
+      if (usesDivisionSpots && cancelingDivision) {
+        waitlistQueryRef = query(
+          collection(db, 'tournaments', id as string, 'waitlist'),
+          where('division', '==', cancelingDivision),
+          orderBy('createdAt', 'asc')
+        );
+      } else {
+        waitlistQueryRef = query(collection(db, 'tournaments', id as string, 'waitlist'), orderBy('createdAt', 'asc'));
+      }
+
+      const waitlistSnap = await getDocs(waitlistQueryRef);
       if (waitlistSnap.docs.length > 0) {
         const first = waitlistSnap.docs[0];
         const firstData = first.data();
         const firstUserId = firstData.userId;
+        const promotedDivision = firstData.division || cancelingDivision || '';
 
         await runTransaction(db, async (tx) => {
           const tRef = doc(db, 'tournaments', id as string);
           const tSnap = await tx.get(tRef);
           if (!tSnap.exists()) return;
-          tx.update(tRef, { joinedUsers: arrayUnion(firstUserId), spots: increment(-1) });
+          if (usesDivisionSpots && promotedDivision) {
+            tx.update(tRef, {
+              joinedUsers: arrayUnion(firstUserId),
+              [`divisionSpots.${promotedDivision}`]: increment(-1),
+            });
+          } else {
+            tx.update(tRef, { joinedUsers: arrayUnion(firstUserId), spots: increment(-1) });
+          }
         });
+
+        if (usesDivisionSpots && promotedDivision) {
+          setDivisionSpotsLeft(prev => ({ ...prev, [promotedDivision]: Math.max(0, (prev[promotedDivision] || 0) - 1) }));
+        } else {
+          setSpotsLeft(prev => Math.max(0, prev - 1));
+        }
 
         await addDoc(collection(db, 'tournaments', id as string, 'teams'), {
           teamName: firstData.username || 'Waitlist Team',
           contactName: firstData.username || '',
           contactInfo: firstData.phone || '',
-          division: '',
+          division: promotedDivision,
           registeredBy: firstUserId,
           fromWaitlist: true,
           createdAt: serverTimestamp(),
@@ -219,19 +297,28 @@ export default function TournamentScreen() {
 
   const handleJoinWaitlist = async () => {
     if (!user || onWaitlist) return;
+    const usesDivisionSpots = hasDivisionSpots(tournament);
+    if (usesDivisionSpots && !waitlistDivision) {
+      setInfoModal({ visible: true, title: 'SELECT A DIVISION', message: 'Please select which division you want to be waitlisted for.' });
+      return;
+    }
     try {
       await addDoc(collection(db, 'tournaments', id as string, 'waitlist'), {
         userId: user.uid,
         username: currentUsername,
         phone: waitlistPhone.trim() || null,
+        division: usesDivisionSpots ? waitlistDivision : '',
         createdAt: serverTimestamp(),
       });
       setOnWaitlist(true);
+      setMyWaitlistDivision(usesDivisionSpots ? waitlistDivision : null);
       setShowWaitlistModal(true);
+
+      const divisionNote = usesDivisionSpots ? ` (${waitlistDivision})` : '';
 
       await addDoc(collection(db, 'notifications'), {
         toUserId: postedBy as string,
-        message: `${currentUsername} joined the waitlist for ${tournament?.name}`,
+        message: `${currentUsername} joined the waitlist for ${tournament?.name}${divisionNote}`,
         body: "They'll be automatically added if a spot opens.",
         link: `/tournament?id=${id}&postedBy=${postedBy}`,
         createdAt: serverTimestamp(),
@@ -246,7 +333,7 @@ export default function TournamentScreen() {
           body: JSON.stringify({
             to: ownerSnap.data().pushToken,
             title: '📋 New waitlist signup',
-            body: `${currentUsername} joined the waitlist for ${tournament?.name}.`,
+            body: `${currentUsername} joined the waitlist for ${tournament?.name}${divisionNote}.`,
           }),
         });
       }
@@ -262,6 +349,7 @@ export default function TournamentScreen() {
       const myEntry = waitlistSnap.docs.find(d => d.data().userId === user.uid);
       if (myEntry) await deleteDoc(myEntry.ref);
       setOnWaitlist(false);
+      setMyWaitlistDivision(null);
       setShowLeaveWaitlistModal(false);
 
       await addDoc(collection(db, 'notifications'), {
@@ -305,6 +393,11 @@ export default function TournamentScreen() {
     return fee ? `$${fee}` : null;
   };
 
+  const getDivisionSpotsLeft = (div: string): number | null => {
+    if (!hasDivisionSpots(tournament)) return null;
+    return divisionSpotsLeft[div] ?? tournament.divisionSpots[div] ?? 0;
+  };
+
   const handleRegisterTeam = async () => {
     if (!teamName || !contactName || !contactInfo || !teamDivision) return;
     if (!user) return;
@@ -319,21 +412,49 @@ export default function TournamentScreen() {
         setIsEditingRegistration(false);
         setMyTeamId(null);
       } else {
+        const usesDivisionSpots = hasDivisionSpots(tournament);
         let registered = false;
+        let wasFull = false;
+
         await runTransaction(db, async (tx) => {
           const tRef = doc(db, 'tournaments', id as string);
           const tSnap = await tx.get(tRef);
           if (!tSnap.exists()) return;
-          const spots = tSnap.data().spots;
-          if (spots <= 0) return;
-          tx.update(tRef, { joinedUsers: arrayUnion(user.uid), spots: increment(-1) });
+          const data = tSnap.data();
+
+          if (usesDivisionSpots) {
+            const divSpots = data.divisionSpots?.[teamDivision];
+            if (divSpots === undefined || divSpots <= 0) { wasFull = true; return; }
+            tx.update(tRef, {
+              joinedUsers: arrayUnion(user.uid),
+              [`divisionSpots.${teamDivision}`]: increment(-1),
+            });
+          } else {
+            const spots = data.spots;
+            if (spots <= 0) { wasFull = true; return; }
+            tx.update(tRef, { joinedUsers: arrayUnion(user.uid), spots: increment(-1) });
+          }
           registered = true;
         });
+
+        if (wasFull) {
+          setTeamLoading(false);
+          setInfoModal({
+            visible: true,
+            title: 'DIVISION FULL',
+            message: `The ${teamDivision} division is full. You can join the waitlist for this division instead.`,
+          });
+          return;
+        }
 
         if (!registered) { setTeamLoading(false); return; }
 
         setJoined(true);
-        setSpotsLeft(prev => prev - 1);
+        if (usesDivisionSpots) {
+          setDivisionSpotsLeft(prev => ({ ...prev, [teamDivision]: Math.max(0, (prev[teamDivision] ?? tournament.divisionSpots[teamDivision] ?? 0) - 1) }));
+        } else {
+          setSpotsLeft(prev => prev - 1);
+        }
 
         await addDoc(collection(db, 'tournaments', id as string, 'teams'), {
           teamName, contactName, contactInfo,
@@ -435,7 +556,12 @@ export default function TournamentScreen() {
 
   if (!tournament) return null;
   const isCanceled = tournament.status === 'canceled';
-  const isFull = spotsLeft <= 0;
+  const usesDivisionSpots = hasDivisionSpots(tournament);
+
+  // "Full" means: no divisions and spots <= 0, OR every division is at 0
+  const isFull = usesDivisionSpots
+    ? tournament.divisions.every((d: string) => getDivisionSpotsLeft(d) === 0)
+    : spotsLeft <= 0;
 
   const sportColor = tournament.sport === 'Basketball' ? '#008080'
     : tournament.sport === 'Volleyball' ? '#7A1E1E'
@@ -533,6 +659,11 @@ export default function TournamentScreen() {
                     </View>
                     <View style={styles.waitlistInfo}>
                       <Text style={[styles.waitlistName, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>{w.username || 'Unknown'}</Text>
+                      {w.division ? (
+                        <View style={[styles.teamDivisionBadge, { backgroundColor: `${sportColor}20`, borderColor: sportColor, alignSelf: 'flex-start', marginTop: 4, marginBottom: 2 }]}>
+                          <Text style={[styles.teamDivisionText, { color: sportColor }]}>{w.division}</Text>
+                        </View>
+                      ) : null}
                       {w.phone ? (
                         <TouchableOpacity onPress={() => Linking.openURL(`tel:${w.phone.replace(/\D/g, '')}`)}>
                           <Text style={[styles.waitlistPhone, { color: sportColor }]}>📱 {w.phone}</Text>
@@ -589,7 +720,12 @@ export default function TournamentScreen() {
                   <View style={[styles.row, { marginTop: 16 }]}><Text style={styles.rowIcon}>🏅</Text><Text style={styles.rowLabel}>Divisions</Text></View>
                   {tournament.divisions.map((d: string) => {
                     const fee = getDivisionFee(d);
-                    return <Text key={d} style={styles.rowValue}>{d}{fee ? `  —  ${fee}` : ''}</Text>;
+                    const divSpots = getDivisionSpotsLeft(d);
+                    return (
+                      <Text key={d} style={styles.rowValue}>
+                        {d}{fee ? `  —  ${fee}` : ''}{divSpots !== null ? `  •  ${divSpots === 0 ? 'Full' : `${divSpots} spot${divSpots === 1 ? '' : 's'} left`}` : ''}
+                      </Text>
+                    );
                   })}
                 </>
               )}
@@ -643,13 +779,17 @@ export default function TournamentScreen() {
                 </>
               ) : null}
 
-              <Text style={[styles.spotsText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>
-                {isFull ? 'Tournament Full' : `${spotsLeft} spots left`}
-              </Text>
+              {!usesDivisionSpots && (
+                <Text style={[styles.spotsText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>
+                  {isFull ? 'Tournament Full' : `${spotsLeft} spots left`}
+                </Text>
+              )}
 
               {onWaitlist && !isOwner && (
                 <View style={styles.waitlistBanner}>
-                  <Text style={styles.waitlistBannerText}>📋 You're on the waitlist — you'll be automatically added if a spot opens.</Text>
+                  <Text style={styles.waitlistBannerText}>
+                    📋 You're on the waitlist{myWaitlistDivision ? ` for ${myWaitlistDivision}` : ''} — you'll be automatically added if a spot opens.
+                  </Text>
                 </View>
               )}
             </View>
@@ -674,23 +814,32 @@ export default function TournamentScreen() {
                       <Text style={styles.cancelRegText}>Cancel Registration</Text>
                     </TouchableOpacity>
                   </>
-                ) : isFull && !isCanceled ? (
-                  onWaitlist ? (
-                    // Leave waitlist button
+                ) : onWaitlist ? (
+                  // Already on a waitlist — show leave option, but still allow registering
+                  // in case a different division has room
+                  <>
                     <TouchableOpacity
                       style={styles.leaveWaitlistBtn}
                       onPress={() => setShowLeaveWaitlistModal(true)}
                     >
-                      <Text style={styles.leaveWaitlistText}>✓ On Waitlist  ·  Leave</Text>
+                      <Text style={styles.leaveWaitlistText}>✓ On Waitlist{myWaitlistDivision ? ` (${myWaitlistDivision})` : ''}  ·  Leave</Text>
                     </TouchableOpacity>
-                  ) : (
-                    <TouchableOpacity
-                      style={[styles.joinBtn, { backgroundColor: sportColor }]}
-                      onPress={() => setShowWaitlistModal(true)}
-                    >
-                      <Text style={styles.joinText}>Join Waitlist</Text>
-                    </TouchableOpacity>
-                  )
+                    {!isFull && !isCanceled && (
+                      <TouchableOpacity
+                        style={[styles.joinBtn, { backgroundColor: sportColor }]}
+                        onPress={() => setShowTeamModal(true)}
+                      >
+                        <Text style={styles.joinText}>Register Team</Text>
+                      </TouchableOpacity>
+                    )}
+                  </>
+                ) : isFull && !isCanceled ? (
+                  <TouchableOpacity
+                    style={[styles.joinBtn, { backgroundColor: sportColor }]}
+                    onPress={() => setShowWaitlistModal(true)}
+                  >
+                    <Text style={styles.joinText}>Join Waitlist</Text>
+                  </TouchableOpacity>
                 ) : (
                   <TouchableOpacity
                     style={[styles.joinBtn, isCanceled && styles.joinedBtn]}
@@ -733,19 +882,30 @@ export default function TournamentScreen() {
               </TouchableOpacity>
               {showDivisionPicker && (
                 <View style={styles.modalDropdownList}>
-                  {registrationDivisions.map((d: string) => (
-                    <TouchableOpacity key={d} style={styles.modalDropdownItem} onPress={() => { setTeamDivision(d); setShowDivisionPicker(false); }}>
-                      <View style={styles.divisionPickerRow}>
-                        <Text style={[styles.modalDropdownItemText, teamDivision === d && styles.modalDropdownItemActive]}>{d}</Text>
-                        {getDivisionFee(d) ? <Text style={styles.divisionFeeTag}>{getDivisionFee(d)}</Text> : null}
-                      </View>
-                    </TouchableOpacity>
-                  ))}
+                  {registrationDivisions.map((d: string) => {
+                    const divSpots = getDivisionSpotsLeft(d);
+                    const divFull = divSpots === 0;
+                    return (
+                      <TouchableOpacity key={d} style={styles.modalDropdownItem} onPress={() => { setTeamDivision(d); setShowDivisionPicker(false); }}>
+                        <View style={styles.divisionPickerRow}>
+                          <Text style={[styles.modalDropdownItemText, teamDivision === d && styles.modalDropdownItemActive]}>
+                            {d}{divFull ? ' (Full)' : ''}
+                          </Text>
+                          {getDivisionFee(d) ? <Text style={styles.divisionFeeTag}>{getDivisionFee(d)}</Text> : null}
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
                 </View>
               )}
               {teamDivision && getDivisionFee(teamDivision) ? (
                 <View style={styles.selectedDivisionFeeBox}>
                   <Text style={styles.selectedDivisionFeeText}>💵 Entry fee for {teamDivision}: {getDivisionFee(teamDivision)}</Text>
+                </View>
+              ) : null}
+              {teamDivision && getDivisionSpotsLeft(teamDivision) === 0 ? (
+                <View style={styles.depositNotice}>
+                  <Text style={styles.depositNoticeText}>⚠️ {teamDivision} is currently full. You'll be notified if you try to register, and can join the waitlist instead.</Text>
                 </View>
               ) : null}
               {tournament.depositAmount && !isEditingRegistration ? (
@@ -789,7 +949,7 @@ export default function TournamentScreen() {
         <View style={styles.successOverlay}>
           <View style={styles.deleteBox}>
             <Text style={[styles.deleteModalTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>LEAVE WAITLIST?</Text>
-            <Text style={styles.deleteModalMsg}>You'll lose your spot in line for {tournament.name}. If a spot opens, someone else will be added first.</Text>
+            <Text style={styles.deleteModalMsg}>You'll lose your spot in line for {tournament.name}{myWaitlistDivision ? ` (${myWaitlistDivision})` : ''}. If a spot opens, someone else will be added first.</Text>
             <View style={styles.deleteModalBtns}>
               <TouchableOpacity style={styles.deleteModalCancelBtn} onPress={() => setShowLeaveWaitlistModal(false)}>
                 <Text style={[styles.deleteModalCancelText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>KEEP SPOT</Text>
@@ -810,7 +970,7 @@ export default function TournamentScreen() {
               <>
                 <Text style={{ fontSize: 40, marginBottom: 8 }}>⏳</Text>
                 <Text style={[styles.successTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>ON THE WAITLIST</Text>
-                <Text style={styles.successMsg}>You'll be automatically added to {tournament.name} if a spot opens.</Text>
+                <Text style={styles.successMsg}>You'll be automatically added to {tournament.name}{myWaitlistDivision ? ` (${myWaitlistDivision})` : ''} if a spot opens.</Text>
                 <TouchableOpacity style={[styles.successBtn, { backgroundColor: sportColor }]} onPress={() => setShowWaitlistModal(false)}>
                   <Text style={[styles.successBtnText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>GOT IT</Text>
                 </TouchableOpacity>
@@ -820,6 +980,25 @@ export default function TournamentScreen() {
                 <Text style={{ fontSize: 40, marginBottom: 8 }}>📋</Text>
                 <Text style={[styles.successTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>JOIN WAITLIST</Text>
                 <Text style={styles.successMsg}>You'll be automatically added if a spot opens. Add your phone so the organizer can reach you.</Text>
+
+                {usesDivisionSpots && (
+                  <View style={{ width: '100%', marginBottom: 12 }}>
+                    <TouchableOpacity style={styles.modalDropdown} onPress={() => setShowWaitlistDivisionPicker(!showWaitlistDivisionPicker)}>
+                      <Text style={waitlistDivision ? styles.modalDropdownSelected : styles.modalDropdownPlaceholder}>{waitlistDivision || 'Select division...'}</Text>
+                      <Text style={styles.dropdownArrow}>{showWaitlistDivisionPicker ? '▲' : '▼'}</Text>
+                    </TouchableOpacity>
+                    {showWaitlistDivisionPicker && (
+                      <View style={styles.modalDropdownList}>
+                        {registrationDivisions.map((d: string) => (
+                          <TouchableOpacity key={d} style={styles.modalDropdownItem} onPress={() => { setWaitlistDivision(d); setShowWaitlistDivisionPicker(false); }}>
+                            <Text style={[styles.modalDropdownItemText, waitlistDivision === d && styles.modalDropdownItemActive]}>{d}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    )}
+                  </View>
+                )}
+
                 <TextInput
                   style={styles.waitlistPhoneInput}
                   placeholder="Phone number (optional)"
@@ -887,6 +1066,13 @@ export default function TournamentScreen() {
           </View>
         </View>
       </Modal>
+
+      <InfoModal
+        visible={infoModal.visible}
+        title={infoModal.title}
+        message={infoModal.message}
+        onClose={() => setInfoModal({ visible: false, title: '', message: '' })}
+      />
 
     </KeyboardAvoidingView>
   );

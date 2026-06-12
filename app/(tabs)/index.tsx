@@ -146,16 +146,6 @@ export default function HomeScreen() {
 
   const hasActiveFilters = sport !== 'All' || stateFilter !== 'All States' || search.trim() !== '';
 
-  const getEntryFeeDisplay = (t: any): string[] => {
-    if (t.divisionFees && Object.keys(t.divisionFees).length > 0) {
-      return Object.entries(t.divisionFees)
-        .filter(([, fee]) => fee)
-        .map(([div, fee]) => `💵 ${div}: $${fee}`);
-    }
-    if (t.entryFee) return [`💵 ${t.entryFee} entry`];
-    return [];
-  };
-
   return (
     <View style={styles.container}>
       <View style={styles.headerBlock} onLayout={e => setHeaderHeight(e.nativeEvent.layout.height)}>
@@ -259,10 +249,7 @@ export default function HomeScreen() {
             const organizerInitials = t.organizerName
               ? t.organizerName.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase()
               : '?';
-            const entryFeeLines = getEntryFeeDisplay(t);
-            const prizeLines: string[] = t.prizes
-              ? t.prizes.split(/\n| · /).map((s: string) => s.trim()).filter(Boolean)
-              : [];
+            const hasDivisions = t.divisions?.length > 0;
 
             return (
               <TouchableOpacity
@@ -277,31 +264,25 @@ export default function HomeScreen() {
                   <Text style={styles.detail}>📅 {t.date}</Text>
                   <Text style={styles.detail}>📍 {t.city}, {t.state}</Text>
 
-                  {entryFeeLines.map((line, i) => (
-                    <Text key={i} style={styles.fee}>{line}</Text>
-                  ))}
-
-                  {t.spectatorFee ? <Text style={styles.fee}>🎟 {t.spectatorFee} spectators</Text> : null}
-
-                  {prizeLines.length > 0 && (
-                    <View style={styles.prizesBlock}>
-                      <Text style={styles.prizesLabel}>🏆 Prizes</Text>
-                      {prizeLines.map((line: string, i: number) => (
-                        <View key={i} style={styles.prizeLineRow}>
-                          <Text style={styles.prizeLine}>{line}</Text>
+                  {hasDivisions ? (
+                    <View style={styles.divisionsRow}>
+                      <Text style={[styles.divisionsText, { color: sportColor }]}>🏅 {t.divisions.join(', ')}</Text>
+                      {t.status === 'canceled' && (
+                        <View style={[styles.canceledBadge, { marginTop: 4, alignSelf: 'flex-start' }]}>
+                          <Text style={styles.canceledBadgeText}>Canceled</Text>
                         </View>
-                      ))}
+                      )}
+                    </View>
+                  ) : (
+                    <View style={styles.spotsRow}>
+                      <Text style={[styles.spots, { color: sportColor }]}>{t.spots} spots left</Text>
+                      {t.status === 'canceled' && (
+                        <View style={styles.canceledBadge}>
+                          <Text style={styles.canceledBadgeText}>Canceled</Text>
+                        </View>
+                      )}
                     </View>
                   )}
-
-                  <View style={styles.spotsRow}>
-                    <Text style={[styles.spots, { color: sportColor }]}>{t.spots} spots left</Text>
-                    {t.status === 'canceled' && (
-                      <View style={styles.canceledBadge}>
-                        <Text style={styles.canceledBadgeText}>Canceled</Text>
-                      </View>
-                    )}
-                  </View>
 
                   {t.organizerName ? (
                     <View style={styles.organizerRow}>
@@ -436,11 +417,8 @@ const styles = StyleSheet.create({
   name: { fontSize: 17, fontWeight: 'bold', color: '#f5ede0', flex: 1, marginRight: 8, textTransform: 'uppercase', letterSpacing: 1.2 },
   sportBadge: { fontSize: 11, backgroundColor: '#f5ede0', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, overflow: 'hidden', fontWeight: 'bold' },
   detail: { fontSize: 14, color: '#5a5a5a', marginBottom: 4 },
-  fee: { fontSize: 13, color: '#7A1E1E', fontWeight: '600', marginBottom: 2 },
-  prizesBlock: { marginTop: 6, marginBottom: 4, flexDirection: 'column' },
-  prizesLabel: { fontSize: 12, fontWeight: '700', color: '#003333', marginBottom: 4 },
-  prizeLineRow: { width: '100%', marginBottom: 2 },
-  prizeLine: { fontSize: 12, color: '#5a5a5a', paddingLeft: 4 },
+  divisionsRow: { marginTop: 6 },
+  divisionsText: { fontSize: 13, fontWeight: '600' },
   spotsRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 6 },
   spots: { fontSize: 13, fontWeight: '600' },
   canceledBadge: { backgroundColor: '#7A1E1E', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 2 },

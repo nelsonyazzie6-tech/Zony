@@ -1,6 +1,6 @@
 import { Rajdhani_700Bold, useFonts } from '@expo-google-fonts/rajdhani';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { addDoc, collection, doc, getDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
+import { addDoc, collection, doc, getDoc, getDocs, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { useEffect, useRef, useState } from 'react';
 import { Keyboard, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
 import { GooglePlacesAutocomplete } from 'react-native-google-places-autocomplete';
@@ -77,6 +77,7 @@ export default function EditTournamentScreen() {
   const [divisions, setDivisions] = useState<string[]>([]);
   const [showDivisionPicker, setShowDivisionPicker] = useState(false);
   const [divisionFees, setDivisionFees] = useState<Record<string, string>>({});
+  const [divisionSpots, setDivisionSpots] = useState<Record<string, string>>({});
   const [spectatorFee, setSpectatorFee] = useState('');
   const [rosterSize, setRosterSize] = useState('');
   const [contactName, setContactName] = useState('');
@@ -85,6 +86,11 @@ export default function EditTournamentScreen() {
   const [prizeRows, setPrizeRows] = useState<{ cash: string; physical: string }[]>([
     { cash: '', physical: '' }, { cash: '', physical: '' }, { cash: '', physical: '' },
   ]);
+
+  // Manual prizes fallback — toggle between structured rows and free text
+  const [useManualPrizes, setUseManualPrizes] = useState(false);
+  const [manualPrizes, setManualPrizes] = useState('');
+
   const [depositAmount, setDepositAmount] = useState('');
   const [depositDue, setDepositDue] = useState('');
   const [showDepositDuePicker, setShowDepositDuePicker] = useState(false);
@@ -101,6 +107,9 @@ export default function EditTournamentScreen() {
     date: '', location: '', divisions: [], joinedUsers: [],
   });
 
+  // Track how many teams are currently registered per division (for shrink warnings)
+  const registeredCountRef = useRef<Record<string, number>>({});
+
   const spectatorFeeRef = useRef<TextInput>(null);
   const rosterSizeRef = useRef<TextInput>(null);
   const spotsRef = useRef<TextInput>(null);
@@ -108,6 +117,11 @@ export default function EditTournamentScreen() {
   const contactPhoneRef = useRef<TextInput>(null);
   const contactEmailRef = useRef<TextInput>(null);
   const depositAmountRef = useRef<TextInput>(null);
+
+  // "Available Spots" is only meaningful when there are no divisions, or
+  // when at least one selected division has been left blank (and thus
+  // needs this value as its fallback).
+  const needsAvailableSpots = divisions.length === 0 || divisions.some(d => !divisionSpots[d]?.trim());
 
   useEffect(() => {
     const load = async () => {
@@ -127,6 +141,16 @@ export default function EditTournamentScreen() {
       setSpots(d.spots?.toString() || '');
       setDivisions(d.divisions || []);
       setDivisionFees(d.divisionFees || {});
+
+      // Load current remaining spots per division (what's actually stored)
+      const loadedDivisionSpots: Record<string, string> = {};
+      if (d.divisionSpots) {
+        Object.entries(d.divisionSpots).forEach(([div, val]) => {
+          loadedDivisionSpots[div] = String(val);
+        });
+      }
+      setDivisionSpots(loadedDivisionSpots);
+
       setSpectatorFee(d.spectatorFee?.replace('$', '') || '');
       setRosterSize(d.rosterSize || '');
       setContactName(d.contactName || '');
@@ -143,21 +167,46 @@ export default function EditTournamentScreen() {
         joinedUsers: d.joinedUsers || [],
       };
 
-      if (d.prizes) {
-        const parts = d.prizes.split(' · ');
-        const parsed = parts.map((p: string) => {
-          const withoutLabel = p.replace(/^[^:]+:\s*/, '');
-          if (withoutLabel.includes(' + ')) {
-            const [cashPart, physical] = withoutLabel.split(' + ');
-            return { cash: cashPart.replace('$', '').replace(/,/g, ''), physical };
-          } else if (withoutLabel.startsWith('$')) {
-            return { cash: withoutLabel.replace('$', '').replace(/,/g, ''), physical: '' };
-          } else {
-            return { cash: '', physical: withoutLabel };
-          }
+      // Count currently registered teams per division (for shrink warnings)
+      try {
+        const teamsSnap = await getDocs(collection(db, 'tournaments', id as string, 'teams'));
+        const counts: Record<string, number> = {};
+        teamsSnap.docs.forEach(t => {
+          const div = t.data().division;
+          if (div) counts[div] = (counts[div] || 0) + 1;
         });
-        const padded = [...parsed, ...Array(Math.max(0, 3 - parsed.length)).fill({ cash: '', physical: '' })];
-        setPrizeRows(padded);
+        registeredCountRef.current = counts;
+      } catch (_) {}
+
+      // Determine whether prizes were entered in structured format
+      // ("1st: ... · 2nd: ...") or free-form manual text. If every
+      // non-empty segment starts with a recognized place label, treat
+      // as structured; otherwise load into the manual textarea as-is.
+      if (d.prizes) {
+        const segments = d.prizes.split(/ · |\n/).map((s: string) => s.trim()).filter(Boolean);
+        const isStructured = segments.length > 0 && segments.every((seg: string) =>
+          placeLabels.some(label => seg.startsWith(`${label}:`))
+        );
+
+        if (isStructured) {
+          const parsed = segments.map((p: string) => {
+            const withoutLabel = p.replace(/^[^:]+:\s*/, '');
+            if (withoutLabel.includes(' + ')) {
+              const [cashPart, physical] = withoutLabel.split(' + ');
+              return { cash: cashPart.replace('$', '').replace(/,/g, ''), physical };
+            } else if (withoutLabel.startsWith('$')) {
+              return { cash: withoutLabel.replace('$', '').replace(/,/g, ''), physical: '' };
+            } else {
+              return { cash: '', physical: withoutLabel };
+            }
+          });
+          const padded = [...parsed, ...Array(Math.max(0, 3 - parsed.length)).fill({ cash: '', physical: '' })];
+          setPrizeRows(padded);
+          setUseManualPrizes(false);
+        } else {
+          setManualPrizes(d.prizes);
+          setUseManualPrizes(true);
+        }
       }
 
       setDataLoaded(true);
@@ -169,6 +218,7 @@ export default function EditTournamentScreen() {
     setDivisions(prev => {
       if (prev.includes(d)) {
         setDivisionFees(f => { const n = { ...f }; delete n[d]; return n; });
+        setDivisionSpots(s => { const n = { ...s }; delete n[d]; return n; });
         return prev.filter(x => x !== d);
       }
       return [...prev, d];
@@ -191,6 +241,7 @@ export default function EditTournamentScreen() {
   };
 
   const formatPrizes = () => {
+    if (useManualPrizes) return manualPrizes.trim();
     return prizeRows.map((row, i) => {
       const cash = row.cash.trim();
       const physical = row.physical.trim();
@@ -245,7 +296,7 @@ export default function EditTournamentScreen() {
     if (!startDate) missing.push('Start Date');
     if (!endDate) missing.push('End Date');
     if (!city || !state) missing.push('Venue / Address (city & state)');
-    if (!spots) missing.push('Available Spots');
+    if (needsAvailableSpots && !spots) missing.push('Available Spots');
 
     if (missing.length > 0) {
       setInfoModal({ visible: true, title: 'MISSING INFORMATION', message: `Please fill in:\n\n${missing.join('\n')}` });
@@ -254,6 +305,16 @@ export default function EditTournamentScreen() {
 
     setLoading(true);
     const prizesFormatted = formatPrizes();
+
+    // Build final divisionSpots map. Blank entries fall back to the overall
+    // "Available Spots" value, same as the create form.
+    const fallbackSpots = parseInt(spots) || 0;
+    const finalDivisionSpots: Record<string, number> = {};
+    divisions.forEach(d => {
+      const raw = divisionSpots[d];
+      finalDivisionSpots[d] = raw && raw.trim() !== '' ? parseInt(raw) : fallbackSpots;
+    });
+
     try {
       const user = auth.currentUser;
       let organizerName = '';
@@ -274,9 +335,10 @@ export default function EditTournamentScreen() {
         date: newDate,
         address, city, state, zip,
         location: newLocation,
-        spots: parseInt(spots),
+        spots: parseInt(spots) || 0,
         divisions,
         divisionFees,
+        divisionSpots: divisions.length > 0 ? finalDivisionSpots : {},
         spectatorFee: spectatorFee ? `$${spectatorFee}` : '',
         rosterSize, contactName, contactPhone, contactEmail,
         prizes: prizesFormatted,
@@ -432,26 +494,46 @@ export default function EditTournamentScreen() {
 
             {divisions.length > 0 && (
               <View style={styles.divisionFeesBlock}>
-                <Text style={styles.divisionFeesTitle}>Entry Fee per Division</Text>
-                <Text style={styles.divisionFeesHint}>Leave blank if same for all, or set per division</Text>
-                {divisions.map(d => (
-                  <View key={d} style={styles.divisionFeeRow}>
-                    <View style={styles.divisionFeeLabel}>
-                      <Text style={styles.divisionFeeLabelText}>{d}</Text>
+                <Text style={styles.divisionFeesTitle}>Spots & Entry Fee per Division</Text>
+                <Text style={styles.divisionFeesHint}>Spots reflect what's currently open — leave blank to use Available Spots below</Text>
+                {divisions.map(d => {
+                  const registeredCount = registeredCountRef.current[d] || 0;
+                  return (
+                    <View key={d}>
+                      <View style={styles.divisionRow}>
+                        <View style={styles.divisionFeeLabel}>
+                          <Text style={styles.divisionFeeLabelText}>{d}</Text>
+                        </View>
+                        <View style={styles.divisionRowInputs}>
+                          <View style={styles.divisionSpotsInputWrapper}>
+                            <TextInput
+                              style={styles.divisionFeeInput}
+                              placeholder="Spots"
+                              placeholderTextColor="#a0b8b8"
+                              value={divisionSpots[d] || ''}
+                              onChangeText={v => setDivisionSpots(prev => ({ ...prev, [d]: v.replace(/[^0-9]/g, '') }))}
+                              keyboardType="numeric"
+                            />
+                          </View>
+                          <View style={styles.divisionFeeInputWrapper}>
+                            <Text style={styles.prizeInputPrefix}>$</Text>
+                            <TextInput
+                              style={styles.divisionFeeInput}
+                              placeholder="Fee"
+                              placeholderTextColor="#a0b8b8"
+                              value={divisionFees[d] || ''}
+                              onChangeText={v => setDivisionFees(prev => ({ ...prev, [d]: v.replace(/[^0-9]/g, '') }))}
+                              keyboardType="numeric"
+                            />
+                          </View>
+                        </View>
+                      </View>
+                      {registeredCount > 0 && (
+                        <Text style={styles.divisionRegisteredHint}>{registeredCount} team{registeredCount === 1 ? '' : 's'} currently registered in {d}</Text>
+                      )}
                     </View>
-                    <View style={styles.divisionFeeInputWrapper}>
-                      <Text style={styles.prizeInputPrefix}>$</Text>
-                      <TextInput
-                        style={styles.divisionFeeInput}
-                        placeholder="Amount"
-                        placeholderTextColor="#a0b8b8"
-                        value={divisionFees[d] || ''}
-                        onChangeText={v => setDivisionFees(prev => ({ ...prev, [d]: v.replace(/[^0-9]/g, '') }))}
-                        keyboardType="numeric"
-                      />
-                    </View>
-                  </View>
-                ))}
+                  );
+                })}
               </View>
             )}
 
@@ -459,10 +541,14 @@ export default function EditTournamentScreen() {
             <TextInput ref={spectatorFeeRef} style={styles.input} placeholder="Amount in dollars" placeholderTextColor="#a0b8b8" value={spectatorFee} onChangeText={setSpectatorFee} keyboardType="numeric" returnKeyType="next" blurOnSubmit={false} onSubmitEditing={() => rosterSizeRef.current?.focus()} />
 
             <Text style={styles.label}>Roster Size</Text>
-            <TextInput ref={rosterSizeRef} style={styles.input} placeholder="Number of players" placeholderTextColor="#a0b8b8" value={rosterSize} onChangeText={setRosterSize} keyboardType="numeric" returnKeyType="next" blurOnSubmit={false} onSubmitEditing={() => spotsRef.current?.focus()} />
+            <TextInput ref={rosterSizeRef} style={styles.input} placeholder="Number of players" placeholderTextColor="#a0b8b8" value={rosterSize} onChangeText={setRosterSize} keyboardType="numeric" returnKeyType="next" blurOnSubmit={false} onSubmitEditing={() => { if (needsAvailableSpots) { spotsRef.current?.focus(); } else { contactNameRef.current?.focus(); } }} />
 
-            <Text style={styles.label}>Available Spots</Text>
-            <TextInput ref={spotsRef} style={styles.input} placeholder="Number of teams" placeholderTextColor="#a0b8b8" value={spots} onChangeText={setSpots} keyboardType="numeric" returnKeyType="next" blurOnSubmit={false} onSubmitEditing={() => contactNameRef.current?.focus()} />
+            {needsAvailableSpots && (
+              <>
+                <Text style={styles.label}>Available Spots {divisions.length > 0 ? <Text style={styles.optional}>(default for divisions left blank above)</Text> : null}</Text>
+                <TextInput ref={spotsRef} style={styles.input} placeholder="Number of teams" placeholderTextColor="#a0b8b8" value={spots} onChangeText={setSpots} keyboardType="numeric" returnKeyType="next" blurOnSubmit={false} onSubmitEditing={() => contactNameRef.current?.focus()} />
+              </>
+            )}
 
             <Text style={styles.label}>Contact Name</Text>
             <TextInput ref={contactNameRef} style={styles.input} placeholder="Contact name" placeholderTextColor="#a0b8b8" value={contactName} onChangeText={setContactName} returnKeyType="next" blurOnSubmit={false} onSubmitEditing={() => contactPhoneRef.current?.focus()} />
@@ -473,28 +559,56 @@ export default function EditTournamentScreen() {
             <Text style={styles.label}>Contact Email <Text style={styles.optional}>(optional)</Text></Text>
             <TextInput ref={contactEmailRef} style={styles.input} placeholder="Email address" placeholderTextColor="#a0b8b8" value={contactEmail} onChangeText={setContactEmail} keyboardType="email-address" autoCapitalize="none" returnKeyType="next" blurOnSubmit={false} onSubmitEditing={() => Keyboard.dismiss()} />
 
+            {/* Prizes / Awards — structured rows or manual free text */}
             <Text style={styles.label}>Prizes / Awards</Text>
-            <Text style={styles.prizesHint}>Fill in cash, physical prizes, or both per place</Text>
 
-            {prizeRows.map((row, i) => (
-              <View key={i} style={styles.prizeRowBlock}>
-                <View style={styles.prizePlaceLabel}>
-                  <Text style={styles.prizeLabelText}>{placeLabels[i]}</Text>
-                </View>
-                <View style={styles.prizeInputs}>
-                  <View style={styles.prizeInputWrapper}>
-                    <Text style={styles.prizeInputPrefix}>$</Text>
-                    <TextInput style={styles.prizeInputCash} placeholder="Cash amount" placeholderTextColor="#a0b8b8" value={row.cash} onChangeText={(t) => updatePrizeCash(i, t)} keyboardType="numeric" returnKeyType="next" blurOnSubmit={false} />
+            {!useManualPrizes ? (
+              <>
+                <Text style={styles.prizesHint}>Fill in cash, physical prizes, or both per place</Text>
+
+                {prizeRows.map((row, i) => (
+                  <View key={i} style={styles.prizeRowBlock}>
+                    <View style={styles.prizePlaceLabel}>
+                      <Text style={styles.prizeLabelText}>{placeLabels[i]}</Text>
+                    </View>
+                    <View style={styles.prizeInputs}>
+                      <View style={styles.prizeInputWrapper}>
+                        <Text style={styles.prizeInputPrefix}>$</Text>
+                        <TextInput style={styles.prizeInputCash} placeholder="Cash amount" placeholderTextColor="#a0b8b8" value={row.cash} onChangeText={(t) => updatePrizeCash(i, t)} keyboardType="numeric" returnKeyType="next" blurOnSubmit={false} />
+                      </View>
+                      <TextInput style={styles.prizeInputPhysical} placeholder="Trophy, Jacket, etc." placeholderTextColor="#a0b8b8" value={row.physical} onChangeText={(t) => updatePrizePhysical(i, t)} returnKeyType="next" blurOnSubmit={false} onSubmitEditing={i === prizeRows.length - 1 ? focusDeposit : undefined} />
+                    </View>
                   </View>
-                  <TextInput style={styles.prizeInputPhysical} placeholder="Trophy, Jacket, etc." placeholderTextColor="#a0b8b8" value={row.physical} onChangeText={(t) => updatePrizePhysical(i, t)} returnKeyType="next" blurOnSubmit={false} onSubmitEditing={i === prizeRows.length - 1 ? focusDeposit : undefined} />
-                </View>
-              </View>
-            ))}
+                ))}
 
-            {prizeRows.length < 8 && (
-              <TouchableOpacity style={styles.addPrizeBtn} onPress={addPrizeRow}>
-                <Text style={styles.addPrizeBtnText}>+ Add Place</Text>
-              </TouchableOpacity>
+                {prizeRows.length < 8 && (
+                  <TouchableOpacity style={styles.addPrizeBtn} onPress={addPrizeRow}>
+                    <Text style={styles.addPrizeBtnText}>+ Add Place</Text>
+                  </TouchableOpacity>
+                )}
+
+                <TouchableOpacity style={styles.manualToggleBtn} onPress={() => setUseManualPrizes(true)}>
+                  <Text style={styles.manualToggleText}>Don't see the right format? Enter manually</Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <View style={styles.manualLocationBlock}>
+                <View style={styles.manualLocationHeader}>
+                  <Text style={styles.manualLocationTitle}>Manual Prizes Entry</Text>
+                  <TouchableOpacity onPress={() => { setUseManualPrizes(false); setManualPrizes(''); }}>
+                    <Text style={styles.manualLocationSwitch}>Use Structured Format Instead</Text>
+                  </TouchableOpacity>
+                </View>
+                <TextInput
+                  style={[styles.input, styles.textArea]}
+                  placeholder={'e.g.\n1st: $500 + Custom Trophy\n2nd: $250\nAll players: Tournament T-Shirt'}
+                  placeholderTextColor="#a0b8b8"
+                  value={manualPrizes}
+                  onChangeText={setManualPrizes}
+                  multiline
+                  numberOfLines={5}
+                />
+              </View>
             )}
 
             <Text style={styles.label}>Deposit Amount <Text style={styles.optional}>(optional)</Text></Text>
@@ -535,6 +649,7 @@ const styles = StyleSheet.create({
   label: { fontSize: 14, fontWeight: '600', color: '#003333', marginBottom: 6, marginTop: 10 },
   optional: { fontSize: 12, fontWeight: '400', color: '#a0b8b8' },
   input: { backgroundColor: '#fff', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, fontSize: 15, color: '#003333', marginBottom: 4, borderWidth: 1, borderColor: '#e0d8c8' },
+  textArea: { height: 120, textAlignVertical: 'top' },
   dropdown: { backgroundColor: '#fff', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderWidth: 1, borderColor: '#e0d8c8', marginBottom: 4 },
   dropdownPlaceholder: { fontSize: 15, color: '#a0b8b8' },
   dropdownSelected: { fontSize: 15, color: '#003333', flex: 1, marginRight: 8 },
@@ -549,6 +664,12 @@ const styles = StyleSheet.create({
   autoFilledBox: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#e0f5f5', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, marginBottom: 12 },
   autoFilledText: { fontSize: 13, color: '#003333', flex: 1, marginRight: 8 },
   clearText: { fontSize: 13, color: '#008080', fontWeight: 'bold' },
+  manualToggleBtn: { paddingVertical: 10, alignItems: 'center', marginBottom: 4 },
+  manualToggleText: { fontSize: 13, color: '#008080', fontWeight: '600', textDecorationLine: 'underline' },
+  manualLocationBlock: { backgroundColor: '#f0fafa', borderRadius: 14, padding: 14, marginBottom: 8, borderWidth: 1, borderColor: '#e0f0f0', gap: 4 },
+  manualLocationHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  manualLocationTitle: { fontSize: 13, fontWeight: '700', color: '#003333' },
+  manualLocationSwitch: { fontSize: 12, color: '#008080', fontWeight: '600', textDecorationLine: 'underline' },
   prizesHint: { fontSize: 12, color: '#a0b8b8', marginBottom: 10, marginTop: -4 },
   prizeRowBlock: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 10, gap: 8 },
   prizePlaceLabel: { backgroundColor: '#7A1E1E', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 8, minWidth: 36, alignItems: 'center', marginTop: 2 },
@@ -563,11 +684,14 @@ const styles = StyleSheet.create({
   divisionFeesBlock: { backgroundColor: '#f0fafa', borderRadius: 12, padding: 14, marginBottom: 8, borderWidth: 1, borderColor: '#e0f0f0' },
   divisionFeesTitle: { fontSize: 13, fontWeight: '700', color: '#003333', marginBottom: 2 },
   divisionFeesHint: { fontSize: 11, color: '#a0b8b8', marginBottom: 10 },
-  divisionFeeRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 10 },
+  divisionRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 4, gap: 10 },
+  divisionRowInputs: { flex: 1, flexDirection: 'row', gap: 8 },
   divisionFeeLabel: { backgroundColor: '#008080', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6, minWidth: 52, alignItems: 'center' },
   divisionFeeLabelText: { color: '#fff', fontWeight: 'bold', fontSize: 13 },
+  divisionSpotsInputWrapper: { flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 10, borderWidth: 1, borderColor: '#e0d8c8', paddingHorizontal: 10 },
   divisionFeeInputWrapper: { flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 10, borderWidth: 1, borderColor: '#e0d8c8', paddingHorizontal: 10 },
   divisionFeeInput: { flex: 1, paddingVertical: 8, fontSize: 15, color: '#003333' },
+  divisionRegisteredHint: { fontSize: 11, color: '#a0b8b8', marginBottom: 8, paddingLeft: 4 },
   // Info/Error modal styles
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 },
   modalBox: { backgroundColor: '#f5ede0', borderRadius: 24, padding: 24, width: '100%', shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 16, elevation: 8 },
