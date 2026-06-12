@@ -3,7 +3,7 @@ import * as ImageManipulator from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { deleteUser, signOut } from 'firebase/auth';
-import { collection, deleteDoc, doc, getDoc, getDocs, onSnapshot, query, setDoc, where } from 'firebase/firestore';
+import { arrayRemove, collection, deleteDoc, doc, getDoc, getDocs, increment, onSnapshot, query, runTransaction, setDoc, where } from 'firebase/firestore';
 import { deleteObject, getStorage, ref } from 'firebase/storage';
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Image, Linking, Modal, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
@@ -61,6 +61,10 @@ export default function ProfileScreen() {
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [hideContactInfo, setHideContactInfo] = useState(false);
 
+  // Sport Preferences
+  const [preferredSports, setPreferredSports] = useState<string[]>(['Basketball', 'Volleyball', 'Softball']);
+  const [showSportsModal, setShowSportsModal] = useState(false);
+
   const avatarColor = useMemo(() => {
     const index = (user?.uid?.charCodeAt(0) || 0) % AVATAR_COLORS.length;
     return AVATAR_COLORS[index];
@@ -75,6 +79,7 @@ export default function ProfileScreen() {
         if (snap.data().username) setFullName(snap.data().username);
         if (snap.data().notificationsEnabled !== undefined) setNotificationsEnabled(snap.data().notificationsEnabled);
         if (snap.data().hideContactInfo !== undefined) setHideContactInfo(snap.data().hideContactInfo);
+        if (snap.data().preferredSports !== undefined) setPreferredSports(snap.data().preferredSports);
       }
     };
     loadUserData();
@@ -191,6 +196,14 @@ export default function ProfileScreen() {
     await setDoc(doc(db, 'users', user!.uid), { hideContactInfo: val }, { merge: true });
   };
 
+  const handleToggleSport = async (sport: string) => {
+    const updated = preferredSports.includes(sport)
+      ? preferredSports.filter(s => s !== sport)
+      : [...preferredSports, sport];
+    setPreferredSports(updated);
+    await setDoc(doc(db, 'users', user!.uid), { preferredSports: updated }, { merge: true });
+  };
+
   const handleDeleteTournament = (tournament: any) => {
     setTournamentToDelete(tournament);
     setShowDeleteTournamentModal(true);
@@ -212,19 +225,61 @@ export default function ProfileScreen() {
     setDeletingAccount(true);
     try {
       const uid = user.uid;
+
+      // Delete tournaments the user posted
       const tournamentsSnap = await getDocs(query(collection(db, 'tournaments'), where('postedBy', '==', uid)));
       await Promise.all(tournamentsSnap.docs.map(d => deleteDoc(d.ref)));
+
+      // Delete board posts the user made
       const boardSnap = await getDocs(query(collection(db, 'board'), where('postedBy', '==', uid)));
       await Promise.all(boardSnap.docs.map(d => deleteDoc(d.ref)));
+
+      // Delete community posts the user made
       const communitySnap = await getDocs(query(collection(db, 'community'), where('authorId', '==', uid)));
       await Promise.all(communitySnap.docs.map(d => deleteDoc(d.ref)));
+
+      // Delete the user's own notifications
       const notifsSnap = await getDocs(query(collection(db, 'notifications'), where('toUserId', '==', uid)));
       await Promise.all(notifsSnap.docs.map(d => deleteDoc(d.ref)));
+
+      // Clean up registrations in OTHER users' tournaments:
+      // remove user from joinedUsers, free up the spot, delete their team doc
+      const joinedSnap = await getDocs(query(collection(db, 'tournaments'), where('joinedUsers', 'array-contains', uid)));
+      await Promise.all(joinedSnap.docs.map(async (tDoc) => {
+        try {
+          // Remove their team registration doc(s) in this tournament
+          const teamsSnap = await getDocs(collection(db, 'tournaments', tDoc.id, 'teams'));
+          const myTeams = teamsSnap.docs.filter(t => t.data().registeredBy === uid);
+          await Promise.all(myTeams.map(t => deleteDoc(t.ref)));
+
+          // Remove uid from joinedUsers and free up a spot
+          await runTransaction(db, async (tx) => {
+            const tRef = doc(db, 'tournaments', tDoc.id);
+            const tSnap = await tx.get(tRef);
+            if (!tSnap.exists()) return;
+            tx.update(tRef, { joinedUsers: arrayRemove(uid), spots: increment(1) });
+          });
+        } catch (e) { console.log('Cleanup join error:', e); }
+      }));
+
+      // Clean up waitlist entries in OTHER users' tournaments
+      const allTournamentsSnap = await getDocs(collection(db, 'tournaments'));
+      await Promise.all(allTournamentsSnap.docs.map(async (tDoc) => {
+        try {
+          const waitlistSnap = await getDocs(
+            query(collection(db, 'tournaments', tDoc.id, 'waitlist'), where('userId', '==', uid))
+          );
+          await Promise.all(waitlistSnap.docs.map(w => deleteDoc(w.ref)));
+        } catch (e) { console.log('Cleanup waitlist error:', e); }
+      }));
+
+      // Delete profile photo
       try {
         const storage = getStorage();
         const storageRef = ref(storage, `profilePhotos/${uid}.jpg`);
         await deleteObject(storageRef);
       } catch (_) {}
+
       await deleteDoc(doc(db, 'users', uid));
       await deleteUser(user);
       router.replace('/login');
@@ -423,6 +478,17 @@ export default function ProfileScreen() {
           </View>
         </TouchableOpacity>
         <View style={styles.divider} />
+        <TouchableOpacity style={styles.infoRow} onPress={() => setShowSportsModal(true)}>
+          <Svg width={16} height={16} viewBox="0 0 16 16" fill="none">
+            <Circle cx="8" cy="8" r="6" stroke="#666" strokeWidth="1.4" />
+            <Path d="M8 2v12M2 8h12" stroke="#666" strokeWidth="1.4" />
+          </Svg>
+          <Text style={styles.settingLabel}>Sport Preferences</Text>
+          <View style={[styles.togglePill, { backgroundColor: '#008080' }]}>
+            <Text style={styles.togglePillText}>{preferredSports.length}/3</Text>
+          </View>
+        </TouchableOpacity>
+        <View style={styles.divider} />
         <TouchableOpacity style={styles.infoRow} onPress={() => setShowHelpModal(true)}>
           <Svg width={16} height={16} viewBox="0 0 16 16" fill="none">
             <Circle cx="8" cy="8" r="6" stroke="#666" strokeWidth="1.4" />
@@ -577,6 +643,30 @@ export default function ProfileScreen() {
                 : '✗ Your contact info is visible to everyone'}
             </Text>
             <TouchableOpacity style={styles.modalDoneBtn} onPress={() => setShowPrivacyModal(false)}>
+              <Text style={[styles.modalDoneText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>DONE</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Sport Preferences Modal */}
+      <Modal visible={showSportsModal} animationType="fade" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalBox}>
+            <Text style={[styles.modalTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>SPORT PREFERENCES</Text>
+            <Text style={styles.modalSub}>Choose which sports you want tournament alerts for.</Text>
+            {['Basketball', 'Volleyball', 'Softball'].map(sport => (
+              <View key={sport} style={styles.toggleRow}>
+                <Text style={styles.toggleLabel}>{sport}</Text>
+                <Switch
+                  value={preferredSports.includes(sport)}
+                  onValueChange={() => handleToggleSport(sport)}
+                  trackColor={{ false: '#e0e0e0', true: '#008080' }}
+                  thumbColor="#fff"
+                />
+              </View>
+            ))}
+            <TouchableOpacity style={styles.modalDoneBtn} onPress={() => setShowSportsModal(false)}>
               <Text style={[styles.modalDoneText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>DONE</Text>
             </TouchableOpacity>
           </View>

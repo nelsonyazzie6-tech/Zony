@@ -26,6 +26,8 @@ async function sendPush(token: string, title: string, body: string) {
   } catch (e) { console.log('Push error:', e); }
 }
 
+const REPORT_REASONS = ['Spam', 'Scam or Fraud', 'Offensive Content', 'Harassment', 'Other'];
+
 export default function CommunityPostScreen() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
@@ -38,6 +40,12 @@ export default function CommunityPostScreen() {
   const [replyText, setReplyText] = useState('');
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
+
+  // Report state
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [reportSubmitting, setReportSubmitting] = useState(false);
+  const [showReportConfirm, setShowReportConfirm] = useState(false);
+
   const user = auth.currentUser;
 
   useEffect(() => {
@@ -143,6 +151,30 @@ export default function CommunityPostScreen() {
     });
   };
 
+  const handleReport = async (reason: string) => {
+    if (!user || !post) return;
+    setReportSubmitting(true);
+    try {
+      await addDoc(collection(db, 'reports'), {
+        postId: id as string,
+        postType: 'community',
+        postAuthorId: post.authorId || null,
+        postSnapshot: {
+          title: post.title || null,
+          body: post.body || null,
+          type: post.type || null,
+        },
+        reason,
+        reportedBy: user.uid,
+        createdAt: serverTimestamp(),
+        status: 'pending',
+      });
+      setShowReportModal(false);
+      setShowReportConfirm(true);
+    } catch (e: any) { console.log(e); }
+    setReportSubmitting(false);
+  };
+
   if (!post) return null;
   const isSale = post.type === 'Sale';
   const isOwner = user?.uid === post.authorId;
@@ -158,9 +190,13 @@ export default function CommunityPostScreen() {
           <TouchableOpacity onPress={() => router.back()}>
             <Text style={styles.backText}>← Back</Text>
           </TouchableOpacity>
-          {isOwner && (
+          {isOwner ? (
             <TouchableOpacity onPress={() => setShowDeleteModal(true)} style={styles.deleteBtn}>
               <Text style={styles.deleteBtnText}>Delete Post</Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity onPress={() => setShowReportModal(true)} style={styles.reportBtn}>
+              <Text style={styles.reportBtnText}>Report</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -275,6 +311,43 @@ export default function CommunityPostScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Report Reason Modal */}
+      <Modal visible={showReportModal} animationType="fade" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalBox}>
+            <Text style={[styles.modalTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>REPORT POST</Text>
+            <Text style={styles.modalMsg}>Why are you reporting this post?</Text>
+            {REPORT_REASONS.map(reason => (
+              <TouchableOpacity
+                key={reason}
+                style={styles.reportReasonBtn}
+                onPress={() => handleReport(reason)}
+                disabled={reportSubmitting}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.reportReasonText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>{reason}</Text>
+              </TouchableOpacity>
+            ))}
+            <TouchableOpacity style={styles.modalCancelBtnFull} onPress={() => setShowReportModal(false)} disabled={reportSubmitting}>
+              <Text style={[styles.modalCancelText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>CANCEL</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Report Confirmation Modal */}
+      <Modal visible={showReportConfirm} animationType="fade" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalBox}>
+            <Text style={[styles.modalTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>REPORT SUBMITTED</Text>
+            <Text style={styles.modalMsg}>Thanks for letting us know. Our team will review this post.</Text>
+            <TouchableOpacity style={styles.modalOkBtn} onPress={() => setShowReportConfirm(false)}>
+              <Text style={[styles.modalOkText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>OK</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -285,6 +358,8 @@ const styles = StyleSheet.create({
   backText: { fontSize: 16, color: '#008080', fontWeight: '600' },
   deleteBtn: { backgroundColor: '#1a1a2e', borderRadius: 20, paddingHorizontal: 14, paddingVertical: 6 },
   deleteBtnText: { color: '#fff', fontSize: 13, fontWeight: '600' },
+  reportBtn: { backgroundColor: '#fff', borderRadius: 20, paddingHorizontal: 14, paddingVertical: 6, borderWidth: 1, borderColor: '#e0d8c8' },
+  reportBtnText: { color: '#999', fontSize: 13, fontWeight: '600' },
   scroll: { paddingHorizontal: 16, paddingBottom: 20 },
   postCard: { backgroundColor: '#fff', borderRadius: 16, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: '#e8e8e8', shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 4, elevation: 1 },
   postTop: { flexDirection: 'row', alignItems: 'center', marginBottom: 10, gap: 8 },
@@ -325,7 +400,12 @@ const styles = StyleSheet.create({
   modalMsg: { fontSize: 15, color: '#555', textAlign: 'center', lineHeight: 22, marginBottom: 24 },
   modalBtns: { flexDirection: 'row', gap: 12, width: '100%' },
   modalCancelBtn: { flex: 1, backgroundColor: '#fff', borderRadius: 14, paddingVertical: 14, alignItems: 'center', borderWidth: 1, borderColor: '#e0d8c8' },
+  modalCancelBtnFull: { width: '100%', backgroundColor: '#fff', borderRadius: 14, paddingVertical: 14, alignItems: 'center', borderWidth: 1, borderColor: '#e0d8c8', marginTop: 4 },
   modalCancelText: { fontSize: 16, color: '#555', letterSpacing: 1 },
   modalDeleteBtn: { flex: 1, backgroundColor: '#1a1a2e', borderRadius: 14, paddingVertical: 14, alignItems: 'center' },
   modalDeleteText: { color: '#fff', fontSize: 16, letterSpacing: 1 },
+  reportReasonBtn: { width: '100%', backgroundColor: '#fff', borderRadius: 14, paddingVertical: 14, alignItems: 'center', borderWidth: 1, borderColor: '#e0d8c8', marginBottom: 8 },
+  reportReasonText: { fontSize: 15, color: '#003333', letterSpacing: 0.5 },
+  modalOkBtn: { width: '100%', backgroundColor: '#008080', borderRadius: 14, paddingVertical: 14, alignItems: 'center' },
+  modalOkText: { fontSize: 15, color: '#fff', letterSpacing: 1 },
 });

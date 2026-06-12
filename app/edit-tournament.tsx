@@ -1,8 +1,8 @@
 import { Rajdhani_700Bold, useFonts } from '@expo-google-fonts/rajdhani';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { addDoc, collection, doc, getDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { useEffect, useRef, useState } from 'react';
-import { Keyboard, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
+import { Keyboard, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
 import { GooglePlacesAutocomplete } from 'react-native-google-places-autocomplete';
 import DateTimePickerModal from 'react-native-modal-datetime-picker';
 import { auth, db } from '../firebaseConfig';
@@ -26,6 +26,34 @@ function formatPhone(val: string) {
   if (digits.length <= 3) return digits;
   if (digits.length <= 6) return `${digits.slice(0, 3)}-${digits.slice(3)}`;
   return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}`;
+}
+
+async function sendPush(token: string, title: string, body: string) {
+  try {
+    await fetch('https://exp.host/--/api/v2/push/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ to: token, title, body, sound: 'default' }),
+    });
+  } catch (e) { console.log('Push error:', e); }
+}
+
+// Reusable styled info/error modal matching app theme
+function InfoModal({ visible, title, message, onClose }: { visible: boolean; title: string; message: string; onClose: () => void }) {
+  const [fontsLoaded] = useFonts({ Rajdhani_700Bold });
+  return (
+    <Modal visible={visible} animationType="fade" transparent>
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalBox}>
+          <Text style={[styles.modalTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>{title}</Text>
+          <Text style={styles.modalMsg}>{message}</Text>
+          <TouchableOpacity style={styles.modalOkBtn} onPress={onClose}>
+            <Text style={[styles.modalOkText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>OK</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
 }
 
 export default function EditTournamentScreen() {
@@ -63,6 +91,16 @@ export default function EditTournamentScreen() {
   const [loading, setLoading] = useState(false);
   const [dataLoaded, setDataLoaded] = useState(false);
 
+  // Styled info/error modal state
+  const [infoModal, setInfoModal] = useState<{ visible: boolean; title: string; message: string }>({
+    visible: false, title: '', message: '',
+  });
+
+  // Track original values to detect changes for notifications
+  const originalRef = useRef<{ date: string; location: string; divisions: string[]; joinedUsers: string[] }>({
+    date: '', location: '', divisions: [], joinedUsers: [],
+  });
+
   const spectatorFeeRef = useRef<TextInput>(null);
   const rosterSizeRef = useRef<TextInput>(null);
   const spotsRef = useRef<TextInput>(null);
@@ -96,6 +134,14 @@ export default function EditTournamentScreen() {
       setContactEmail(d.contactEmail || '');
       setDepositAmount(d.depositAmount?.replace('$', '') || '');
       setDepositDue(d.depositDue || '');
+
+      // Store originals for change detection
+      originalRef.current = {
+        date: d.date || '',
+        location: d.location || `${d.city || ''}, ${d.state || ''}`,
+        divisions: d.divisions || [],
+        joinedUsers: d.joinedUsers || [],
+      };
 
       if (d.prizes) {
         const parts = d.prizes.split(' · ');
@@ -193,7 +239,19 @@ export default function EditTournamentScreen() {
   };
 
   const handleSave = async () => {
-    if (!name || !sport || !startDate || !endDate || !city || !state || !spots) return;
+    const missing: string[] = [];
+    if (!name) missing.push('Tournament Name');
+    if (!sport) missing.push('Sport');
+    if (!startDate) missing.push('Start Date');
+    if (!endDate) missing.push('End Date');
+    if (!city || !state) missing.push('Venue / Address (city & state)');
+    if (!spots) missing.push('Available Spots');
+
+    if (missing.length > 0) {
+      setInfoModal({ visible: true, title: 'MISSING INFORMATION', message: `Please fill in:\n\n${missing.join('\n')}` });
+      return;
+    }
+
     setLoading(true);
     const prizesFormatted = formatPrizes();
     try {
@@ -207,11 +265,15 @@ export default function EditTournamentScreen() {
           organizerPhoto = userSnap.data().photoURL || '';
         }
       }
+
+      const newDate = `${startDate} - ${endDate}`;
+      const newLocation = `${city}, ${state}`;
+
       await updateDoc(doc(db, 'tournaments', id as string), {
         name, sport,
-        date: `${startDate} - ${endDate}`,
+        date: newDate,
         address, city, state, zip,
-        location: `${city}, ${state}`,
+        location: newLocation,
         spots: parseInt(spots),
         divisions,
         divisionFees,
@@ -223,8 +285,55 @@ export default function EditTournamentScreen() {
         organizerName,
         organizerPhoto,
       });
+
+      // Notify registered users if schedule, location, or divisions changed
+      const original = originalRef.current;
+      const dateChanged = original.date !== newDate;
+      const locationChanged = original.location !== newLocation;
+      const divisionsChanged = JSON.stringify(original.divisions) !== JSON.stringify(divisions);
+
+      if ((dateChanged || locationChanged || divisionsChanged) && original.joinedUsers.length > 0) {
+        let message = 'Tournament details updated';
+        if (dateChanged) message = 'Tournament schedule changed';
+        else if (locationChanged) message = 'Tournament location changed';
+        else if (divisionsChanged) message = 'Tournament divisions updated';
+
+        const bodyParts = [];
+        if (dateChanged) bodyParts.push(`New dates: ${newDate}`);
+        if (locationChanged) bodyParts.push(`New location: ${newLocation}`);
+        const body = bodyParts.length > 0 ? bodyParts.join(' • ') : `${name} has been updated`;
+
+        try {
+          await Promise.all(
+            original.joinedUsers
+              .filter((uid: string) => uid !== user?.uid)
+              .map(async (uid: string) => {
+                await addDoc(collection(db, 'notifications'), {
+                  toUserId: uid,
+                  message: `${message}: ${name}`,
+                  body,
+                  link: `/tournament?id=${id}`,
+                  createdAt: serverTimestamp(),
+                  read: false,
+                });
+                const userSnap = await getDoc(doc(db, 'users', uid));
+                if (userSnap.exists() && userSnap.data().pushToken && userSnap.data().notificationsEnabled !== false) {
+                  await sendPush(userSnap.data().pushToken, `📋 ${message}`, `${name} — ${body}`);
+                }
+              })
+          );
+        } catch (e) { console.log('Notify error:', e); }
+      }
+
       router.back();
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      console.error(e);
+      setInfoModal({
+        visible: true,
+        title: 'SAVE FAILED',
+        message: 'We couldn\'t save your changes. Check your internet connection and try again.',
+      });
+    }
     setLoading(false);
   };
 
@@ -405,6 +514,13 @@ export default function EditTournamentScreen() {
           </View>
         </ScrollView>
       </TouchableWithoutFeedback>
+
+      <InfoModal
+        visible={infoModal.visible}
+        title={infoModal.title}
+        message={infoModal.message}
+        onClose={() => setInfoModal({ visible: false, title: '', message: '' })}
+      />
     </KeyboardAvoidingView>
   );
 }
@@ -452,4 +568,11 @@ const styles = StyleSheet.create({
   divisionFeeLabelText: { color: '#fff', fontWeight: 'bold', fontSize: 13 },
   divisionFeeInputWrapper: { flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 10, borderWidth: 1, borderColor: '#e0d8c8', paddingHorizontal: 10 },
   divisionFeeInput: { flex: 1, paddingVertical: 8, fontSize: 15, color: '#003333' },
+  // Info/Error modal styles
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 },
+  modalBox: { backgroundColor: '#f5ede0', borderRadius: 24, padding: 24, width: '100%', shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 16, elevation: 8 },
+  modalTitle: { fontSize: 20, color: '#003333', letterSpacing: 2, marginBottom: 8, textAlign: 'center' },
+  modalMsg: { fontSize: 14, color: '#555', textAlign: 'center', marginBottom: 20, lineHeight: 22 },
+  modalOkBtn: { backgroundColor: '#008080', borderRadius: 14, paddingVertical: 13, alignItems: 'center' },
+  modalOkText: { fontSize: 15, color: '#fff', letterSpacing: 1 },
 });

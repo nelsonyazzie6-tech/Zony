@@ -1,6 +1,6 @@
 import { Rajdhani_700Bold, useFonts } from '@expo-google-fonts/rajdhani';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { deleteDoc, doc, getDoc } from 'firebase/firestore';
+import { addDoc, collection, deleteDoc, doc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 import { Image, Linking, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Svg, { Path, Polygon } from 'react-native-svg';
@@ -13,6 +13,8 @@ function getSportColor(sport: string) {
   return '#008080';
 }
 
+const REPORT_REASONS = ['Spam', 'Scam or Fraud', 'Offensive Content', 'Harassment', 'Other'];
+
 export default function BoardDetailScreen() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
@@ -23,6 +25,12 @@ const [hideContactInfo, setHideContactInfo] = useState<boolean | null>(null);
   const [headerHeight, setHeaderHeight] = useState(160);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
+
+  // Report state
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [reportSubmitting, setReportSubmitting] = useState(false);
+  const [showReportConfirm, setShowReportConfirm] = useState(false);
+
   const user = auth.currentUser;
 
   useEffect(() => {
@@ -85,6 +93,31 @@ const [hideContactInfo, setHideContactInfo] = useState<boolean | null>(null);
     });
   };
 
+  const handleReport = async (reason: string) => {
+    if (!user || !post) return;
+    setReportSubmitting(true);
+    try {
+      await addDoc(collection(db, 'reports'), {
+        postId: id as string,
+        postType: 'board',
+        postAuthorId: post.postedBy || null,
+        postSnapshot: {
+          name: post.name || null,
+          sport: post.sport || null,
+          division: post.division || null,
+          description: post.description || null,
+        },
+        reason,
+        reportedBy: user.uid,
+        createdAt: serverTimestamp(),
+        status: 'pending',
+      });
+      setShowReportModal(false);
+      setShowReportConfirm(true);
+    } catch (e: any) { console.log(e); }
+    setReportSubmitting(false);
+  };
+
   return (
     <View style={styles.container}>
       <View style={[styles.headerBlock, { backgroundColor: sportColor }]} onLayout={e => setHeaderHeight(e.nativeEvent.layout.height)}>
@@ -105,9 +138,16 @@ const [hideContactInfo, setHideContactInfo] = useState<boolean | null>(null);
           <Polygon points="240,130 310,80 390,130" fill="white" opacity={0.05} />
           <Polygon points="80,130 180,90 240,130" fill="white" opacity={0.04} />
         </Svg>
-        <TouchableOpacity onPress={() => router.back()} style={styles.back}>
-          <Text style={styles.backText}>‹ Sports Board</Text>
-        </TouchableOpacity>
+        <View style={styles.topRow}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.back}>
+            <Text style={styles.backText}>‹ Sports Board</Text>
+          </TouchableOpacity>
+          {!isOwner && (
+            <TouchableOpacity onPress={() => setShowReportModal(true)} style={styles.reportBtn}>
+              <Text style={styles.reportBtnText}>Report</Text>
+            </TouchableOpacity>
+          )}
+        </View>
         <View style={styles.heroInner}>
           <View style={styles.avatarLarge}>
             <Text style={[styles.avatarLargeText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>{initials}</Text>
@@ -247,6 +287,43 @@ const [hideContactInfo, setHideContactInfo] = useState<boolean | null>(null);
           </View>
         </View>
       </Modal>
+
+      {/* Report Reason Modal */}
+      <Modal visible={showReportModal} animationType="fade" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalBox}>
+            <Text style={[styles.modalTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>REPORT POST</Text>
+            <Text style={styles.modalMsg}>Why are you reporting this post?</Text>
+            {REPORT_REASONS.map(reason => (
+              <TouchableOpacity
+                key={reason}
+                style={styles.reportReasonBtn}
+                onPress={() => handleReport(reason)}
+                disabled={reportSubmitting}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.reportReasonText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>{reason}</Text>
+              </TouchableOpacity>
+            ))}
+            <TouchableOpacity style={styles.modalCancelBtnFull} onPress={() => setShowReportModal(false)} disabled={reportSubmitting}>
+              <Text style={[styles.modalCancelText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>CANCEL</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Report Confirmation Modal */}
+      <Modal visible={showReportConfirm} animationType="fade" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalBox}>
+            <Text style={[styles.modalTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>REPORT SUBMITTED</Text>
+            <Text style={styles.modalMsg}>Thanks for letting us know. Our team will review this post.</Text>
+            <TouchableOpacity style={styles.modalOkBtn} onPress={() => setShowReportConfirm(false)}>
+              <Text style={[styles.modalOkText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>OK</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -254,8 +331,11 @@ const [hideContactInfo, setHideContactInfo] = useState<boolean | null>(null);
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f5ede0' },
   headerBlock: { paddingTop: 60, paddingBottom: 24, paddingHorizontal: 20 },
-  back: { marginBottom: 16 },
+  topRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
+  back: {},
   backText: { fontSize: 16, color: 'rgba(255,255,255,0.9)', fontWeight: '600' },
+  reportBtn: { backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 20, paddingHorizontal: 14, paddingVertical: 6, borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' },
+  reportBtnText: { color: 'rgba(255,255,255,0.9)', fontSize: 13, fontWeight: '600' },
   heroInner: { flexDirection: 'row', alignItems: 'center', gap: 16 },
   avatarLarge: { width: 72, height: 72, borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.2)', borderWidth: 2, borderColor: 'rgba(255,255,255,0.4)', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   avatarLargeText: { color: '#fff', fontSize: 24, fontWeight: '900' },
@@ -294,7 +374,12 @@ const styles = StyleSheet.create({
   modalMsg: { fontSize: 15, color: '#555', textAlign: 'center', lineHeight: 22, marginBottom: 24 },
   modalBtns: { flexDirection: 'row', gap: 12, width: '100%' },
   modalCancelBtn: { flex: 1, backgroundColor: '#fff', borderRadius: 14, paddingVertical: 14, alignItems: 'center', borderWidth: 1, borderColor: '#e0d8c8' },
+  modalCancelBtnFull: { width: '100%', backgroundColor: '#fff', borderRadius: 14, paddingVertical: 14, alignItems: 'center', borderWidth: 1, borderColor: '#e0d8c8', marginTop: 4 },
   modalCancelText: { fontSize: 16, color: '#555', letterSpacing: 1 },
   modalDeleteBtn: { flex: 1, backgroundColor: '#1a1a2e', borderRadius: 14, paddingVertical: 14, alignItems: 'center' },
   modalDeleteText: { color: '#fff', fontSize: 16, letterSpacing: 1 },
+  reportReasonBtn: { width: '100%', backgroundColor: '#fff', borderRadius: 14, paddingVertical: 14, alignItems: 'center', borderWidth: 1, borderColor: '#e0d8c8', marginBottom: 8 },
+  reportReasonText: { fontSize: 15, color: '#003333', letterSpacing: 0.5 },
+  modalOkBtn: { width: '100%', backgroundColor: '#008080', borderRadius: 14, paddingVertical: 14, alignItems: 'center' },
+  modalOkText: { fontSize: 15, color: '#fff', letterSpacing: 1 },
 });
