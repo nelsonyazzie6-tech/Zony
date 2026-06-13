@@ -2,7 +2,7 @@ import { Rajdhani_700Bold, useFonts } from '@expo-google-fonts/rajdhani';
 import { useRouter } from 'expo-router';
 import { collection, doc, getDoc, onSnapshot, orderBy, query } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, FlatList, Image, Keyboard, StyleSheet, Text, TextInput, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
+import { ActivityIndicator, FlatList, Image, Keyboard, StyleSheet, Text, TextInput, TouchableOpacity, TouchableWithoutFeedback, useWindowDimensions, View } from 'react-native';
 import Svg, { Path, Polygon } from 'react-native-svg';
 import { auth, db } from '../../firebaseConfig';
 
@@ -25,6 +25,30 @@ function timeAgo(seconds: number) {
   if (hrs > 0) return `${hrs}h ago`;
   if (mins > 0) return `${mins}m ago`;
   return 'just now';
+}
+
+function FeedImage({ uri }: { uri: string }) {
+  const { width: screenWidth } = useWindowDimensions();
+  const cardWidth = screenWidth - 32 - 28; // outer list padding (16*2) + card padding (14*2)
+  const [aspectRatio, setAspectRatio] = useState(1);
+
+  useEffect(() => {
+    let cancelled = false;
+    Image.getSize(
+      uri,
+      (w, h) => { if (!cancelled && w && h) setAspectRatio(w / h); },
+      () => {}
+    );
+    return () => { cancelled = true; };
+  }, [uri]);
+
+  return (
+    <Image
+      source={{ uri }}
+      style={[styles.cardImage, { width: cardWidth, height: cardWidth / aspectRatio }]}
+      resizeMode="cover"
+    />
+  );
 }
 
 const filterOptions = [
@@ -201,7 +225,7 @@ export default function CommunityScreen() {
                   </View>
                   {p.title ? <Text style={styles.cardTitle}>{p.title}</Text> : null}
                   <Text style={styles.cardBody} numberOfLines={3}>{p.body}</Text>
-                  {p.imageUrl ? <Image source={{ uri: p.imageUrl }} style={styles.cardImage} /> : null}
+                  {p.imageUrl ? <FeedImage uri={p.imageUrl} /> : null}
                   <View style={styles.cardFooter}>
                     {isSale && p.price ? <Text style={styles.cardPrice}>{p.price}</Text> : <View />}
                     <Text style={styles.commentCount}>💬 {p.commentCount || 0} comments</Text>
@@ -251,7 +275,7 @@ const styles = StyleSheet.create({
   typeBadgeText: { fontSize: 10, fontWeight: '600' },
   cardTitle: { fontSize: 14, fontWeight: '700', color: '#111', marginBottom: 4 },
   cardBody: { fontSize: 13, color: '#555', lineHeight: 19 },
-  cardImage: { width: '100%', height: 220, borderRadius: 12, marginTop: 10, resizeMode: 'contain', backgroundColor: '#F5F0E8' },
+  cardImage: { borderRadius: 12, marginTop: 10 },
   cardFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 },
   cardPrice: { fontSize: 14, fontWeight: '800', color: '#7A1E1E' },
   commentCount: { fontSize: 12, color: '#aaa' },

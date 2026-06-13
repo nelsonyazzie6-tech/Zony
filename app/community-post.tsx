@@ -2,7 +2,7 @@ import { Rajdhani_700Bold, useFonts } from '@expo-google-fonts/rajdhani';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { addDoc, collection, deleteDoc, doc, getDoc, increment, onSnapshot, orderBy, query, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
-import { Image, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Image, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, useWindowDimensions, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { auth, db } from '../firebaseConfig';
 
@@ -26,6 +26,29 @@ async function sendPush(token: string, title: string, body: string) {
   } catch (e) { console.log('Push error:', e); }
 }
 
+function PostImage({ uri }: { uri: string }) {
+  const { width: screenWidth } = useWindowDimensions();
+  const imgWidth = screenWidth - 32 - 32; // scroll padding (16*2) + postCard padding (16*2)
+  const [aspectRatio, setAspectRatio] = useState(1);
+
+  useEffect(() => {
+    let cancelled = false;
+    Image.getSize(
+      uri,
+      (w, h) => { if (!cancelled && w && h) setAspectRatio(w / h); },
+      () => {}
+    );
+    return () => { cancelled = true; };
+  }, [uri]);
+
+  return (
+    <Image
+      source={{ uri }}
+      style={[styles.postImage, { width: imgWidth, height: imgWidth / aspectRatio }]}
+    />
+  );
+}
+
 const REPORT_REASONS = ['Spam', 'Scam or Fraud', 'Offensive Content', 'Harassment', 'Other'];
 
 export default function CommunityPostScreen() {
@@ -40,6 +63,7 @@ export default function CommunityPostScreen() {
   const [replyText, setReplyText] = useState('');
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [showImageModal, setShowImageModal] = useState(false);
 
   // Report state
   const [showReportModal, setShowReportModal] = useState(false);
@@ -219,7 +243,11 @@ export default function CommunityPostScreen() {
             </View>
             {post.title ? <Text style={[styles.postTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>{post.title}</Text> : null}
             <Text style={styles.postBody}>{post.body}</Text>
-            {post.imageUrl ? <Image source={{ uri: post.imageUrl }} style={styles.postImage} /> : null}
+            {post.imageUrl ? (
+              <TouchableOpacity activeOpacity={0.9} onPress={() => setShowImageModal(true)}>
+                <PostImage uri={post.imageUrl} />
+              </TouchableOpacity>
+            ) : null}
             {isSale && post.price ? <Text style={styles.postPrice}>{post.price}</Text> : null}
 
             {isSale && !isOwner && post.authorId ? (
@@ -348,6 +376,22 @@ export default function CommunityPostScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Full-Screen Image Viewer */}
+      <Modal visible={showImageModal} animationType="fade" transparent onRequestClose={() => setShowImageModal(false)}>
+        <View style={styles.fullImageOverlay}>
+          <TouchableOpacity style={styles.fullImageCloseBtn} onPress={() => setShowImageModal(false)} activeOpacity={0.8}>
+            <Svg width={28} height={28} viewBox="0 0 24 24" fill="none">
+              <Path d="M6 6l12 12M18 6L6 18" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            </Svg>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.fullImageBackdrop} activeOpacity={1} onPress={() => setShowImageModal(false)}>
+            {post.imageUrl ? (
+              <Image source={{ uri: post.imageUrl }} style={styles.fullImage} resizeMode="contain" />
+            ) : null}
+          </TouchableOpacity>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -372,7 +416,7 @@ const styles = StyleSheet.create({
   typeBadgeText: { fontSize: 10, fontWeight: '600' },
   postTitle: { fontSize: 18, color: '#111', marginBottom: 8 },
   postBody: { fontSize: 14, color: '#444', lineHeight: 22 },
- postImage: { width: '100%', height: 280, borderRadius: 12, marginTop: 12, resizeMode: 'contain', backgroundColor: '#f5ede0' },
+  postImage: { borderRadius: 12, marginTop: 12 },
   postPrice: { fontSize: 18, fontWeight: '900', color: '#7A1E1E', marginTop: 12 },
   messageBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#7A1E1E', borderRadius: 12, paddingVertical: 14, marginTop: 14 },
   messageBtnText: { color: '#fff', fontSize: 16, letterSpacing: 1 },
@@ -408,4 +452,8 @@ const styles = StyleSheet.create({
   reportReasonText: { fontSize: 15, color: '#003333', letterSpacing: 0.5 },
   modalOkBtn: { width: '100%', backgroundColor: '#008080', borderRadius: 14, paddingVertical: 14, alignItems: 'center' },
   modalOkText: { fontSize: 15, color: '#fff', letterSpacing: 1 },
+  fullImageOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.95)', justifyContent: 'center', alignItems: 'center' },
+  fullImageBackdrop: { width: '100%', height: '100%', justifyContent: 'center', alignItems: 'center' },
+  fullImage: { width: '100%', height: '100%' },
+  fullImageCloseBtn: { position: 'absolute', top: 60, right: 20, zIndex: 10, padding: 8 },
 });
