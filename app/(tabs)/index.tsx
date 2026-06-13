@@ -133,6 +133,26 @@ export default function HomeScreen() {
     } catch (e) { console.log(e); }
   };
 
+  // Tapping a notification marks it as read, closes the sheet, and
+  // navigates to wherever it's about (a specific tournament, community
+  // post, or home). Falls back to home if a notification is somehow
+  // missing a link.
+  const handleNotificationPress = async (n: any) => {
+    try {
+      if (!n.read) {
+        await updateDoc(doc(db, 'notifications', n.id), { read: true });
+      }
+    } catch (e) { console.log(e); }
+
+    setShowNotifications(false);
+
+    if (n.link) {
+      router.push(n.link as any);
+    } else {
+      router.push('/');
+    }
+  };
+
   const sportLabel = sportOptions.find(o => o.value === sport)?.label || 'All Sports';
 
   const filtered = tournaments
@@ -266,7 +286,9 @@ export default function HomeScreen() {
 
                   {hasDivisions ? (
                     <View style={styles.divisionsRow}>
-                      <Text style={[styles.divisionsText, { color: sportColor }]}>🏅 {t.divisions.join(', ')}</Text>
+                      <Text style={[styles.divisionsText, { color: sportColor }]}>
+                        🏅 {t.divisions.length === 1 ? t.divisions[0] : 'Multiple Divisions Available'}
+                      </Text>
                       {t.status === 'canceled' && (
                         <View style={[styles.canceledBadge, { marginTop: 4, alignSelf: 'flex-start' }]}>
                           <Text style={styles.canceledBadgeText}>Canceled</Text>
@@ -359,7 +381,7 @@ export default function HomeScreen() {
                   return (
                     <TouchableOpacity
                       style={[styles.notiCard, isRead && styles.notiCardRead]}
-                      onPress={() => updateDoc(doc(db, 'notifications', n.id), { read: true })}
+                      onPress={() => handleNotificationPress(n)}
                     >
                       <View style={styles.notiIcon}>
                         <NotiTrophyIcon />

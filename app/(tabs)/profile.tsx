@@ -444,6 +444,9 @@ export default function ProfileScreen() {
                       <Text style={styles.tournamentCardDate}>{t.date}</Text>
                       <Text style={styles.tournamentCardLocation}>{t.city}, {t.state}</Text>
                     </View>
+                    <View style={[styles.registeredBadge, { backgroundColor: sportColor }]}>
+                      <Text style={styles.registeredBadgeText}>✓ REGISTERED</Text>
+                    </View>
                     <View style={[styles.tournamentSportBadge, { backgroundColor: `${sportColor}20` }]}>
                       <Text style={[styles.tournamentSportBadgeText, { color: sportColor }]}>{t.sport}</Text>
                     </View>
@@ -745,6 +748,8 @@ const styles = StyleSheet.create({
   tournamentCardLocation: { fontSize: 12, color: '#a0b8b8' },
   tournamentSportBadge: { borderRadius: 10, paddingHorizontal: 8, paddingVertical: 4, marginRight: 12 },
   tournamentSportBadgeText: { fontSize: 11, fontWeight: '700' },
+  registeredBadge: { borderRadius: 10, paddingHorizontal: 8, paddingVertical: 4, marginRight: 8 },
+  registeredBadgeText: { fontSize: 10, fontWeight: '900', color: '#fff', letterSpacing: 0.5 },
   tournamentDeleteBtn: { borderTopWidth: 1, borderTopColor: '#f0f0f0', paddingVertical: 10, alignItems: 'center' },
   tournamentDeleteText: { fontSize: 13, color: '#cc4444', fontWeight: '600' },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 },

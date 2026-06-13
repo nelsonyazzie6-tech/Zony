@@ -60,6 +60,10 @@ export default function TournamentScreen() {
   const [onWaitlist, setOnWaitlist] = useState(false);
   const [myWaitlistDivision, setMyWaitlistDivision] = useState<string | null>(null);
 
+  // Name of the current user's registered team, used to show the
+  // "[Team Name] is Registered" banner on the details card.
+  const [myTeamName, setMyTeamName] = useState<string | null>(null);
+
   // spotsLeft is per-division when the tournament has divisions, otherwise a single number
   const [divisionSpotsLeft, setDivisionSpotsLeft] = useState<Record<string, number>>({});
   const [spotsLeft, setSpotsLeft] = useState(0);
@@ -124,6 +128,14 @@ export default function TournamentScreen() {
           setOnWaitlist(true);
           setMyWaitlistDivision(myEntry.data().division || null);
         }
+
+        // Look up the user's registered team (if any) so we can show
+        // the "[Team Name] is Registered" banner immediately.
+        const teamsSnap = await getDocs(collection(db, 'tournaments', id as string, 'teams'));
+        const myTeam = teamsSnap.docs.find(d => d.data().registeredBy === user.uid);
+        if (myTeam) {
+          setMyTeamName(myTeam.data().teamName || null);
+        }
       }
     };
     load();
@@ -179,6 +191,7 @@ export default function TournamentScreen() {
 
       setJoined(false);
       setMyTeamId(null);
+      setMyTeamName(null);
       if (usesDivisionSpots && cancelingDivision) {
         setDivisionSpotsLeft(prev => ({ ...prev, [cancelingDivision]: (prev[cancelingDivision] || 0) + 1 }));
       } else {
@@ -407,6 +420,7 @@ export default function TournamentScreen() {
         await updateDoc(doc(db, 'tournaments', id as string, 'teams', myTeamId), {
           teamName, contactName, contactInfo, division: teamDivision,
         });
+        setMyTeamName(teamName);
         setShowTeamModal(false);
         setTeamName(''); setContactName(''); setContactInfo(''); setTeamDivision('');
         setIsEditingRegistration(false);
@@ -450,6 +464,7 @@ export default function TournamentScreen() {
         if (!registered) { setTeamLoading(false); return; }
 
         setJoined(true);
+        setMyTeamName(teamName);
         if (usesDivisionSpots) {
           setDivisionSpotsLeft(prev => ({ ...prev, [teamDivision]: Math.max(0, (prev[teamDivision] ?? tournament.divisionSpots[teamDivision] ?? 0) - 1) }));
         } else {
@@ -685,6 +700,17 @@ export default function TournamentScreen() {
                   <Text style={styles.sportBadgeText}>{tournament.sport}</Text>
                 </View>
               </View>
+
+              {/* Hard-to-miss banner shown when the current user has a team registered */}
+              {joined && !isOwner && (
+                <View style={[styles.registeredBanner, { backgroundColor: sportColor }]}>
+                  <Text style={styles.registeredBannerIcon}>✓</Text>
+                  <Text style={[styles.registeredBannerText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]} numberOfLines={2}>
+                    {myTeamName ? `${myTeamName} is Registered` : 'You\'re Registered'}
+                  </Text>
+                </View>
+              )}
+
               <Text style={[styles.tournamentName, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>{tournament.name}</Text>
 
               {tournament.organizerName ? (
@@ -1120,6 +1146,9 @@ const styles = StyleSheet.create({
   sportBadgeRow: { marginBottom: 12 },
   sportBadge: { alignSelf: 'flex-start', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 4 },
   sportBadgeText: { color: '#fff', fontSize: 12, fontWeight: '700' },
+  registeredBanner: { flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: 14, paddingVertical: 12, paddingHorizontal: 16, marginBottom: 14 },
+  registeredBannerIcon: { color: '#fff', fontSize: 18, fontWeight: '900' },
+  registeredBannerText: { flex: 1, color: '#fff', fontSize: 16, letterSpacing: 0.5 },
   tournamentName: { fontSize: 26, fontWeight: '900', color: '#111', marginBottom: 12, lineHeight: 30 },
   organizerRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 14, backgroundColor: '#f5ede0', borderRadius: 12, padding: 10 },
   organizerPhoto: { width: 40, height: 40, borderRadius: 20 },
