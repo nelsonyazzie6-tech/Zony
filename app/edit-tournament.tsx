@@ -20,6 +20,7 @@ const divisionOptions = [
   'Adult Men', 'Adult Women', 'Adult Coed',
 ];
 const placeLabels = ['1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th'];
+const paymentMethodOptions = ['Cash', 'Card', 'Zelle', 'Other'];
 
 function formatPhone(val: string) {
   const digits = val.replace(/\D/g, '').slice(0, 10);
@@ -79,6 +80,11 @@ export default function EditTournamentScreen() {
   const [divisionFees, setDivisionFees] = useState<Record<string, string>>({});
   const [divisionSpots, setDivisionSpots] = useState<Record<string, string>>({});
   const [spectatorFee, setSpectatorFee] = useState('');
+
+  // Accepted payment methods for spectator entrance fee
+  const [spectatorPaymentMethods, setSpectatorPaymentMethods] = useState<string[]>([]);
+  const [spectatorPaymentOther, setSpectatorPaymentOther] = useState('');
+
   const [rosterSize, setRosterSize] = useState('');
   const [contactName, setContactName] = useState('');
   const [contactPhone, setContactPhone] = useState('');
@@ -111,6 +117,7 @@ export default function EditTournamentScreen() {
   const registeredCountRef = useRef<Record<string, number>>({});
 
   const spectatorFeeRef = useRef<TextInput>(null);
+  const spectatorPaymentOtherRef = useRef<TextInput>(null);
   const rosterSizeRef = useRef<TextInput>(null);
   const spotsRef = useRef<TextInput>(null);
   const contactNameRef = useRef<TextInput>(null);
@@ -122,6 +129,16 @@ export default function EditTournamentScreen() {
   // when at least one selected division has been left blank (and thus
   // needs this value as its fallback).
   const needsAvailableSpots = divisions.length === 0 || divisions.some(d => !divisionSpots[d]?.trim());
+
+  const togglePaymentMethod = (method: string) => {
+    setSpectatorPaymentMethods(prev => {
+      if (prev.includes(method)) {
+        if (method === 'Other') setSpectatorPaymentOther('');
+        return prev.filter(m => m !== method);
+      }
+      return [...prev, method];
+    });
+  };
 
   useEffect(() => {
     const load = async () => {
@@ -152,6 +169,8 @@ export default function EditTournamentScreen() {
       setDivisionSpots(loadedDivisionSpots);
 
       setSpectatorFee(d.spectatorFee?.replace('$', '') || '');
+      setSpectatorPaymentMethods(d.spectatorPaymentMethods || []);
+      setSpectatorPaymentOther(d.spectatorPaymentOther || '');
       setRosterSize(d.rosterSize || '');
       setContactName(d.contactName || '');
       setContactPhone(d.contactPhone || '');
@@ -340,6 +359,8 @@ export default function EditTournamentScreen() {
         divisionFees,
         divisionSpots: divisions.length > 0 ? finalDivisionSpots : {},
         spectatorFee: spectatorFee ? `$${spectatorFee}` : '',
+        spectatorPaymentMethods,
+        spectatorPaymentOther: spectatorPaymentMethods.includes('Other') ? spectatorPaymentOther.trim() : '',
         rosterSize, contactName, contactPhone, contactEmail,
         prizes: prizesFormatted,
         depositAmount: depositAmount ? `$${depositAmount}` : '',
@@ -540,6 +561,39 @@ export default function EditTournamentScreen() {
             <Text style={styles.label}>Spectator Entrance Fee <Text style={styles.optional}>(optional)</Text></Text>
             <TextInput ref={spectatorFeeRef} style={styles.input} placeholder="Amount in dollars" placeholderTextColor="#a0b8b8" value={spectatorFee} onChangeText={setSpectatorFee} keyboardType="numeric" returnKeyType="next" blurOnSubmit={false} onSubmitEditing={() => rosterSizeRef.current?.focus()} />
 
+            {spectatorFee ? (
+              <View style={styles.paymentMethodsBlock}>
+                <Text style={styles.paymentMethodsLabel}>Accepted Payment Methods <Text style={styles.optional}>(optional)</Text></Text>
+                <View style={styles.paymentMethodsRow}>
+                  {paymentMethodOptions.map(method => {
+                    const selected = spectatorPaymentMethods.includes(method);
+                    return (
+                      <TouchableOpacity
+                        key={method}
+                        style={[styles.paymentMethodPill, selected && styles.paymentMethodPillActive]}
+                        onPress={() => togglePaymentMethod(method)}
+                      >
+                        <Text style={[styles.paymentMethodPillText, selected && styles.paymentMethodPillTextActive]}>{method}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+                {spectatorPaymentMethods.includes('Other') && (
+                  <TextInput
+                    ref={spectatorPaymentOtherRef}
+                    style={[styles.input, { marginTop: 8 }]}
+                    placeholder="e.g. Venmo, CashApp"
+                    placeholderTextColor="#a0b8b8"
+                    value={spectatorPaymentOther}
+                    onChangeText={setSpectatorPaymentOther}
+                    returnKeyType="next"
+                    blurOnSubmit={false}
+                    onSubmitEditing={() => rosterSizeRef.current?.focus()}
+                  />
+                )}
+              </View>
+            ) : null}
+
             <Text style={styles.label}>Roster Size</Text>
             <TextInput ref={rosterSizeRef} style={styles.input} placeholder="Number of players" placeholderTextColor="#a0b8b8" value={rosterSize} onChangeText={setRosterSize} keyboardType="numeric" returnKeyType="next" blurOnSubmit={false} onSubmitEditing={() => { if (needsAvailableSpots) { spotsRef.current?.focus(); } else { contactNameRef.current?.focus(); } }} />
 
@@ -692,6 +746,13 @@ const styles = StyleSheet.create({
   divisionFeeInputWrapper: { flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 10, borderWidth: 1, borderColor: '#e0d8c8', paddingHorizontal: 10 },
   divisionFeeInput: { flex: 1, paddingVertical: 8, fontSize: 15, color: '#003333' },
   divisionRegisteredHint: { fontSize: 11, color: '#a0b8b8', marginBottom: 8, paddingLeft: 4 },
+  paymentMethodsBlock: { marginBottom: 8 },
+  paymentMethodsLabel: { fontSize: 13, fontWeight: '600', color: '#003333', marginBottom: 8 },
+  paymentMethodsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  paymentMethodPill: { borderRadius: 20, paddingHorizontal: 16, paddingVertical: 8, borderWidth: 1, borderColor: '#e0d8c8', backgroundColor: '#fff' },
+  paymentMethodPillActive: { backgroundColor: '#008080', borderColor: '#008080' },
+  paymentMethodPillText: { fontSize: 13, color: '#5a7a7a', fontWeight: '600' },
+  paymentMethodPillTextActive: { color: '#fff' },
   // Info/Error modal styles
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 },
   modalBox: { backgroundColor: '#f5ede0', borderRadius: 24, padding: 24, width: '100%', shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 16, elevation: 8 },

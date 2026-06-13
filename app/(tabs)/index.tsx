@@ -297,7 +297,9 @@ export default function HomeScreen() {
                     </View>
                   ) : (
                     <View style={styles.spotsRow}>
-                      <Text style={[styles.spots, { color: sportColor }]}>{t.spots} spots left</Text>
+                      <View style={[styles.spotsBadge, { backgroundColor: `${sportColor}1A`, borderColor: sportColor }]}>
+                        <Text style={[styles.spots, { color: sportColor }]}>{t.spots} spots left</Text>
+                      </View>
                       {t.status === 'canceled' && (
                         <View style={styles.canceledBadge}>
                           <Text style={styles.canceledBadgeText}>Canceled</Text>
@@ -442,7 +444,8 @@ const styles = StyleSheet.create({
   divisionsRow: { marginTop: 6 },
   divisionsText: { fontSize: 13, fontWeight: '600' },
   spotsRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 6 },
-  spots: { fontSize: 13, fontWeight: '600' },
+  spotsBadge: { borderRadius: 10, paddingHorizontal: 10, paddingVertical: 4, borderWidth: 1, alignSelf: 'flex-start' },
+  spots: { fontSize: 13, fontWeight: '900' },
   canceledBadge: { backgroundColor: '#7A1E1E', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 2 },
   canceledBadgeText: { color: '#fff', fontSize: 11, fontWeight: 'bold' },
   organizerRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#f0f0f0' },

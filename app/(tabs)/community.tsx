@@ -201,6 +201,7 @@ export default function CommunityScreen() {
                   </View>
                   {p.title ? <Text style={styles.cardTitle}>{p.title}</Text> : null}
                   <Text style={styles.cardBody} numberOfLines={3}>{p.body}</Text>
+                  {p.imageUrl ? <Image source={{ uri: p.imageUrl }} style={styles.cardImage} /> : null}
                   <View style={styles.cardFooter}>
                     {isSale && p.price ? <Text style={styles.cardPrice}>{p.price}</Text> : <View />}
                     <Text style={styles.commentCount}>💬 {p.commentCount || 0} comments</Text>
@@ -250,6 +251,7 @@ const styles = StyleSheet.create({
   typeBadgeText: { fontSize: 10, fontWeight: '600' },
   cardTitle: { fontSize: 14, fontWeight: '700', color: '#111', marginBottom: 4 },
   cardBody: { fontSize: 13, color: '#555', lineHeight: 19 },
+  cardImage: { width: '100%', height: 220, borderRadius: 12, marginTop: 10, resizeMode: 'contain', backgroundColor: '#F5F0E8' },
   cardFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 },
   cardPrice: { fontSize: 14, fontWeight: '800', color: '#7A1E1E' },
   commentCount: { fontSize: 12, color: '#aaa' },

@@ -372,7 +372,7 @@ const styles = StyleSheet.create({
   typeBadgeText: { fontSize: 10, fontWeight: '600' },
   postTitle: { fontSize: 18, color: '#111', marginBottom: 8 },
   postBody: { fontSize: 14, color: '#444', lineHeight: 22 },
-  postImage: { width: '100%', height: 200, borderRadius: 12, marginTop: 12, resizeMode: 'cover' },
+ postImage: { width: '100%', height: 280, borderRadius: 12, marginTop: 12, resizeMode: 'contain', backgroundColor: '#f5ede0' },
   postPrice: { fontSize: 18, fontWeight: '900', color: '#7A1E1E', marginTop: 12 },
   messageBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#7A1E1E', borderRadius: 12, paddingVertical: 14, marginTop: 14 },
   messageBtnText: { color: '#fff', fontSize: 16, letterSpacing: 1 },

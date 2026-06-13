@@ -411,6 +411,21 @@ export default function TournamentScreen() {
     return divisionSpotsLeft[div] ?? tournament.divisionSpots[div] ?? 0;
   };
 
+  // Builds the "Cash, Card, Zelle, Venmo accepted" string for the spectator
+  // fee line. "Other" is replaced by whatever the organizer typed in.
+  const getSpectatorPaymentMethodsText = (): string | null => {
+    const methods: string[] = tournament?.spectatorPaymentMethods || [];
+    if (methods.length === 0) return null;
+    const display = methods.map(m => {
+      if (m === 'Other') {
+        return tournament?.spectatorPaymentOther?.trim() || null;
+      }
+      return m;
+    }).filter(Boolean) as string[];
+    if (display.length === 0) return null;
+    return `${display.join(', ')} accepted`;
+  };
+
   const handleRegisterTeam = async () => {
     if (!teamName || !contactName || !contactInfo || !teamDivision) return;
     if (!user) return;
@@ -589,6 +604,8 @@ export default function TournamentScreen() {
 
   const registrationDivisions = tournament.divisions?.length > 0 ? tournament.divisions : [];
 
+  const spectatorPaymentMethodsText = getSpectatorPaymentMethodsText();
+
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <View style={styles.container}>
@@ -748,9 +765,16 @@ export default function TournamentScreen() {
                     const fee = getDivisionFee(d);
                     const divSpots = getDivisionSpotsLeft(d);
                     return (
-                      <Text key={d} style={styles.rowValue}>
-                        {d}{fee ? `  —  ${fee}` : ''}{divSpots !== null ? `  •  ${divSpots === 0 ? 'Full' : `${divSpots} spot${divSpots === 1 ? '' : 's'} left`}` : ''}
-                      </Text>
+                      <View key={d} style={styles.divisionRow}>
+                        <Text style={styles.divisionRowLabel}>
+                          {d}{fee ? `  —  ${fee}` : ''}
+                        </Text>
+                        {divSpots !== null ? (
+                          <Text style={[styles.divisionRowSpots, { color: divSpots === 0 ? '#cc4444' : sportColor }]}>
+                            {divSpots === 0 ? 'Full' : `${divSpots} spot${divSpots === 1 ? '' : 's'} left`}
+                          </Text>
+                        ) : null}
+                      </View>
                     );
                   })}
                 </>
@@ -759,7 +783,9 @@ export default function TournamentScreen() {
               {tournament.spectatorFee ? (
                 <>
                   <View style={[styles.row, { marginTop: 16 }]}><Text style={styles.rowIcon}>🎟️</Text><Text style={styles.rowLabel}>Spectator Fee</Text></View>
-                  <Text style={styles.rowValue}>{tournament.spectatorFee} at the door</Text>
+                  <Text style={styles.rowValue}>
+                    {tournament.spectatorFee} at the door{spectatorPaymentMethodsText ? `  ·  ${spectatorPaymentMethodsText}` : ''}
+                  </Text>
                 </>
               ) : null}
 
@@ -1161,6 +1187,9 @@ const styles = StyleSheet.create({
   rowIcon: { fontSize: 15 },
   rowLabel: { fontSize: 13, fontWeight: '700', color: '#333' },
   rowValue: { fontSize: 14, color: '#555', paddingLeft: 24, marginBottom: 2 },
+  divisionRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingLeft: 24, paddingRight: 4, paddingVertical: 4 },
+  divisionRowLabel: { fontSize: 14, color: '#555', flex: 1, marginRight: 8 },
+  divisionRowSpots: { fontSize: 14, fontWeight: '900' },
   copyBtn: { marginLeft: 24, marginTop: 8, backgroundColor: '#f5ede0', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 6, alignSelf: 'flex-start' },
   copyBtnText: { fontSize: 12, color: '#008080', fontWeight: '600' },
   spotsText: { fontSize: 18, color: '#008080', fontWeight: '900', marginTop: 16 },
