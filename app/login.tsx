@@ -12,7 +12,7 @@ import { auth, db } from '../firebaseConfig';
 
 function TrophyIcon() {
   return (
-    <Svg width={36} height={36} viewBox="0 0 36 36" fill="none">
+    <Svg width={52} height={52} viewBox="0 0 36 36" fill="none">
       <Path d="M10 6h16v16a8 8 0 0 1-16 0V6Z" stroke="white" strokeWidth="2" strokeLinejoin="round"/>
       <Path d="M10 11H6a4 4 0 0 0 0 8h4M26 11h4a4 4 0 0 1 0 8h-4" stroke="white" strokeWidth="2" strokeLinecap="round"/>
       <Path d="M18 28v4M14 34h8" stroke="white" strokeWidth="2" strokeLinecap="round"/>
@@ -194,14 +194,12 @@ export default function LoginScreen() {
           </View>
         </View>
 
-        {/* Error message */}
         {errorMsg ? (
           <View style={styles.errorBox}>
             <Text style={styles.errorText}>⚠️  {errorMsg}</Text>
           </View>
         ) : null}
 
-        {/* Success message (reset email sent) */}
         {successMsg ? (
           <View style={styles.successBox}>
             <Text style={styles.successText}>✓  {successMsg}</Text>
@@ -264,11 +262,11 @@ const styles = StyleSheet.create({
     paddingVertical: 60,
     paddingHorizontal: 32,
   },
-  top: { alignItems: 'center', marginBottom: 32 },
+  top: { alignItems: 'center', marginBottom: 28 },
   logoBox: {
-    width: 72,
-    height: 72,
-    borderRadius: 18,
+    width: 96,
+    height: 96,
+    borderRadius: 24,
     backgroundColor: '#008080',
     alignItems: 'center',
     justifyContent: 'center',
@@ -277,14 +275,14 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 4 },
     elevation: 8,
-    marginBottom: 12,
+    marginBottom: 16,
   },
   appName: {
-    fontSize: 32,
+    fontSize: 48,
     fontWeight: '900',
     color: '#111',
-    letterSpacing: 2,
-    marginBottom: 4,
+    letterSpacing: 4,
+    marginBottom: 6,
   },
   slogan: { fontSize: 14, color: '#999' },
   form: { width: '100%', gap: 8 },
