@@ -2,7 +2,7 @@ import { Rajdhani_700Bold, useFonts } from '@expo-google-fonts/rajdhani';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { addDoc, collection, deleteDoc, doc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
-import { Image, Linking, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Image, Linking, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Svg, { Circle, Path, Polygon, Rect } from 'react-native-svg';
 import { auth, db } from '../firebaseConfig';
 
@@ -98,6 +98,7 @@ const [hideContactInfo, setHideContactInfo] = useState<boolean | null>(null);
   const [headerHeight, setHeaderHeight] = useState(160);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   // Report state
   const [showReportModal, setShowReportModal] = useState(false);
@@ -126,11 +127,18 @@ const [hideContactInfo, setHideContactInfo] = useState<boolean | null>(null);
           } catch (_) {}
         }
       }
+      setLoading(false);
     };
     load();
   }, []);
 
-  if (!post) return null;
+  if (loading || !post) {
+    return (
+      <View style={[styles.container, styles.loadingContainer]}>
+        <ActivityIndicator size="large" color="#008080" />
+      </View>
+    );
+  }
 
   const isOwner = user?.uid === post.postedBy;
   const sportColor = getSportColor(post.sport);
@@ -424,6 +432,7 @@ const [hideContactInfo, setHideContactInfo] = useState<boolean | null>(null);
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f5ede0' },
+  loadingContainer: { justifyContent: 'center', alignItems: 'center' },
   headerBlock: { paddingTop: 60, paddingBottom: 24, paddingHorizontal: 20 },
   topRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
   back: {},
