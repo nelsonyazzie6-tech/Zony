@@ -1,6 +1,8 @@
 import { Rajdhani_700Bold, useFonts } from '@expo-google-fonts/rajdhani';
+import { GoogleSignin } from '@react-native-google-signin/google-signin';
+import * as AppleAuthentication from 'expo-apple-authentication';
 import { useRouter } from 'expo-router';
-import { createUserWithEmailAndPassword, sendPasswordResetEmail, signInWithEmailAndPassword } from 'firebase/auth';
+import { createUserWithEmailAndPassword, GoogleAuthProvider, OAuthProvider, sendPasswordResetEmail, signInWithCredential, signInWithEmailAndPassword } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
 import { useState } from 'react';
 import {
@@ -9,6 +11,11 @@ import {
 } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { auth, db } from '../firebaseConfig';
+
+GoogleSignin.configure({
+  webClientId: '295900317104-6issabib0tcbp5ktf3tdpegi5mifs6or.apps.googleusercontent.com',
+  iosClientId: '295900317104-dk7n2cq2obdc9a2v37p1p6ih61pj9fha.apps.googleusercontent.com',
+});
 
 function TrophyIcon() {
   return (
@@ -130,6 +137,78 @@ export default function LoginScreen() {
     setResetLoading(false);
   };
 
+  const handleAppleSignIn = async () => {
+    setErrorMsg('');
+    setSuccessMsg('');
+    try {
+      const credential = await AppleAuthentication.signInAsync({
+        requestedScopes: [
+          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+          AppleAuthentication.AppleAuthenticationScope.EMAIL,
+        ],
+      });
+
+      const provider = new OAuthProvider('apple.com');
+      const authCredential = provider.credential({
+        idToken: credential.identityToken!,
+      });
+
+      const userCred = await signInWithCredential(auth, authCredential);
+
+      const userDocRef = doc(db, 'users', userCred.user.uid);
+      const username = credential.fullName?.givenName
+        ? `${credential.fullName.givenName} ${credential.fullName.lastName || ''}`.trim()
+        : (userCred.user.email?.split('@')[0] || 'Player');
+
+      await setDoc(userDocRef, {
+        username,
+        email: userCred.user.email,
+        createdAt: new Date(),
+      }, { merge: true });
+
+      router.replace('/');
+    } catch (e: any) {
+      if (e.code === 'ERR_REQUEST_CANCELED') {
+        // user canceled, do nothing
+      } else {
+        console.log(e);
+        setErrorMsg('Apple sign-in failed. Please try again.');
+      }
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    setErrorMsg('');
+    setSuccessMsg('');
+    try {
+      await GoogleSignin.hasPlayServices();
+      const userInfo = await GoogleSignin.signIn();
+      const idToken = userInfo.data?.idToken;
+      if (!idToken) throw new Error('No ID token returned');
+
+      const credential = GoogleAuthProvider.credential(idToken);
+      const userCred = await signInWithCredential(auth, credential);
+
+      const userDocRef = doc(db, 'users', userCred.user.uid);
+      const username = userCred.user.displayName || userCred.user.email?.split('@')[0] || 'Player';
+
+      await setDoc(userDocRef, {
+        username,
+        email: userCred.user.email,
+        createdAt: new Date(),
+      }, { merge: true });
+
+      router.replace('/');
+    } catch (e: any) {
+      if (e.code === 'SIGN_IN_CANCELLED' || e.code === '-5') {
+        // user canceled
+      } else {
+        console.log(e);
+        setErrorMsg('Google sign-in failed. Please try again.');
+      }
+    }
+  };
+
   return (
     <KeyboardAvoidingView
       style={styles.container}
@@ -225,7 +304,7 @@ export default function LoginScreen() {
         </View>
 
         <View style={styles.socialRow}>
-          <TouchableOpacity style={styles.socialBtn}>
+          <TouchableOpacity style={styles.socialBtn} onPress={handleGoogleSignIn}>
             <Svg width={18} height={18} viewBox="0 0 18 18" style={{ marginRight: 8 }}>
               <Path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 0 1-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615Z" fill="#4285F4"/>
               <Path d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18Z" fill="#34A853"/>
@@ -234,12 +313,14 @@ export default function LoginScreen() {
             </Svg>
             <Text style={styles.socialBtnText}>Google</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.socialBtn}>
-            <Svg width={18} height={18} viewBox="0 0 18 18" style={{ marginRight: 8 }}>
-              <Path d="M9 0C4.029 0 0 4.029 0 9c0 3.982 2.579 7.356 6.155 8.555.45.083.615-.195.615-.433 0-.214-.008-.779-.012-1.529-2.504.543-3.033-1.207-3.033-1.207-.409-1.04-1-1.317-1-1.317-.817-.559.062-.547.062-.547.903.063 1.379.928 1.379.928.803 1.376 2.107.979 2.62.748.082-.581.314-.979.572-1.204-2-.227-4.103-1-4.103-4.455 0-.984.351-1.788.928-2.418-.093-.228-.402-1.144.088-2.384 0 0 .757-.242 2.479.924A8.641 8.641 0 0 1 9 4.128c.766.003 1.537.104 2.257.303 1.72-1.166 2.477-.924 2.477-.924.491 1.24.182 2.156.09 2.384.578.63.926 1.434.926 2.418 0 3.464-2.107 4.226-4.115 4.449.323.279.612.829.612 1.671 0 1.206-.011 2.179-.011 2.476 0 .241.162.521.619.433C15.424 16.353 18 12.981 18 9c0-4.971-4.029-9-9-9Z" fill="#111"/>
-            </Svg>
-            <Text style={styles.socialBtnText}>Apple</Text>
-          </TouchableOpacity>
+          {Platform.OS === 'ios' && (
+            <TouchableOpacity style={styles.socialBtn} onPress={handleAppleSignIn}>
+              <Svg width={18} height={18} viewBox="0 0 18 18" style={{ marginRight: 8 }}>
+                <Path d="M9 0C4.029 0 0 4.029 0 9c0 3.982 2.579 7.356 6.155 8.555.45.083.615-.195.615-.433 0-.214-.008-.779-.012-1.529-2.504.543-3.033-1.207-3.033-1.207-.409-1.04-1-1.317-1-1.317-.817-.559.062-.547.062-.547.903.063 1.379.928 1.379.928.803 1.376 2.107.979 2.62.748.082-.581.314-.979.572-1.204-2-.227-4.103-1-4.103-4.455 0-.984.351-1.788.928-2.418-.093-.228-.402-1.144.088-2.384 0 0 .757-.242 2.479.924A8.641 8.641 0 0 1 9 4.128c.766.003 1.537.104 2.257.303 1.72-1.166 2.477-.924 2.477-.924.491 1.24.182 2.156.09 2.384.578.63.926 1.434.926 2.418 0 3.464-2.107 4.226-4.115 4.449.323.279.612.829.612 1.671 0 1.206-.011 2.179-.011 2.476 0 .241.162.521.619.433C15.424 16.353 18 12.981 18 9c0-4.971-4.029-9-9-9Z" fill="#111"/>
+              </Svg>
+              <Text style={styles.socialBtnText}>Apple</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         <TouchableOpacity style={styles.signupRow} onPress={() => { setIsSignUp(!isSignUp); setUsername(''); setErrorMsg(''); setSuccessMsg(''); }}>
