@@ -3,7 +3,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { addDoc, collection, deleteDoc, doc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 import { Image, Linking, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import Svg, { Path, Polygon } from 'react-native-svg';
+import Svg, { Circle, Path, Polygon, Rect } from 'react-native-svg';
 import { auth, db } from '../firebaseConfig';
 
 function getSportColor(sport: string) {
@@ -11,6 +11,79 @@ function getSportColor(sport: string) {
   if (sport === 'Volleyball') return '#7A1E1E';
   if (sport === 'Softball') return '#B8860B';
   return '#008080';
+}
+
+// Sport icons, replace 🏀
+function BasketballIcon({ size = 12, color = '#fff' }: { size?: number; color?: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <Circle cx="12" cy="12" r="10" />
+      <Path d="M12 2.5v19" />
+      <Path d="M2.5 12h19" />
+      <Path d="M4.8 4.8c7 5.5 7 9.4 0 14.4" />
+      <Path d="M19.2 4.8c-7 5.5-7 9.4 0 14.4" />
+    </Svg>
+  );
+}
+
+function VolleyballIcon({ size = 12, color = '#fff' }: { size?: number; color?: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <Circle cx="12" cy="12" r="10" />
+      <Path d="M12 2c3 2 4.5 5 4.5 8s-1.5 6-4.5 8" />
+      <Path d="M3 9c4-1.5 9-1.5 14 1" />
+      <Path d="M3 16c4-3.5 11-4 17.5-1" />
+    </Svg>
+  );
+}
+
+function SoftballIcon({ size = 12, color = '#fff' }: { size?: number; color?: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <Circle cx="12" cy="12" r="10" />
+      <Path d="M5 5c4 4 4 10 0 14" />
+      <Path d="M19 5c-4 4-4 10 0 14" />
+    </Svg>
+  );
+}
+
+function SportIcon({ sport, size = 12, color = '#fff' }: { sport: string; size?: number; color?: string }) {
+  if (sport === 'Volleyball') return <VolleyballIcon size={size} color={color} />;
+  if (sport === 'Softball') return <SoftballIcon size={size} color={color} />;
+  return <BasketballIcon size={size} color={color} />;
+}
+
+// Trophy icon, replaces 🏅 / 🏆
+function TrophyIcon({ size = 12, color = '#fff' }: { size?: number; color?: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <Path d="M8 21h8" />
+      <Path d="M12 17v4" />
+      <Path d="M7 4h10v5a5 5 0 0 1-10 0z" />
+      <Path d="M17 5h3a2 2 0 0 1-2 4h-1" />
+      <Path d="M7 5H4a2 2 0 0 0 2 4h1" />
+    </Svg>
+  );
+}
+
+// Phone (Mobile) icon, replaces 📱
+function PhoneMobileIcon({ size = 13, color = '#008080' }: { size?: number; color?: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <Rect x="5" y="2" width="14" height="20" rx="2" />
+      <Path d="M12 18h.01" />
+    </Svg>
+  );
+}
+
+// Mail icon, replaces ✉️
+function MailIcon({ size = 13, color = '#008080' }: { size?: number; color?: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <Rect x="2" y="4" width="20" height="16" rx="2" />
+      <Path d="m22 6-10 7L2 6" />
+    </Svg>
+  );
 }
 
 const REPORT_REASONS = ['Spam', 'Scam or Fraud', 'Offensive Content', 'Harassment', 'Other'];
@@ -157,9 +230,24 @@ const [hideContactInfo, setHideContactInfo] = useState<boolean | null>(null);
               {post.name ? post.name.toUpperCase() : post.sport?.toUpperCase()}
             </Text>
             <View style={styles.badgeRow}>
-              {post.sport ? <View style={styles.badge}><Text style={styles.badgeText}>🏀 {post.sport}</Text></View> : null}
-              {post.division ? <View style={styles.badge}><Text style={styles.badgeText}>🏅 {post.division}</Text></View> : null}
-              {post.forTournament ? <View style={styles.badge}><Text style={styles.badgeText}>🏆 {post.forTournament}</Text></View> : null}
+              {post.sport ? (
+                <View style={styles.badgeRow2}>
+                  <SportIcon sport={post.sport} size={12} color="#fff" />
+                  <Text style={styles.badgeText}>{post.sport}</Text>
+                </View>
+              ) : null}
+              {post.division ? (
+                <View style={styles.badgeRow2}>
+                  <TrophyIcon size={12} color="#fff" />
+                  <Text style={styles.badgeText}>{post.division}</Text>
+                </View>
+              ) : null}
+              {post.forTournament ? (
+                <View style={styles.badgeRow2}>
+                  <TrophyIcon size={12} color="#fff" />
+                  <Text style={styles.badgeText}>{post.forTournament}</Text>
+                </View>
+              ) : null}
             </View>
           </View>
         </View>
@@ -203,7 +291,10 @@ const [hideContactInfo, setHideContactInfo] = useState<boolean | null>(null);
                 activeOpacity={0.7}
               >
                 <Text style={styles.infoLabel}>Phone</Text>
-                <Text style={[styles.infoValue, styles.tappableLink]}>📱 {post.contactPhone}</Text>
+                <View style={styles.tappableLinkRow}>
+                  <PhoneMobileIcon size={13} color="#008080" />
+                  <Text style={[styles.infoValue, styles.tappableLink]}>{post.contactPhone}</Text>
+                </View>
               </TouchableOpacity>
             ) : null
           ) : null}
@@ -217,7 +308,10 @@ const [hideContactInfo, setHideContactInfo] = useState<boolean | null>(null);
                 activeOpacity={0.7}
               >
                 <Text style={styles.infoLabel}>Email</Text>
-                <Text style={[styles.infoValue, styles.tappableLink]}>✉️ {post.contactEmail}</Text>
+                <View style={styles.tappableLinkRow}>
+                  <MailIcon size={13} color="#008080" />
+                  <Text style={[styles.infoValue, styles.tappableLink]}>{post.contactEmail}</Text>
+                </View>
               </TouchableOpacity>
             ) : null
           ) : null}
@@ -342,6 +436,7 @@ const styles = StyleSheet.create({
   heroInfo: { flex: 1 },
   heroName: { color: '#fff', fontSize: 22, fontWeight: '900', letterSpacing: 1, marginBottom: 8 },
   badgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  badgeRow2: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4 },
   badge: { backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4 },
   badgeText: { color: '#fff', fontSize: 10, fontWeight: '600' },
   scroll: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 48 },
@@ -352,6 +447,7 @@ const styles = StyleSheet.create({
   infoRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#f5f5f5' },
   infoLabel: { fontSize: 13, color: '#a0b8b8', fontWeight: '500' },
   infoValue: { fontSize: 13, color: '#111', fontWeight: '600' },
+  tappableLinkRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   tappableLink: { color: '#008080', textDecorationLine: 'underline' },
   hiddenContactNote: { fontSize: 13, color: '#a0b8b8', fontStyle: 'italic' },
   posterCard: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#fff', borderRadius: 14, padding: 12, marginBottom: 12, borderWidth: 1, borderColor: '#e8e8e8' },

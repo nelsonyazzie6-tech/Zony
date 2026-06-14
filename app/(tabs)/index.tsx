@@ -3,7 +3,7 @@ import { useRouter } from 'expo-router';
 import { collection, deleteDoc, doc, onSnapshot, query, updateDoc, where } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, Image, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import Svg, { Path, Polygon } from 'react-native-svg';
+import Svg, { Circle, Line, Path, Polygon, Rect } from 'react-native-svg';
 import { auth, db } from '../../firebaseConfig';
 
 const sportOptions = [
@@ -62,6 +62,51 @@ function NotiTrophyIcon() {
       <Path d="M8 3h8v8a4 4 0 0 1-8 0V3Z" stroke="#008080" strokeWidth="1.8" strokeLinejoin="round" />
       <Path d="M8 6H5a2 2 0 0 0 0 4h3M16 6h3a2 2 0 0 1 0 4h-3" stroke="#008080" strokeWidth="1.8" strokeLinecap="round" />
       <Path d="M12 15v4M9 21h6" stroke="#008080" strokeWidth="1.8" strokeLinecap="round" />
+    </Svg>
+  );
+}
+
+// Calendar icon, replaces 📅
+function CalendarIcon({ size = 14, color = '#5a5a5a' }: { size?: number; color?: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <Rect x="3" y="4" width="18" height="18" rx="2" />
+      <Line x1="16" y1="2" x2="16" y2="6" />
+      <Line x1="8" y1="2" x2="8" y2="6" />
+      <Line x1="3" y1="10" x2="21" y2="10" />
+    </Svg>
+  );
+}
+
+// Location icon, replaces 📍
+function LocationIcon({ size = 14, color = '#5a5a5a' }: { size?: number; color?: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <Path d="M21 10c0 7-9 12-9 12s-9-5-9-12a9 9 0 1 1 18 0z" />
+      <Circle cx="12" cy="10" r="3" />
+    </Svg>
+  );
+}
+
+// Trophy icon, replaces 🏅
+function TrophyIcon({ size = 13, color = '#008080' }: { size?: number; color?: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <Path d="M8 21h8" />
+      <Path d="M12 17v4" />
+      <Path d="M7 4h10v5a5 5 0 0 1-10 0z" />
+      <Path d="M17 5h3a2 2 0 0 1-2 4h-1" />
+      <Path d="M7 5H4a2 2 0 0 0 2 4h1" />
+    </Svg>
+  );
+}
+
+// X icon, replaces ✕
+function XIcon({ size = 12, color = '#ccc' }: { size?: number; color?: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <Line x1="18" y1="6" x2="6" y2="18" />
+      <Line x1="6" y1="6" x2="18" y2="18" />
     </Svg>
   );
 }
@@ -279,14 +324,23 @@ export default function HomeScreen() {
                   <Text style={[styles.sportBadge, { color: sportColor }]}>{t.sport}</Text>
                 </View>
                 <View style={styles.cardBody}>
-                  <Text style={styles.detail}>📅 {t.date}</Text>
-                  <Text style={styles.detail}>📍 {t.city}, {t.state}</Text>
+                  <View style={styles.detailRow}>
+                    <CalendarIcon size={14} color="#5a5a5a" />
+                    <Text style={styles.detail}>{t.date}</Text>
+                  </View>
+                  <View style={styles.detailRow}>
+                    <LocationIcon size={14} color="#5a5a5a" />
+                    <Text style={styles.detail}>{t.city}, {t.state}</Text>
+                  </View>
 
                   {hasDivisions ? (
                     <View style={styles.divisionsRow}>
-                      <Text style={[styles.divisionsText, { color: sportColor }]}>
-                        🏅 {t.divisions.length === 1 ? t.divisions[0] : 'Multiple Divisions Available'}
-                      </Text>
+                      <View style={styles.detailRow}>
+                        <TrophyIcon size={13} color={sportColor} />
+                        <Text style={[styles.divisionsText, { color: sportColor }]}>
+                          {t.divisions.length === 1 ? t.divisions[0] : 'Multiple Divisions Available'}
+                        </Text>
+                      </View>
                       {t.status === 'canceled' && (
                         <View style={[styles.canceledBadge, { marginTop: 4, alignSelf: 'flex-start' }]}>
                           <Text style={styles.canceledBadgeText}>Canceled</Text>
@@ -396,7 +450,7 @@ export default function HomeScreen() {
                       </View>
                       {!isRead && <View style={styles.notiDot} />}
                       <TouchableOpacity onPress={() => handleDeleteNotification(n.id)} style={styles.notiDelete}>
-                        <Text style={styles.notiDeleteText}>✕</Text>
+                        <XIcon size={12} color="#ccc" />
                       </TouchableOpacity>
                     </TouchableOpacity>
                   );
@@ -438,7 +492,8 @@ const styles = StyleSheet.create({
   cardBody: { paddingHorizontal: 14, paddingTop: 10, paddingBottom: 12 },
   name: { fontSize: 17, fontWeight: 'bold', color: '#f5ede0', flex: 1, marginRight: 8, textTransform: 'uppercase', letterSpacing: 1.2 },
   sportBadge: { fontSize: 11, backgroundColor: '#f5ede0', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, overflow: 'hidden', fontWeight: 'bold' },
-  detail: { fontSize: 14, color: '#5a5a5a', marginBottom: 4 },
+  detailRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 },
+  detail: { fontSize: 14, color: '#5a5a5a' },
   divisionsRow: { marginTop: 6 },
   divisionsText: { fontSize: 13, fontWeight: '600' },
   spotsRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 6 },

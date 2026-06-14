@@ -8,7 +8,7 @@ import {
 } from 'react-native';
 import { GooglePlacesAutocomplete } from 'react-native-google-places-autocomplete';
 import DateTimePickerModal from 'react-native-modal-datetime-picker';
-import Svg, { Path, Polygon, Rect } from 'react-native-svg';
+import Svg, { Circle, Path, Polygon, Rect } from 'react-native-svg';
 import { auth, db } from '../../firebaseConfig';
 
 const GOOGLE_API_KEY = 'AIzaSyC9w_A1-1lPhvtTTuCFdIQejyfm9GOJXRc';
@@ -31,6 +31,26 @@ const boardDescriptionPlaceholders = [
   'e.g. "Does anyone need a player for the 16U division this weekend?"',
   'e.g. "Looking for a 14U player to complete our roster for an upcoming event."',
 ];
+
+// Location pin icon, replaces 📍
+function LocationIcon({ size = 13, color = '#003333' }: { size?: number; color?: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <Path d="M21 10c0 7-9 12-9 12s-9-5-9-12a9 9 0 1 1 18 0z" />
+      <Circle cx="12" cy="10" r="3" />
+    </Svg>
+  );
+}
+
+// Check icon, replaces ✓ in division picker
+function CheckIcon({ size = 13, color = '#008080' }: { size?: number; color?: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <Circle cx="12" cy="12" r="10" />
+      <Path d="m8 12 3 3 5-6" />
+    </Svg>
+  );
+}
 
 function formatPhone(val: string) {
   const digits = val.replace(/\D/g, '').slice(0, 10);
@@ -474,7 +494,10 @@ function TournamentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
               </View>
               {(address || city || state) ? (
                 <View style={styles.autoFilledBox}>
-                  <Text style={styles.autoFilledText}>📍 {[address, city, state, zip].filter(Boolean).join(', ')}</Text>
+                  <View style={styles.autoFilledTextRow}>
+                    <LocationIcon size={13} color="#003333" />
+                    <Text style={styles.autoFilledText}>{[address, city, state, zip].filter(Boolean).join(', ')}</Text>
+                  </View>
                   <TouchableOpacity onPress={() => { setAddress(''); setCity(''); setState(''); setZip(''); }}>
                     <Text style={styles.clearText}>Clear</Text>
                   </TouchableOpacity>
@@ -549,8 +572,9 @@ function TournamentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
           {showDivisionPicker && (
             <ScrollView style={[styles.dropdownList, { maxHeight: 240 }]} nestedScrollEnabled>
               {divisionOptions.map((d) => (
-                <TouchableOpacity key={d} style={styles.dropdownItem} onPress={() => toggleDivision(d)}>
-                  <Text style={[styles.dropdownItemText, divisions.includes(d) && styles.dropdownItemActive]}>{divisions.includes(d) ? '✓ ' : ''}{d}</Text>
+                <TouchableOpacity key={d} style={styles.dropdownItemRow} onPress={() => toggleDivision(d)}>
+                  {divisions.includes(d) ? <CheckIcon size={13} color="#008080" /> : null}
+                  <Text style={[styles.dropdownItemText, divisions.includes(d) && styles.dropdownItemActive]}>{d}</Text>
                 </TouchableOpacity>
               ))}
               <TouchableOpacity style={[styles.dropdownItem, { backgroundColor: '#e0f5f5' }]} onPress={() => setShowDivisionPicker(false)}>
@@ -1034,6 +1058,7 @@ const styles = StyleSheet.create({
   dropdownArrow: { fontSize: 12, color: '#008080' },
   dropdownList: { backgroundColor: '#fff', borderRadius: 12, marginBottom: 8, overflow: 'hidden', borderWidth: 1, borderColor: '#e0d8c8' },
   dropdownItem: { paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#f0fafa' },
+  dropdownItemRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#f0fafa' },
   dropdownItemText: { fontSize: 15, color: '#003333' },
   dropdownItemActive: { color: '#008080', fontWeight: 'bold' },
   submitBtn: { backgroundColor: '#7A1E1E', borderRadius: 12, paddingVertical: 16, alignItems: 'center', marginTop: 8, marginBottom: 40 },
@@ -1045,7 +1070,8 @@ const styles = StyleSheet.create({
   backText: { color: '#fff', fontSize: 16, letterSpacing: 1 },
   placesWrapper: { marginBottom: 12, zIndex: 10 },
   autoFilledBox: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#e0f5f5', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, marginBottom: 8 },
-  autoFilledText: { fontSize: 13, color: '#003333', flex: 1, marginRight: 8 },
+  autoFilledTextRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1, marginRight: 8 },
+  autoFilledText: { fontSize: 13, color: '#003333', flex: 1 },
   clearText: { fontSize: 13, color: '#008080', fontWeight: 'bold' },
   manualToggleBtn: { paddingVertical: 10, alignItems: 'center', marginBottom: 4 },
   manualToggleText: { fontSize: 13, color: '#008080', fontWeight: '600', textDecorationLine: 'underline' },

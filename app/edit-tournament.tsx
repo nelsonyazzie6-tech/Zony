@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Keyboard, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
 import { GooglePlacesAutocomplete } from 'react-native-google-places-autocomplete';
 import DateTimePickerModal from 'react-native-modal-datetime-picker';
+import Svg, { Circle, Line, Path, Rect } from 'react-native-svg';
 import { auth, db } from '../firebaseConfig';
 
 const GOOGLE_API_KEY = 'AIzaSyC9w_A1-1lPhvtTTuCFdIQejyfm9GOJXRc';
@@ -21,6 +22,38 @@ const divisionOptions = [
 ];
 const placeLabels = ['1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th'];
 const paymentMethodOptions = ['Cash', 'Card', 'Zelle', 'Other'];
+
+// Calendar icon, replaces 📅
+function CalendarIcon({ size = 16, color = '#008080' }: { size?: number; color?: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <Rect x="3" y="4" width="18" height="18" rx="2" />
+      <Line x1="16" y1="2" x2="16" y2="6" />
+      <Line x1="8" y1="2" x2="8" y2="6" />
+      <Line x1="3" y1="10" x2="21" y2="10" />
+    </Svg>
+  );
+}
+
+// Location icon, replaces 📍
+function LocationIcon({ size = 13, color = '#003333' }: { size?: number; color?: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <Path d="M21 10c0 7-9 12-9 12s-9-5-9-12a9 9 0 1 1 18 0z" />
+      <Circle cx="12" cy="10" r="3" />
+    </Svg>
+  );
+}
+
+// Check icon, replaces ✓
+function CheckIcon({ size = 13, color = '#008080' }: { size?: number; color?: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <Circle cx="12" cy="12" r="10" />
+      <Path d="m8 12 3 3 5-6" />
+    </Svg>
+  );
+}
 
 function formatPhone(val: string) {
   const digits = val.replace(/\D/g, '').slice(0, 10);
@@ -455,14 +488,14 @@ export default function EditTournamentScreen() {
             <Text style={styles.label}>Start Date</Text>
             <TouchableOpacity style={styles.dropdown} onPress={() => { Keyboard.dismiss(); setShowStartPicker(true); }}>
               <Text style={startDate ? styles.dropdownSelected : styles.dropdownPlaceholder}>{startDate || 'Select start date...'}</Text>
-              <Text style={styles.dropdownArrow}>📅</Text>
+              <CalendarIcon size={16} color="#008080" />
             </TouchableOpacity>
             <DateTimePickerModal isVisible={showStartPicker} mode="date" onConfirm={handleStartConfirm} onCancel={() => setShowStartPicker(false)} />
 
             <Text style={styles.label}>End Date</Text>
             <TouchableOpacity style={styles.dropdown} onPress={() => { Keyboard.dismiss(); setShowEndPicker(true); }}>
               <Text style={endDate ? styles.dropdownSelected : styles.dropdownPlaceholder}>{endDate || 'Select end date...'}</Text>
-              <Text style={styles.dropdownArrow}>📅</Text>
+              <CalendarIcon size={16} color="#008080" />
             </TouchableOpacity>
             <DateTimePickerModal isVisible={showEndPicker} mode="date" onConfirm={handleEndConfirm} onCancel={() => setShowEndPicker(false)} />
 
@@ -488,7 +521,10 @@ export default function EditTournamentScreen() {
             </View>
             {(address || city || state) ? (
               <View style={styles.autoFilledBox}>
-                <Text style={styles.autoFilledText}>📍 {[address, city, state, zip].filter(Boolean).join(', ')}</Text>
+                <View style={styles.autoFilledTextRow}>
+                  <LocationIcon size={13} color="#003333" />
+                  <Text style={styles.autoFilledText}>{[address, city, state, zip].filter(Boolean).join(', ')}</Text>
+                </View>
                 <TouchableOpacity onPress={() => { setAddress(''); setCity(''); setState(''); setZip(''); }}>
                   <Text style={styles.clearText}>Clear</Text>
                 </TouchableOpacity>
@@ -503,8 +539,9 @@ export default function EditTournamentScreen() {
             {showDivisionPicker && (
               <View style={styles.dropdownList}>
                 {divisionOptions.map((d) => (
-                  <TouchableOpacity key={d} style={styles.dropdownItem} onPress={() => toggleDivision(d)}>
-                    <Text style={[styles.dropdownItemText, divisions.includes(d) && styles.dropdownItemActive]}>{divisions.includes(d) ? '✓ ' : ''}{d}</Text>
+                  <TouchableOpacity key={d} style={styles.dropdownItemRow} onPress={() => toggleDivision(d)}>
+                    {divisions.includes(d) ? <CheckIcon size={13} color="#008080" /> : null}
+                    <Text style={[styles.dropdownItemText, divisions.includes(d) && styles.dropdownItemActive]}>{d}</Text>
                   </TouchableOpacity>
                 ))}
                 <TouchableOpacity style={[styles.dropdownItem, { backgroundColor: '#e0f5f5' }]} onPress={() => setShowDivisionPicker(false)}>
@@ -671,7 +708,7 @@ export default function EditTournamentScreen() {
             <Text style={styles.label}>Deposit Due Date <Text style={styles.optional}>(optional)</Text></Text>
             <TouchableOpacity style={styles.dropdown} onPress={() => { Keyboard.dismiss(); setShowDepositDuePicker(true); }}>
               <Text style={depositDue ? styles.dropdownSelected : styles.dropdownPlaceholder}>{depositDue || 'Select deposit due date...'}</Text>
-              <Text style={styles.dropdownArrow}>📅</Text>
+              <CalendarIcon size={16} color="#008080" />
             </TouchableOpacity>
             <DateTimePickerModal isVisible={showDepositDuePicker} mode="date" onConfirm={handleDepositDueConfirm} onCancel={() => setShowDepositDuePicker(false)} />
 
@@ -710,13 +747,15 @@ const styles = StyleSheet.create({
   dropdownArrow: { fontSize: 12, color: '#008080' },
   dropdownList: { backgroundColor: '#fff', borderRadius: 12, marginBottom: 8, overflow: 'hidden', borderWidth: 1, borderColor: '#e0d8c8' },
   dropdownItem: { paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#f0fafa' },
+  dropdownItemRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#f0fafa' },
   dropdownItemText: { fontSize: 15, color: '#003333' },
   dropdownItemActive: { color: '#008080', fontWeight: 'bold' },
   submitBtn: { backgroundColor: '#008080', borderRadius: 12, paddingVertical: 16, alignItems: 'center', marginTop: 8, marginBottom: 40 },
   submitText: { color: '#fff', fontSize: 18, letterSpacing: 1 },
   placesWrapper: { marginBottom: 12, zIndex: 10 },
   autoFilledBox: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#e0f5f5', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, marginBottom: 12 },
-  autoFilledText: { fontSize: 13, color: '#003333', flex: 1, marginRight: 8 },
+  autoFilledTextRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1, marginRight: 8 },
+  autoFilledText: { fontSize: 13, color: '#003333', flex: 1 },
   clearText: { fontSize: 13, color: '#008080', fontWeight: 'bold' },
   manualToggleBtn: { paddingVertical: 10, alignItems: 'center', marginBottom: 4 },
   manualToggleText: { fontSize: 13, color: '#008080', fontWeight: '600', textDecorationLine: 'underline' },

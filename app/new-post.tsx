@@ -6,9 +6,30 @@ import { addDoc, collection, doc, getDoc, serverTimestamp, updateDoc } from 'fir
 import { getDownloadURL, getStorage, ref, uploadBytes } from 'firebase/storage';
 import { useState } from 'react';
 import { ActivityIndicator, Alert, Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import Svg, { Circle, Line, Path } from 'react-native-svg';
 import { auth, db } from '../firebaseConfig';
 
 const typeOptions = ['Sale', 'Question'];
+
+// Camera icon, replaces 📷
+function CameraIcon({ size = 16, color = '#008080' }: { size?: number; color?: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <Path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" />
+      <Circle cx="12" cy="13" r="4" />
+    </Svg>
+  );
+}
+
+// X icon, replaces ✕
+function XIcon({ size = 14, color = '#888' }: { size?: number; color?: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <Line x1="18" y1="6" x2="6" y2="18" />
+      <Line x1="6" y1="6" x2="18" y2="18" />
+    </Svg>
+  );
+}
 
 export default function NewPostScreen() {
   const router = useRouter();
@@ -108,8 +129,9 @@ export default function NewPostScreen() {
     <ScrollView style={styles.container} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
 
       <View style={styles.topRow}>
-        <TouchableOpacity onPress={() => router.back()}>
-          <Text style={styles.backText}>✕ Cancel</Text>
+        <TouchableOpacity onPress={() => router.back()} style={styles.cancelRow}>
+          <XIcon size={13} color="#888" />
+          <Text style={styles.backText}>Cancel</Text>
         </TouchableOpacity>
         <Text style={[styles.title, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>NEW POST</Text>
         <TouchableOpacity style={styles.postBtn} onPress={handlePost} disabled={isSubmitting}>
@@ -192,7 +214,10 @@ export default function NewPostScreen() {
             {uploadingPhoto ? (
               <ActivityIndicator color="#008080" />
             ) : (
-              <Text style={styles.photoPickBtnText}>📷  Add a Photo</Text>
+              <View style={styles.photoPickBtnRow}>
+                <CameraIcon size={16} color="#008080" />
+                <Text style={styles.photoPickBtnText}>Add a Photo</Text>
+              </View>
             )}
           </TouchableOpacity>
         )}
@@ -205,6 +230,7 @@ export default function NewPostScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f5ede0', paddingTop: 60 },
   topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, marginBottom: 20 },
+  cancelRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   backText: { fontSize: 15, color: '#888', fontWeight: '500' },
   title: { fontSize: 22, color: '#003333', letterSpacing: 2 },
   postBtn: { backgroundColor: '#008080', borderRadius: 20, paddingHorizontal: 18, paddingVertical: 8 },
@@ -223,6 +249,7 @@ const styles = StyleSheet.create({
   dropdownItemText: { fontSize: 14, color: '#003333' },
   dropdownItemActive: { color: '#008080', fontWeight: '700' },
   photoPickBtn: { backgroundColor: '#fff', borderRadius: 16, paddingVertical: 18, alignItems: 'center', borderWidth: 1, borderColor: '#e8e8e8', borderStyle: 'dashed' },
+  photoPickBtnRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   photoPickBtnText: { fontSize: 14, color: '#008080', fontWeight: '600' },
   photoPreviewWrap: { gap: 8 },
   photoPreview: { width: '100%', height: 180, borderRadius: 16, resizeMode: 'cover' },

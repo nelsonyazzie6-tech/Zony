@@ -7,7 +7,7 @@ import { arrayRemove, collection, deleteDoc, doc, getDoc, getDocs, increment, on
 import { deleteObject, getStorage, ref } from 'firebase/storage';
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Image, Linking, Modal, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import Svg, { Circle, Path, Rect } from 'react-native-svg';
+import Svg, { Circle, Line, Path, Rect } from 'react-native-svg';
 import { auth, db } from '../../firebaseConfig';
 
 const AVATAR_COLORS = ['#008080', '#7A1E1E', '#B8860B'];
@@ -19,6 +19,60 @@ const FAQ = [
   { q: 'How do I post on the Sports Board?', a: 'Go to the Board tab and tap "+ POST TO BOARD" at the bottom.' },
   { q: 'How do I delete my post?', a: 'Open your post and tap "Delete Post" — only visible to the original poster.' },
 ];
+
+// Camera icon, replaces 📷
+function CameraIcon({ size = 16, color = '#003333' }: { size?: number; color?: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <Path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" />
+      <Circle cx="12" cy="13" r="4" />
+    </Svg>
+  );
+}
+
+// Trash icon, replaces 🗑️
+function TrashIcon({ size = 16, color = '#cc4444' }: { size?: number; color?: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <Path d="M3 6h18" />
+      <Path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+      <Path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+      <Line x1="10" y1="11" x2="10" y2="17" />
+      <Line x1="14" y1="11" x2="14" y2="17" />
+    </Svg>
+  );
+}
+
+// Mail icon, replaces ✉️
+function MailIcon({ size = 16, color = '#fff' }: { size?: number; color?: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <Rect x="2" y="4" width="20" height="16" rx="2" />
+      <Path d="m22 6-10 7L2 6" />
+    </Svg>
+  );
+}
+
+// Check icon, replaces ✓
+function CheckIcon({ size = 14, color = '#008080' }: { size?: number; color?: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <Circle cx="12" cy="12" r="10" />
+      <Path d="m8 12 3 3 5-6" />
+    </Svg>
+  );
+}
+
+// X icon, replaces ✗
+function XIcon({ size = 14, color = '#cc4444' }: { size?: number; color?: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <Circle cx="12" cy="12" r="10" />
+      <Line x1="15" y1="9" x2="9" y2="15" />
+      <Line x1="9" y1="9" x2="15" y2="15" />
+    </Svg>
+  );
+}
 
 function getSportColor(sport: string) {
   if (sport === 'Basketball') return '#008080';
@@ -459,7 +513,10 @@ export default function ProfileScreen() {
                       <Text style={styles.tournamentCardLocation}>{t.city}, {t.state}</Text>
                     </View>
                     <View style={[styles.registeredBadge, { backgroundColor: sportColor }]}>
-                      <Text style={styles.registeredBadgeText}>✓ REGISTERED</Text>
+                      <View style={styles.registeredBadgeRow}>
+                        <CheckIcon size={11} color="#fff" />
+                        <Text style={styles.registeredBadgeText}>REGISTERED</Text>
+                      </View>
                     </View>
                     <View style={[styles.tournamentSportBadge, { backgroundColor: `${sportColor}20` }]}>
                       <Text style={[styles.tournamentSportBadgeText, { color: sportColor }]}>{t.sport}</Text>
@@ -537,10 +594,16 @@ export default function ProfileScreen() {
             <Text style={[styles.modalTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>PROFILE PHOTO</Text>
             <Text style={styles.modalSub}>What would you like to do?</Text>
             <TouchableOpacity style={styles.photoActionBtn} onPress={handlePickPhoto}>
-              <Text style={[styles.photoActionText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>📷  CHANGE PHOTO</Text>
+              <View style={styles.photoActionRow}>
+                <CameraIcon size={16} color="#003333" />
+                <Text style={[styles.photoActionText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>CHANGE PHOTO</Text>
+              </View>
             </TouchableOpacity>
             <TouchableOpacity style={[styles.photoActionBtn, styles.photoActionDanger]} onPress={() => { setShowPhotoModal(false); setTimeout(() => setShowRemoveConfirmModal(true), 300); }}>
-              <Text style={[styles.photoActionText, { color: '#cc4444' }, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>🗑️  REMOVE PHOTO</Text>
+              <View style={styles.photoActionRow}>
+                <TrashIcon size={16} color="#cc4444" />
+                <Text style={[styles.photoActionText, { color: '#cc4444' }, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>REMOVE PHOTO</Text>
+              </View>
             </TouchableOpacity>
             <TouchableOpacity style={styles.photoActionCancelBtn} onPress={() => setShowPhotoModal(false)}>
               <Text style={[styles.photoActionCancelText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>CANCEL</Text>
@@ -636,7 +699,10 @@ export default function ProfileScreen() {
               <Text style={styles.toggleLabel}>Push Notifications</Text>
               <Switch value={notificationsEnabled} onValueChange={handleToggleNotifications} trackColor={{ false: '#e0e0e0', true: '#008080' }} thumbColor="#fff" />
             </View>
-            <Text style={styles.toggleHint}>{notificationsEnabled ? '✓ You will receive notifications' : '✗ Notifications are disabled'}</Text>
+            <View style={styles.toggleHintRow}>
+              {notificationsEnabled ? <CheckIcon size={13} color="#008080" /> : <XIcon size={13} color="#cc4444" />}
+              <Text style={styles.toggleHint}>{notificationsEnabled ? 'You will receive notifications' : 'Notifications are disabled'}</Text>
+            </View>
             <TouchableOpacity style={styles.modalDoneBtn} onPress={() => setShowNotifModal(false)}>
               <Text style={[styles.modalDoneText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>DONE</Text>
             </TouchableOpacity>
@@ -654,11 +720,14 @@ export default function ProfileScreen() {
               <Text style={styles.toggleLabel}>Hide Contact Info</Text>
               <Switch value={hideContactInfo} onValueChange={handleToggleHideContact} trackColor={{ false: '#e0e0e0', true: '#008080' }} thumbColor="#fff" />
             </View>
-            <Text style={styles.toggleHint}>
-              {hideContactInfo
-                ? '✓ Your phone and email are hidden on board posts'
-                : '✗ Your contact info is visible to everyone'}
-            </Text>
+            <View style={styles.toggleHintRow}>
+              {hideContactInfo ? <CheckIcon size={13} color="#008080" /> : <XIcon size={13} color="#cc4444" />}
+              <Text style={styles.toggleHint}>
+                {hideContactInfo
+                  ? 'Your phone and email are hidden on board posts'
+                  : 'Your contact info is visible to everyone'}
+              </Text>
+            </View>
             <TouchableOpacity style={styles.modalDoneBtn} onPress={() => setShowPrivacyModal(false)}>
               <Text style={[styles.modalDoneText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>DONE</Text>
             </TouchableOpacity>
@@ -699,7 +768,10 @@ export default function ProfileScreen() {
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.sheetContent}>
               <Text style={[styles.sheetTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>HELP & SUPPORT</Text>
               <TouchableOpacity style={styles.contactBtn} onPress={() => Linking.openURL('mailto:support@zony.app')}>
-                <Text style={[styles.contactBtnText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>✉️ CONTACT US</Text>
+                <View style={styles.contactBtnRow}>
+                  <MailIcon size={16} color="#fff" />
+                  <Text style={[styles.contactBtnText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>CONTACT US</Text>
+                </View>
               </TouchableOpacity>
               <Text style={styles.faqHeader}>FREQUENTLY ASKED QUESTIONS</Text>
               {FAQ.map((item, i) => (
@@ -764,6 +836,7 @@ const styles = StyleSheet.create({
   tournamentSportBadge: { borderRadius: 10, paddingHorizontal: 8, paddingVertical: 4, marginRight: 12 },
   tournamentSportBadgeText: { fontSize: 11, fontWeight: '700' },
   registeredBadge: { borderRadius: 10, paddingHorizontal: 8, paddingVertical: 4, marginRight: 8 },
+  registeredBadgeRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   registeredBadgeText: { fontSize: 10, fontWeight: '900', color: '#fff', letterSpacing: 0.5 },
   tournamentDeleteBtn: { borderTopWidth: 1, borderTopColor: '#f0f0f0', paddingVertical: 10, alignItems: 'center' },
   tournamentDeleteText: { fontSize: 13, color: '#cc4444', fontWeight: '600' },
@@ -783,12 +856,14 @@ const styles = StyleSheet.create({
   modalDoneText: { fontSize: 15, color: '#fff', letterSpacing: 1 },
   photoActionBtn: { backgroundColor: '#fff', borderRadius: 14, paddingVertical: 14, alignItems: 'center', marginBottom: 8, borderWidth: 1, borderColor: '#e0d8c8' },
   photoActionDanger: { borderColor: '#fecaca' },
+  photoActionRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   photoActionText: { fontSize: 15, color: '#003333', letterSpacing: 0.5 },
   photoActionCancelBtn: { paddingVertical: 12, alignItems: 'center', marginTop: 4 },
   photoActionCancelText: { fontSize: 14, color: '#aaa', letterSpacing: 1 },
   toggleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#fff', borderRadius: 14, paddingHorizontal: 16, paddingVertical: 14, marginBottom: 8 },
   toggleLabel: { fontSize: 14, color: '#333', fontWeight: '500' },
-  toggleHint: { fontSize: 12, color: '#a0b8b8', textAlign: 'center', marginBottom: 16 },
+  toggleHintRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginBottom: 16 },
+  toggleHint: { fontSize: 12, color: '#a0b8b8', textAlign: 'center' },
   sheetOverlay: { flex: 1, justifyContent: 'flex-end' },
   sheetBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.4)' },
   sheet: { backgroundColor: '#f5ede0', borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '85%' },
@@ -796,6 +871,7 @@ const styles = StyleSheet.create({
   sheetContent: { paddingHorizontal: 20, paddingBottom: 40 },
   sheetTitle: { fontSize: 22, color: '#003333', letterSpacing: 2, textAlign: 'center', marginBottom: 16, marginTop: 8 },
   contactBtn: { backgroundColor: '#008080', borderRadius: 14, paddingVertical: 14, alignItems: 'center', marginBottom: 24 },
+  contactBtnRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   contactBtnText: { color: '#fff', fontSize: 16, letterSpacing: 1 },
   faqHeader: { fontSize: 10, color: '#a0b8b8', letterSpacing: 2, fontWeight: '700', marginBottom: 10 },
   faqItem: { backgroundColor: '#fff', borderRadius: 14, padding: 14, marginBottom: 8, borderWidth: 1, borderColor: '#e8e8e8' },

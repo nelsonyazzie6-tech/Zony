@@ -9,7 +9,7 @@ import {
   KeyboardAvoidingView, Platform, StyleSheet, Text,
   TextInput, TouchableOpacity, View
 } from 'react-native';
-import Svg, { Path } from 'react-native-svg';
+import Svg, { Circle, Line, Path } from 'react-native-svg';
 import { auth, db } from '../firebaseConfig';
 
 GoogleSignin.configure({
@@ -52,6 +52,27 @@ function UserIcon() {
     <Svg width={18} height={18} viewBox="0 0 18 18" fill="none" style={{ marginRight: 10 }}>
       <Path d="M9 9a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" stroke="#999" strokeWidth="1.4"/>
       <Path d="M1 17c0-4 3.6-7 8-7s8 3 8 7" stroke="#999" strokeWidth="1.4" strokeLinecap="round"/>
+    </Svg>
+  );
+}
+
+// Warning icon, replaces ⚠️
+function WarningIcon() {
+  return (
+    <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#cc2222" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 8 }}>
+      <Path d="m12 2 10 18H2L12 2z" />
+      <Line x1="12" y1="9" x2="12" y2="13" />
+      <Line x1="12" y1="17" x2="12" y2="17" />
+    </Svg>
+  );
+}
+
+// Check icon, replaces ✓
+function CheckIcon() {
+  return (
+    <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#006060" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 8 }}>
+      <Circle cx="12" cy="12" r="10" />
+      <Path d="m8 12 3 3 5-6" />
     </Svg>
   );
 }
@@ -295,13 +316,19 @@ export default function LoginScreen() {
 
         {errorMsg ? (
           <View style={styles.errorBox}>
-            <Text style={styles.errorText}>⚠️  {errorMsg}</Text>
+            <View style={styles.messageRow}>
+              <WarningIcon />
+              <Text style={styles.errorText}>{errorMsg}</Text>
+            </View>
           </View>
         ) : null}
 
         {successMsg ? (
           <View style={styles.successBox}>
-            <Text style={styles.successText}>✓  {successMsg}</Text>
+            <View style={styles.messageRow}>
+              <CheckIcon />
+              <Text style={styles.successText}>{successMsg}</Text>
+            </View>
           </View>
         ) : null}
 
@@ -414,6 +441,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   input: { flex: 1, fontSize: 15, color: '#003333' },
+  messageRow: { flexDirection: 'row', alignItems: 'center' },
   errorBox: {
     backgroundColor: '#fff0f0',
     borderRadius: 12,
@@ -425,6 +453,7 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   errorText: {
+    flex: 1,
     fontSize: 13,
     color: '#cc2222',
     fontWeight: '600',
@@ -441,6 +470,7 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   successText: {
+    flex: 1,
     fontSize: 13,
     color: '#006060',
     fontWeight: '600',

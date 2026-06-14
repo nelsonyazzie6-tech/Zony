@@ -17,6 +17,19 @@ function SadFace() {
   );
 }
 
+// Trophy icon to replace 🏅 / 🏆
+function TrophyIcon({ size = 13, color = '#5a5a5a' }: { size?: number; color?: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <Path d="M8 21h8" />
+      <Path d="M12 17v4" />
+      <Path d="M7 4h10v5a5 5 0 0 1-10 0z" />
+      <Path d="M17 5h3a2 2 0 0 1-2 4h-1" />
+      <Path d="M7 5H4a2 2 0 0 0 2 4h1" />
+    </Svg>
+  );
+}
+
 function getSportColor(sport: string) {
   if (sport === 'Basketball') return '#008080';
   if (sport === 'Volleyball') return '#7A1E1E';
@@ -251,8 +264,18 @@ export default function BoardScreen() {
                     </View>
                   </View>
 
-                  {p.division ? <Text style={styles.detail}>🏅 {p.division}</Text> : null}
-                  {p.forTournament ? <Text style={styles.detail}>🏆 {p.forTournament}</Text> : null}
+                  {p.division ? (
+                    <View style={styles.detailRow}>
+                      <TrophyIcon size={13} color="#5a5a5a" />
+                      <Text style={styles.detail}>{p.division}</Text>
+                    </View>
+                  ) : null}
+                  {p.forTournament ? (
+                    <View style={styles.detailRow}>
+                      <TrophyIcon size={13} color="#5a5a5a" />
+                      <Text style={styles.detail}>{p.forTournament}</Text>
+                    </View>
+                  ) : null}
                   {p.description ? <Text style={styles.description} numberOfLines={2}>{p.description}</Text> : null}
 
                   <View style={styles.cardFooter}>
@@ -301,7 +324,8 @@ const styles = StyleSheet.create({
   cardName: { fontSize: 17, fontWeight: '900', flex: 1, marginRight: 8, letterSpacing: 0.5 },
   sportBadge: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1 },
   sportBadgeText: { fontSize: 11, fontWeight: '700' },
-  detail: { fontSize: 13, color: '#5a5a5a', marginBottom: 3 },
+  detailRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 3 },
+  detail: { fontSize: 13, color: '#5a5a5a' },
   description: { fontSize: 13, color: '#888', marginTop: 4, lineHeight: 18 },
   cardFooter: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#f0f0f0' },
   posterPhoto: { width: 22, height: 22, borderRadius: 11 },

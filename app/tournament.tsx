@@ -3,7 +3,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { addDoc, arrayRemove, arrayUnion, collection, deleteDoc, doc, getDoc, getDocs, increment, onSnapshot, orderBy, query, runTransaction, serverTimestamp, updateDoc, where } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 import { Clipboard, Image, KeyboardAvoidingView, Linking, Modal, Platform, ScrollView, Share, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import Svg, { Path } from 'react-native-svg';
+import Svg, { Circle, Line, Path, Rect } from 'react-native-svg';
 import { auth, db } from '../firebaseConfig';
 
 function SadFace() {
@@ -26,6 +26,139 @@ function SuccessTrophy() {
     </Svg>
   );
 }
+
+// ---- Inline icon set (replaces emojis) ----
+type IconProps = { size?: number; color?: string };
+
+function CalendarIcon({ size = 15, color = '#008080' }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <Rect x="3" y="4" width="18" height="18" rx="2" />
+      <Line x1="16" y1="2" x2="16" y2="6" />
+      <Line x1="8" y1="2" x2="8" y2="6" />
+      <Line x1="3" y1="10" x2="21" y2="10" />
+    </Svg>
+  );
+}
+
+function LocationIcon({ size = 15, color = '#008080' }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <Path d="M21 10c0 7-9 12-9 12s-9-5-9-12a9 9 0 1 1 18 0z" />
+      <Circle cx="12" cy="10" r="3" />
+    </Svg>
+  );
+}
+
+function PeopleIcon({ size = 15, color = '#008080' }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <Path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+      <Circle cx="9" cy="7" r="4" />
+      <Path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+      <Path d="M16 3.13a4 4 0 0 1 0 7.75" />
+    </Svg>
+  );
+}
+
+function TrophyIcon({ size = 15, color = '#008080' }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <Path d="M8 21h8" />
+      <Path d="M12 17v4" />
+      <Path d="M7 4h10v5a5 5 0 0 1-10 0z" />
+      <Path d="M17 5h3a2 2 0 0 1-2 4h-1" />
+      <Path d="M7 5H4a2 2 0 0 0 2 4h1" />
+    </Svg>
+  );
+}
+
+function CardIcon({ size = 15, color = '#008080' }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <Rect x="2" y="5" width="20" height="14" rx="2" />
+      <Line x1="2" y1="10" x2="22" y2="10" />
+    </Svg>
+  );
+}
+
+function PhoneCallIcon({ size = 15, color = '#008080' }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <Path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.91.69 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.33 1.85.56 2.81.69A2 2 0 0 1 22 16.92z" />
+    </Svg>
+  );
+}
+
+function PhoneMobileIcon({ size = 12, color = '#999' }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <Rect x="5" y="2" width="14" height="20" rx="2" />
+      <Line x1="12" y1="18" x2="12" y2="18" />
+    </Svg>
+  );
+}
+
+function MailIcon({ size = 15, color = '#008080' }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <Rect x="2" y="4" width="20" height="16" rx="2" />
+      <Path d="m22 6-10 7L2 6" />
+    </Svg>
+  );
+}
+
+function TicketIcon({ size = 15, color = '#008080' }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <Path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2z" />
+      <Line x1="13" y1="5" x2="13" y2="19" strokeDasharray="2 2" />
+    </Svg>
+  );
+}
+
+function WarningIcon({ size = 15, color = '#cc4444' }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <Path d="m12 2 10 18H2L12 2z" />
+      <Line x1="12" y1="9" x2="12" y2="13" />
+      <Line x1="12" y1="17" x2="12" y2="17" />
+    </Svg>
+  );
+}
+
+function CheckIcon({ size = 15, color = '#fff' }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <Circle cx="12" cy="12" r="10" />
+      <Path d="m8 12 3 3 5-6" />
+    </Svg>
+  );
+}
+
+function HourglassIcon({ size = 40, color = '#008080' }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <Path d="M6 2h12" />
+      <Path d="M6 22h12" />
+      <Path d="M6 2c0 5 4 8 6 10-2 2-6 5-6 10" />
+      <Path d="M18 2c0 5-4 8-6 10 2 2 6 5 6 10" />
+    </Svg>
+  );
+}
+
+function ClipboardIcon({ size = 15, color = '#7a5a00' }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <Rect x="4" y="3" width="16" height="18" rx="2" />
+      <Path d="M9 2h6v2H9z" />
+      <Line x1="8" y1="9" x2="16" y2="9" />
+      <Line x1="8" y1="13" x2="16" y2="13" />
+      <Line x1="8" y1="17" x2="12" y2="17" />
+    </Svg>
+  );
+}
+// ---- End icon set ----
 
 function formatPhone(val: string) {
   const digits = val.replace(/\D/g, '').slice(0, 10);
@@ -621,7 +754,8 @@ export default function TournamentScreen() {
 
         {isCanceled && (
           <View style={styles.canceledBanner}>
-            <Text style={styles.canceledBannerText}>⚠️ This tournament has been canceled</Text>
+            <WarningIcon size={14} color="#fff" />
+            <Text style={styles.canceledBannerText}>This tournament has been canceled</Text>
           </View>
         )}
 
@@ -667,7 +801,7 @@ export default function TournamentScreen() {
                   <Text style={styles.contactName}>{t.contactName}</Text>
                   {t.contactInfo ? (
                     <View style={styles.contactLine}>
-                      <Text style={styles.contactLineIcon}>📱</Text>
+                      <PhoneMobileIcon size={12} color="#999" />
                       <Text style={styles.contactLineText}>{t.contactInfo}</Text>
                     </View>
                   ) : null}
@@ -697,8 +831,9 @@ export default function TournamentScreen() {
                         </View>
                       ) : null}
                       {w.phone ? (
-                        <TouchableOpacity onPress={() => Linking.openURL(`tel:${w.phone.replace(/\D/g, '')}`)}>
-                          <Text style={[styles.waitlistPhone, { color: sportColor }]}>📱 {w.phone}</Text>
+                        <TouchableOpacity onPress={() => Linking.openURL(`tel:${w.phone.replace(/\D/g, '')}`)} style={styles.contactLineNoIndent}>
+                          <PhoneMobileIcon size={12} color={sportColor} />
+                          <Text style={[styles.waitlistPhone, { color: sportColor }]}>{w.phone}</Text>
                         </TouchableOpacity>
                       ) : null}
                       {joinedDate ? <Text style={styles.waitlistDate}>Joined {joinedDate}</Text> : null}
@@ -721,7 +856,7 @@ export default function TournamentScreen() {
               {/* Hard-to-miss banner shown when the current user has a team registered */}
               {joined && !isOwner && (
                 <View style={[styles.registeredBanner, { backgroundColor: sportColor }]}>
-                  <Text style={styles.registeredBannerIcon}>✓</Text>
+                  <CheckIcon size={18} color="#fff" />
                   <Text style={[styles.registeredBannerText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]} numberOfLines={2}>
                     {myTeamName ? `${myTeamName} is Registered` : 'You\'re Registered'}
                   </Text>
@@ -748,10 +883,10 @@ export default function TournamentScreen() {
 
               <View style={styles.divider} />
 
-              <View style={styles.row}><Text style={styles.rowIcon}>📅</Text><Text style={styles.rowLabel}>Date</Text></View>
+              <View style={styles.row}><CalendarIcon /><Text style={styles.rowLabel}>Date</Text></View>
               <Text style={styles.rowValue}>{tournament.date}</Text>
 
-              <View style={[styles.row, { marginTop: 16 }]}><Text style={styles.rowIcon}>📍</Text><Text style={styles.rowLabel}>Location</Text></View>
+              <View style={[styles.row, { marginTop: 16 }]}><LocationIcon /><Text style={styles.rowLabel}>Location</Text></View>
               {tournament.address ? <Text style={styles.rowValue}>{tournament.address}</Text> : null}
               <Text style={styles.rowValue}>{tournament.city}, {tournament.state} {tournament.zip}</Text>
               <TouchableOpacity style={styles.copyBtn} onPress={handleCopyAddress}>
@@ -760,7 +895,7 @@ export default function TournamentScreen() {
 
               {tournament.divisions?.length > 0 && (
                 <>
-                  <View style={[styles.row, { marginTop: 16 }]}><Text style={styles.rowIcon}>🏅</Text><Text style={styles.rowLabel}>Divisions</Text></View>
+                  <View style={[styles.row, { marginTop: 16 }]}><TrophyIcon /><Text style={styles.rowLabel}>Divisions</Text></View>
                   {tournament.divisions.map((d: string) => {
                     const fee = getDivisionFee(d);
                     const divSpots = getDivisionSpotsLeft(d);
@@ -782,7 +917,7 @@ export default function TournamentScreen() {
 
               {tournament.spectatorFee ? (
                 <>
-                  <View style={[styles.row, { marginTop: 16 }]}><Text style={styles.rowIcon}>🎟️</Text><Text style={styles.rowLabel}>Spectator Fee</Text></View>
+                  <View style={[styles.row, { marginTop: 16 }]}><TicketIcon /><Text style={styles.rowLabel}>Spectator Fee</Text></View>
                   <Text style={styles.rowValue}>
                     {tournament.spectatorFee} at the door{spectatorPaymentMethodsText ? `  ·  ${spectatorPaymentMethodsText}` : ''}
                   </Text>
@@ -791,14 +926,14 @@ export default function TournamentScreen() {
 
               {tournament.rosterSize ? (
                 <>
-                  <View style={[styles.row, { marginTop: 16 }]}><Text style={styles.rowIcon}>👥</Text><Text style={styles.rowLabel}>Roster Size</Text></View>
+                  <View style={[styles.row, { marginTop: 16 }]}><PeopleIcon /><Text style={styles.rowLabel}>Roster Size</Text></View>
                   <Text style={styles.rowValue}>{tournament.rosterSize} players</Text>
                 </>
               ) : null}
 
               {tournament.prizes ? (
                 <>
-                  <View style={[styles.row, { marginTop: 16 }]}><Text style={styles.rowIcon}>🏆</Text><Text style={styles.rowLabel}>Prizes</Text></View>
+                  <View style={[styles.row, { marginTop: 16 }]}><TrophyIcon /><Text style={styles.rowLabel}>Prizes</Text></View>
                   {tournament.prizes.split(/\n| · /).map((line: string, i: number) => line.trim() ? (
                     <Text key={i} style={styles.rowValue}>{line.trim()}</Text>
                   ) : null)}
@@ -807,25 +942,25 @@ export default function TournamentScreen() {
 
               {tournament.depositAmount ? (
                 <>
-                  <View style={[styles.row, { marginTop: 16 }]}><Text style={styles.rowIcon}>💳</Text><Text style={styles.rowLabel}>Deposit</Text></View>
+                  <View style={[styles.row, { marginTop: 16 }]}><CardIcon /><Text style={styles.rowLabel}>Deposit</Text></View>
                   <Text style={styles.rowValue}>{tournament.depositAmount}{tournament.depositDue ? ` due by ${tournament.depositDue}` : ''}</Text>
                 </>
               ) : null}
 
               {(tournament.contactName || tournament.contactPhone || tournament.contactEmail) ? (
                 <>
-                  <View style={[styles.row, { marginTop: 16 }]}><Text style={styles.rowIcon}>📞</Text><Text style={styles.rowLabel}>Contact</Text></View>
+                  <View style={[styles.row, { marginTop: 16 }]}><PhoneCallIcon /><Text style={styles.rowLabel}>Contact</Text></View>
                   {tournament.contactName ? <Text style={styles.rowValue}>{tournament.contactName}</Text> : null}
                   {tournament.contactPhone ? (
                     <TouchableOpacity onPress={() => Linking.openURL(`tel:${tournament.contactPhone.replace(/\D/g, '')}`)} style={styles.contactLine}>
-                      <Text style={styles.contactLineIcon}>📱</Text>
-                      <Text style={[styles.rowValue, styles.tappableLink]}>{tournament.contactPhone}</Text>
+                      <PhoneMobileIcon size={12} color="#008080" />
+                      <Text style={[styles.tappableLink, { paddingLeft: 0 }]}>{tournament.contactPhone}</Text>
                     </TouchableOpacity>
                   ) : null}
                   {tournament.contactEmail ? (
                     <TouchableOpacity onPress={() => Linking.openURL(`mailto:${tournament.contactEmail}`)} style={styles.contactLine}>
-                      <Text style={styles.contactLineIcon}>✉️</Text>
-                      <Text style={[styles.rowValue, styles.tappableLink]}>{tournament.contactEmail}</Text>
+                      <MailIcon size={12} color="#008080" />
+                      <Text style={[styles.tappableLink, { paddingLeft: 0 }]}>{tournament.contactEmail}</Text>
                     </TouchableOpacity>
                   ) : null}
                 </>
@@ -839,8 +974,9 @@ export default function TournamentScreen() {
 
               {onWaitlist && !isOwner && (
                 <View style={styles.waitlistBanner}>
+                  <ClipboardIcon size={16} color="#7a5a00" />
                   <Text style={styles.waitlistBannerText}>
-                    📋 You're on the waitlist{myWaitlistDivision ? ` for ${myWaitlistDivision}` : ''} — you'll be automatically added if a spot opens.
+                    You're on the waitlist{myWaitlistDivision ? ` for ${myWaitlistDivision}` : ''} — you'll be automatically added if a spot opens.
                   </Text>
                 </View>
               )}
@@ -860,7 +996,7 @@ export default function TournamentScreen() {
                 {joined ? (
                   <>
                     <TouchableOpacity style={[styles.joinBtn, { backgroundColor: sportColor }]} onPress={openEditRegistration}>
-                      <Text style={styles.joinText}>Edit Registration ✏️</Text>
+                      <Text style={styles.joinText}>Edit Registration</Text>
                     </TouchableOpacity>
                     <TouchableOpacity style={styles.cancelRegBtn} onPress={handleCancelRegistration}>
                       <Text style={styles.cancelRegText}>Cancel Registration</Text>
@@ -952,17 +1088,20 @@ export default function TournamentScreen() {
               )}
               {teamDivision && getDivisionFee(teamDivision) ? (
                 <View style={styles.selectedDivisionFeeBox}>
-                  <Text style={styles.selectedDivisionFeeText}>💵 Entry fee for {teamDivision}: {getDivisionFee(teamDivision)}</Text>
+                  <CardIcon size={14} color="#003333" />
+                  <Text style={styles.selectedDivisionFeeText}>Entry fee for {teamDivision}: {getDivisionFee(teamDivision)}</Text>
                 </View>
               ) : null}
               {teamDivision && getDivisionSpotsLeft(teamDivision) === 0 ? (
                 <View style={styles.depositNotice}>
-                  <Text style={styles.depositNoticeText}>⚠️ {teamDivision} is currently full. You'll be notified if you try to register, and can join the waitlist instead.</Text>
+                  <WarningIcon size={14} color="#7a5a00" />
+                  <Text style={styles.depositNoticeText}>{teamDivision} is currently full. You'll be notified if you try to register, and can join the waitlist instead.</Text>
                 </View>
               ) : null}
               {tournament.depositAmount && !isEditingRegistration ? (
                 <View style={styles.depositNotice}>
-                  <Text style={styles.depositNoticeText}>💰 Non-refundable deposit of {tournament.depositAmount}{tournament.depositDue ? ` due by ${tournament.depositDue}` : ' required'}.</Text>
+                  <CardIcon size={14} color="#7a5a00" />
+                  <Text style={styles.depositNoticeText}>Non-refundable deposit of {tournament.depositAmount}{tournament.depositDue ? ` due by ${tournament.depositDue}` : ' required'}.</Text>
                 </View>
               ) : null}
               <View style={styles.modalBtns}>
@@ -1020,7 +1159,7 @@ export default function TournamentScreen() {
           <View style={styles.successBox}>
             {onWaitlist ? (
               <>
-                <Text style={{ fontSize: 40, marginBottom: 8 }}>⏳</Text>
+                <HourglassIcon size={40} color="#008080" />
                 <Text style={[styles.successTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>ON THE WAITLIST</Text>
                 <Text style={styles.successMsg}>You'll be automatically added to {tournament.name}{myWaitlistDivision ? ` (${myWaitlistDivision})` : ''} if a spot opens.</Text>
                 <TouchableOpacity style={[styles.successBtn, { backgroundColor: sportColor }]} onPress={() => setShowWaitlistModal(false)}>
@@ -1029,7 +1168,7 @@ export default function TournamentScreen() {
               </>
             ) : (
               <>
-                <Text style={{ fontSize: 40, marginBottom: 8 }}>📋</Text>
+                <ClipboardIcon size={40} color="#008080" />
                 <Text style={[styles.successTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>JOIN WAITLIST</Text>
                 <Text style={styles.successMsg}>You'll be automatically added if a spot opens. Add your phone so the organizer can reach you.</Text>
 
@@ -1104,11 +1243,15 @@ export default function TournamentScreen() {
             <Text style={styles.successMsg}>{successData?.teamName} is registered for {successData?.tournamentName}.</Text>
             {successData?.depositMsg ? (
               <View style={styles.successDepositBox}>
-                <Text style={styles.successDepositText}>💰 {successData.depositMsg}</Text>
+                <CardIcon size={14} color="#7a5a00" />
+                <Text style={styles.successDepositText}>{successData.depositMsg}</Text>
               </View>
             ) : null}
             <View style={styles.paymentPromptBox}>
-              <Text style={styles.paymentPromptTitle}>💳 Payment Details</Text>
+              <View style={styles.paymentPromptTitleRow}>
+                <CardIcon size={14} color="#003333" />
+                <Text style={styles.paymentPromptTitle}>Payment Details</Text>
+              </View>
               <Text style={styles.paymentPromptText}>Contact the organizer for payment instructions and accepted methods.</Text>
               {successData?.contactInfo ? <Text style={styles.paymentContactInfo}>{successData.contactInfo}</Text> : null}
             </View>
@@ -1136,7 +1279,7 @@ const styles = StyleSheet.create({
   backText: { fontSize: 16, color: '#008080', fontWeight: '600' },
   shareBtn: { backgroundColor: '#e0f5f5', borderRadius: 20, paddingHorizontal: 14, paddingVertical: 6 },
   shareText: { fontSize: 14, color: '#008080', fontWeight: '600' },
-  canceledBanner: { backgroundColor: '#cc4444', marginHorizontal: 20, borderRadius: 10, paddingVertical: 10, paddingHorizontal: 16, marginBottom: 12 },
+  canceledBanner: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#cc4444', marginHorizontal: 20, borderRadius: 10, paddingVertical: 10, paddingHorizontal: 16, marginBottom: 12, justifyContent: 'center' },
   canceledBannerText: { color: '#fff', fontWeight: 'bold', fontSize: 14, textAlign: 'center' },
   tabRow: { flexDirection: 'row', marginHorizontal: 20, marginBottom: 16, backgroundColor: '#e0f5f5', borderRadius: 12, padding: 4 },
   tab: { flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center' },
@@ -1155,19 +1298,20 @@ const styles = StyleSheet.create({
   teamDivisionText: { fontSize: 12, fontWeight: '600' },
   submittedLabel: { fontSize: 10, color: '#aaa', fontWeight: '600', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 },
   contactName: { fontSize: 14, fontWeight: '600', color: '#333', marginBottom: 4 },
- contactLine: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2, paddingLeft: 24 },
+  contactLine: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2, paddingLeft: 24 },
+  contactLineNoIndent: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 },
   contactLineIcon: { fontSize: 12 },
   contactLineText: { fontSize: 12, color: '#777' },
-  tappableLink: { color: '#008080', textDecorationLine: 'underline' },
+  tappableLink: { fontSize: 14, color: '#008080', textDecorationLine: 'underline' },
   waitlistCard: { flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: '#fff', borderRadius: 16, padding: 16, marginBottom: 10, borderWidth: 1, borderColor: '#f0f0f0', shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 4, elevation: 1 },
   waitlistPosition: { width: 36, height: 36, borderRadius: 10, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   waitlistPositionText: { fontSize: 16, fontWeight: '900' },
   waitlistInfo: { flex: 1 },
   waitlistName: { fontSize: 15, color: '#111', fontWeight: '700', letterSpacing: 0.5 },
-  waitlistPhone: { fontSize: 12, fontWeight: '600', marginTop: 2 },
+  waitlistPhone: { fontSize: 12, fontWeight: '600' },
   waitlistDate: { fontSize: 12, color: '#a0b8b8', marginTop: 2 },
-  waitlistBanner: { backgroundColor: '#fff8e0', borderRadius: 12, padding: 12, marginTop: 12, borderWidth: 1, borderColor: '#f0d080' },
-  waitlistBannerText: { fontSize: 13, color: '#7a5a00', fontWeight: '600', lineHeight: 18 },
+  waitlistBanner: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, backgroundColor: '#fff8e0', borderRadius: 12, padding: 12, marginTop: 12, borderWidth: 1, borderColor: '#f0d080' },
+  waitlistBannerText: { flex: 1, fontSize: 13, color: '#7a5a00', fontWeight: '600', lineHeight: 18 },
   card: { backgroundColor: '#fff', borderRadius: 24, padding: 20, marginBottom: 16, shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 8, elevation: 2 },
   sportBadgeRow: { marginBottom: 12 },
   sportBadge: { alignSelf: 'flex-start', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 4 },
@@ -1225,10 +1369,10 @@ const styles = StyleSheet.create({
   modalDropdownItemActive: { color: '#008080', fontWeight: 'bold' },
   divisionPickerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   divisionFeeTag: { fontSize: 13, color: '#008080', fontWeight: '700' },
-  selectedDivisionFeeBox: { backgroundColor: '#e0f5f5', borderRadius: 10, padding: 10, marginTop: 6, marginBottom: 4 },
-  selectedDivisionFeeText: { fontSize: 13, color: '#003333', fontWeight: '600' },
-  depositNotice: { backgroundColor: '#fff8e0', borderRadius: 10, padding: 12, marginTop: 12, borderWidth: 1, borderColor: '#f0d080' },
-  depositNoticeText: { fontSize: 13, color: '#7a5a00', fontWeight: '600' },
+  selectedDivisionFeeBox: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#e0f5f5', borderRadius: 10, padding: 10, marginTop: 6, marginBottom: 4 },
+  selectedDivisionFeeText: { flex: 1, fontSize: 13, color: '#003333', fontWeight: '600' },
+  depositNotice: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, backgroundColor: '#fff8e0', borderRadius: 10, padding: 12, marginTop: 12, borderWidth: 1, borderColor: '#f0d080' },
+  depositNoticeText: { flex: 1, fontSize: 13, color: '#7a5a00', fontWeight: '600' },
   modalBtns: { flexDirection: 'row', gap: 10, marginTop: 20, marginBottom: 10 },
   modalCancelBtn: { flex: 1, borderRadius: 12, paddingVertical: 14, alignItems: 'center', borderWidth: 1, borderColor: '#c0d8d8' },
   modalCancelText: { fontSize: 16, color: '#5a7a7a', fontWeight: '600' },
@@ -1238,10 +1382,11 @@ const styles = StyleSheet.create({
   successBox: { backgroundColor: '#f5ede0', borderRadius: 24, padding: 28, alignItems: 'center', width: '100%', shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 16, elevation: 8 },
   successTitle: { fontSize: 28, color: '#003333', letterSpacing: 2, marginTop: 12, marginBottom: 8, textAlign: 'center' },
   successMsg: { fontSize: 15, color: '#555', textAlign: 'center', marginBottom: 12, lineHeight: 22 },
-  successDepositBox: { backgroundColor: '#fff8e0', borderRadius: 12, padding: 14, marginBottom: 12, borderWidth: 1, borderColor: '#f0d080', width: '100%' },
-  successDepositText: { fontSize: 13, color: '#7a5a00', fontWeight: '600', textAlign: 'center', lineHeight: 20 },
+  successDepositBox: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#fff8e0', borderRadius: 12, padding: 14, marginBottom: 12, borderWidth: 1, borderColor: '#f0d080', width: '100%' },
+  successDepositText: { flex: 1, fontSize: 13, color: '#7a5a00', fontWeight: '600', textAlign: 'left', lineHeight: 20 },
   paymentPromptBox: { backgroundColor: '#e0f5f5', borderRadius: 12, padding: 14, marginBottom: 20, width: '100%', borderWidth: 1, borderColor: '#c0e8e8' },
-  paymentPromptTitle: { fontSize: 13, fontWeight: '700', color: '#003333', marginBottom: 4 },
+  paymentPromptTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 },
+  paymentPromptTitle: { fontSize: 13, fontWeight: '700', color: '#003333' },
   paymentPromptText: { fontSize: 13, color: '#5a7a7a', lineHeight: 18 },
   paymentContactInfo: { fontSize: 13, color: '#008080', fontWeight: '600', marginTop: 6 },
   successBtn: { borderRadius: 14, paddingVertical: 14, paddingHorizontal: 40, alignItems: 'center', marginTop: 4 },
