@@ -29,7 +29,7 @@ function timeAgo(seconds: number) {
 
 function FeedImage({ uri }: { uri: string }) {
   const { width: screenWidth } = useWindowDimensions();
-  const cardWidth = screenWidth - 32 - 28; // outer list padding (16*2) + card padding (14*2)
+  const cardWidth = screenWidth - 32 - 28;
   const [aspectRatio, setAspectRatio] = useState(1);
 
   useEffect(() => {
@@ -118,6 +118,8 @@ export default function CommunityScreen() {
             <Polygon points="260,0 330,20 390,0" fill="white" opacity={0.06} />
             <Polygon points="240,130 310,80 390,130" fill="white" opacity={0.05} />
             <Polygon points="80,130 180,90 240,130" fill="white" opacity={0.04} />
+            <Polygon points="0,0 0,60 40,80 0,130 80,130 40,80" fill="white" opacity={0.03} />
+            <Polygon points="0,60 0,0 40,0 80,30 40,80" fill="white" opacity={0.03} />
           </Svg>
           <Text style={[styles.header, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>COMMUNITY</Text>
           <Text style={[styles.sub, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>Connect beyond the game</Text>

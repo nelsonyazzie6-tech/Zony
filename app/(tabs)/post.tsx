@@ -157,7 +157,6 @@ function TournamentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
   const [divisionSpots, setDivisionSpots] = useState<Record<string, string>>({});
   const [spectatorFee, setSpectatorFee] = useState('');
 
-  // Accepted payment methods for spectator entrance fee
   const [spectatorPaymentMethods, setSpectatorPaymentMethods] = useState<string[]>([]);
   const [spectatorPaymentOther, setSpectatorPaymentOther] = useState('');
 
@@ -169,7 +168,6 @@ function TournamentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
     { cash: '', physical: '' }, { cash: '', physical: '' }, { cash: '', physical: '' },
   ]);
 
-  // Manual prizes fallback — toggle between structured rows and free text
   const [useManualPrizes, setUseManualPrizes] = useState(false);
   const [manualPrizes, setManualPrizes] = useState('');
 
@@ -178,7 +176,6 @@ function TournamentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
   const [showDepositDuePicker, setShowDepositDuePicker] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  // Item 1 — manual location fallback
   const [useManualLocation, setUseManualLocation] = useState(false);
   const [manualVenue, setManualVenue] = useState('');
   const [manualAddress, setManualAddress] = useState('');
@@ -186,7 +183,6 @@ function TournamentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
   const [manualState, setManualState] = useState('');
   const [manualZip, setManualZip] = useState('');
 
-  // Styled info/error modal state
   const [infoModal, setInfoModal] = useState<{ visible: boolean; title: string; message: string }>({
     visible: false, title: '', message: '',
   });
@@ -200,12 +196,8 @@ function TournamentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
   const contactEmailRef = useRef<TextInput>(null);
   const depositAmountRef = useRef<TextInput>(null);
 
-  // "Available Spots" is only meaningful when there are no divisions, or
-  // when at least one selected division has been left blank (and thus
-  // needs this value as its fallback).
   const needsAvailableSpots = divisions.length === 0 || divisions.some(d => !divisionSpots[d]?.trim());
 
-  // Item 2 — auto-fill contact name from account
   useEffect(() => {
     const load = async () => {
       const user = auth.currentUser;
@@ -329,9 +321,6 @@ function TournamentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
     setLoading(true);
     const prizesFormatted = formatPrizes();
 
-    // Build per-division spot map. Any division left blank falls back to the
-    // overall "Available Spots" value so nothing breaks for organizers who
-    // don't set per-division numbers.
     const fallbackSpots = parseInt(spots) || 0;
     const finalDivisionSpots: Record<string, number> = {};
     divisions.forEach(d => {
@@ -359,7 +348,6 @@ function TournamentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
         organizerName, organizerPhoto,
       });
 
-      // Notify users who follow this sport
       try {
         const usersSnap = await getDocs(
           query(collection(db, 'users'), where('preferredSports', 'array-contains', sport))
@@ -417,6 +405,8 @@ function TournamentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
             <Polygon points="260,0 330,20 390,0" fill="white" opacity={0.06} />
             <Polygon points="240,130 310,80 390,130" fill="white" opacity={0.05} />
             <Polygon points="80,130 180,90 240,130" fill="white" opacity={0.04} />
+            <Polygon points="0,0 0,60 40,80 0,130 80,130 40,80" fill="white" opacity={0.03} />
+            <Polygon points="0,60 0,0 40,0 80,30 40,80" fill="white" opacity={0.03} />
           </Svg>
           <TouchableOpacity onPress={onBack} style={styles.formBackBtn}>
             <Text style={styles.formBackText}>‹ Back</Text>
@@ -457,7 +447,6 @@ function TournamentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
           </TouchableOpacity>
           <DateTimePickerModal isVisible={showEndPicker} mode="date" onConfirm={(date) => { handleEndConfirm(date); setTimeout(() => scrollRef.current?.scrollTo({ y: 420, animated: true }), 300); }} onCancel={() => setShowEndPicker(false)} />
 
-          {/* Item 1 — Venue / Address with manual fallback */}
           <Text style={styles.label}>Venue / Address</Text>
 
           {!useManualLocation ? (
@@ -662,7 +651,6 @@ function TournamentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
           <Text style={styles.label}>Contact Email <Text style={styles.optional}>(optional)</Text></Text>
           <TextInput ref={contactEmailRef} style={styles.input} placeholder="Email address" placeholderTextColor="#a0b8b8" value={contactEmail} onChangeText={setContactEmail} keyboardType="email-address" autoCapitalize="none" returnKeyType="next" blurOnSubmit={false} onSubmitEditing={() => Keyboard.dismiss()} />
 
-          {/* Prizes / Awards — structured rows or manual free text */}
           <Text style={styles.label}>Prizes / Awards</Text>
 
           {!useManualPrizes ? (
@@ -744,6 +732,7 @@ function TournamentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
 
 function BoardForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: () => void }) {
   const [fontsLoaded] = useFonts({ Rajdhani_700Bold });
+  const [headerHeight, setHeaderHeight] = useState(120);
 
   const [name, setName] = useState('');
   const [forTournament, setForTournament] = useState('');
@@ -761,7 +750,6 @@ function BoardForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: () =>
   const [description, setDescription] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // Styled info/error modal state
   const [infoModal, setInfoModal] = useState<{ visible: boolean; title: string; message: string }>({
     visible: false, title: '', message: '',
   });
@@ -882,7 +870,26 @@ function BoardForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: () =>
   return (
     <ScrollView style={styles.container} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
 
-      <View style={[styles.headerBlock, { backgroundColor: '#7A1E1E' }]}>
+      <View style={[styles.headerBlock, { backgroundColor: '#7A1E1E' }]} onLayout={e => setHeaderHeight(e.nativeEvent.layout.height)}>
+        <Svg style={StyleSheet.absoluteFill} width="100%" height={headerHeight} viewBox="0 0 390 130" preserveAspectRatio="xMidYMid slice">
+          <Polygon points="0,0 80,30 40,80" fill="white" opacity={0.04} />
+          <Polygon points="80,30 160,10 120,70" fill="white" opacity={0.07} />
+          <Polygon points="40,80 120,70 80,130" fill="white" opacity={0.05} />
+          <Polygon points="160,10 260,50 180,90" fill="white" opacity={0.06} />
+          <Polygon points="120,70 180,90 100,130" fill="white" opacity={0.08} />
+          <Polygon points="260,50 330,20 310,80" fill="white" opacity={0.05} />
+          <Polygon points="180,90 310,80 240,130" fill="white" opacity={0.07} />
+          <Polygon points="330,20 390,0 390,60" fill="white" opacity={0.04} />
+          <Polygon points="310,80 390,60 390,130" fill="white" opacity={0.06} />
+          <Polygon points="0,60 40,80 0,130" fill="white" opacity={0.05} />
+          <Polygon points="0,0 40,0 80,30" fill="white" opacity={0.08} />
+          <Polygon points="160,10 260,0 260,50" fill="white" opacity={0.04} />
+          <Polygon points="260,0 330,20 390,0" fill="white" opacity={0.06} />
+          <Polygon points="240,130 310,80 390,130" fill="white" opacity={0.05} />
+          <Polygon points="80,130 180,90 240,130" fill="white" opacity={0.04} />
+          <Polygon points="0,0 0,60 40,80 0,130 80,130 40,80" fill="white" opacity={0.03} />
+          <Polygon points="0,60 0,0 40,0 80,30 40,80" fill="white" opacity={0.03} />
+        </Svg>
         <TouchableOpacity onPress={onBack} style={styles.formBackBtn}>
           <Text style={styles.formBackText}>‹ Back</Text>
         </TouchableOpacity>
@@ -1076,7 +1083,6 @@ const styles = StyleSheet.create({
   paymentMethodPillActive: { backgroundColor: '#008080', borderColor: '#008080' },
   paymentMethodPillText: { fontSize: 13, color: '#5a7a7a', fontWeight: '600' },
   paymentMethodPillTextActive: { color: '#fff' },
-  // Info/Error modal styles
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 },
   modalBox: { backgroundColor: '#f5ede0', borderRadius: 24, padding: 24, width: '100%', shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 16, elevation: 8 },
   modalTitle: { fontSize: 20, color: '#003333', letterSpacing: 2, marginBottom: 8, textAlign: 'center' },

@@ -149,6 +149,8 @@ export default function BoardScreen() {
           <Polygon points="260,0 330,20 390,0" fill="white" opacity={0.06} />
           <Polygon points="240,130 310,80 390,130" fill="white" opacity={0.05} />
           <Polygon points="80,130 180,90 240,130" fill="white" opacity={0.04} />
+          <Polygon points="0,0 0,60 40,80 0,130 80,130 40,80" fill="white" opacity={0.03} />
+          <Polygon points="0,60 0,0 40,0 80,30 40,80" fill="white" opacity={0.03} />
         </Svg>
         <Text style={[styles.header, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>SPORTS BOARD</Text>
         <Text style={[styles.sub, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>Find players or teams near you</Text>
@@ -292,7 +294,6 @@ const styles = StyleSheet.create({
   dropdownMenuText: { fontSize: 13, color: '#333' },
   dropdownMenuTextActive: { color: '#008080', fontWeight: '700' },
   list: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 24 },
-  // Item 8 — card now uses left border accent layout
   card: { backgroundColor: '#fff', borderRadius: 14, marginBottom: 14, overflow: 'hidden', borderWidth: 1, borderColor: '#e0d8c8', elevation: 3, shadowColor: '#003333', shadowOpacity: 0.08, shadowRadius: 8, flexDirection: 'row' },
   cardAccentBar: { width: 5, alignSelf: 'stretch' },
   cardInner: { flex: 1, paddingHorizontal: 12, paddingTop: 12, paddingBottom: 12 },

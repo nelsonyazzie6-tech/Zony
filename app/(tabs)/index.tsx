@@ -133,10 +133,6 @@ export default function HomeScreen() {
     } catch (e) { console.log(e); }
   };
 
-  // Tapping a notification marks it as read, closes the sheet, and
-  // navigates to wherever it's about (a specific tournament, community
-  // post, or home). Falls back to home if a notification is somehow
-  // missing a link.
   const handleNotificationPress = async (n: any) => {
     try {
       if (!n.read) {
@@ -185,6 +181,8 @@ export default function HomeScreen() {
           <Polygon points="260,0 330,20 390,0" fill="white" opacity={0.06} />
           <Polygon points="240,130 310,80 390,130" fill="white" opacity={0.05} />
           <Polygon points="80,130 180,90 240,130" fill="white" opacity={0.04} />
+          <Polygon points="0,0 0,60 40,80 0,130 80,130 40,80" fill="white" opacity={0.03} />
+          <Polygon points="0,60 0,0 40,0 80,30 40,80" fill="white" opacity={0.03} />
         </Svg>
         <View style={styles.headerRow}>
           <TouchableOpacity style={styles.bellBtn} onPress={() => setShowNotifications(true)}>
