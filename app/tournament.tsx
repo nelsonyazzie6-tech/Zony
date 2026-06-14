@@ -1155,7 +1155,7 @@ const styles = StyleSheet.create({
   teamDivisionText: { fontSize: 12, fontWeight: '600' },
   submittedLabel: { fontSize: 10, color: '#aaa', fontWeight: '600', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 6 },
   contactName: { fontSize: 14, fontWeight: '600', color: '#333', marginBottom: 4 },
-  contactLine: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 },
+ contactLine: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2, paddingLeft: 24 },
   contactLineIcon: { fontSize: 12 },
   contactLineText: { fontSize: 12, color: '#777' },
   tappableLink: { color: '#008080', textDecorationLine: 'underline' },

@@ -81,7 +81,8 @@ function getAuthErrorMessage(code: string): string {
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [username, setUsername] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
   const [isSignUp, setIsSignUp] = useState(false);
   const [loading, setLoading] = useState(false);
   const [resetLoading, setResetLoading] = useState(false);
@@ -97,16 +98,19 @@ export default function LoginScreen() {
       setErrorMsg('Please enter your email and password.');
       return;
     }
-    if (isSignUp && !username.trim()) {
-      setErrorMsg('Please enter a username.');
+    if (isSignUp && (!firstName.trim() || !lastName.trim())) {
+      setErrorMsg('Please enter your first and last name.');
       return;
     }
     setLoading(true);
     try {
       if (isSignUp) {
         const cred = await createUserWithEmailAndPassword(auth, email, password);
+        const fullName = `${firstName.trim()} ${lastName.trim()}`;
         await setDoc(doc(db, 'users', cred.user.uid), {
-          username: username.trim(),
+          username: fullName,
+          firstName: firstName.trim(),
+          lastName: lastName.trim(),
           email: cred.user.email,
           createdAt: new Date(),
         });
@@ -226,18 +230,34 @@ export default function LoginScreen() {
 
       <View style={styles.form}>
         {isSignUp && (
-          <View>
-            <Text style={styles.fieldLabel}>USERNAME</Text>
-            <View style={styles.inputRow}>
-              <UserIcon />
-              <TextInput
-                style={styles.input}
-                placeholder="yourname"
-                placeholderTextColor="#bbb"
-                value={username}
-                onChangeText={t => { setUsername(t); setErrorMsg(''); }}
-                autoCapitalize="none"
-              />
+          <View style={styles.nameRow}>
+            <View style={styles.nameField}>
+              <Text style={styles.fieldLabel}>FIRST NAME</Text>
+              <View style={styles.inputRow}>
+                <UserIcon />
+                <TextInput
+                  style={styles.input}
+                  placeholder="First"
+                  placeholderTextColor="#bbb"
+                  value={firstName}
+                  onChangeText={t => { setFirstName(t); setErrorMsg(''); }}
+                  autoCapitalize="words"
+                />
+              </View>
+            </View>
+            <View style={styles.nameField}>
+              <Text style={styles.fieldLabel}>LAST NAME</Text>
+              <View style={styles.inputRow}>
+                <UserIcon />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Last"
+                  placeholderTextColor="#bbb"
+                  value={lastName}
+                  onChangeText={t => { setLastName(t); setErrorMsg(''); }}
+                  autoCapitalize="words"
+                />
+              </View>
             </View>
           </View>
         )}
@@ -323,7 +343,7 @@ export default function LoginScreen() {
           )}
         </View>
 
-        <TouchableOpacity style={styles.signupRow} onPress={() => { setIsSignUp(!isSignUp); setUsername(''); setErrorMsg(''); setSuccessMsg(''); }}>
+        <TouchableOpacity style={styles.signupRow} onPress={() => { setIsSignUp(!isSignUp); setFirstName(''); setLastName(''); setErrorMsg(''); setSuccessMsg(''); }}>
           <Text style={styles.bottomText}>
             {isSignUp ? 'Already have an account? ' : "Don't have an account? "}
             <Text style={styles.bottomLink}>{isSignUp ? 'Log in' : 'Sign up'}</Text>
@@ -367,6 +387,8 @@ const styles = StyleSheet.create({
   },
   slogan: { fontSize: 14, color: '#999' },
   form: { width: '100%', gap: 8 },
+  nameRow: { flexDirection: 'row', gap: 10 },
+  nameField: { flex: 1 },
   fieldLabel: {
     fontSize: 11,
     fontWeight: '700',

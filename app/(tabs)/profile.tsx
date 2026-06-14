@@ -39,6 +39,9 @@ export default function ProfileScreen() {
   const [fontsLoaded] = useFonts({ Rajdhani_700Bold });
   const [deletingTournamentId, setDeletingTournamentId] = useState<string | null>(null);
 
+  // Loading state — prevents "SET YOUR NAME" / "??" flash before Firestore data loads
+  const [loadingProfile, setLoadingProfile] = useState(true);
+
   // Item 6 — profile tab state
   const [profileTab, setProfileTab] = useState<'posted' | 'registered'>('posted');
 
@@ -73,14 +76,17 @@ export default function ProfileScreen() {
   useEffect(() => {
     if (!user) return;
     const loadUserData = async () => {
-      const snap = await getDoc(doc(db, 'users', user.uid));
-      if (snap.exists()) {
-        if (snap.data().photoURL) setPhotoURL(snap.data().photoURL);
-        if (snap.data().username) setFullName(snap.data().username);
-        if (snap.data().notificationsEnabled !== undefined) setNotificationsEnabled(snap.data().notificationsEnabled);
-        if (snap.data().hideContactInfo !== undefined) setHideContactInfo(snap.data().hideContactInfo);
-        if (snap.data().preferredSports !== undefined) setPreferredSports(snap.data().preferredSports);
-      }
+      try {
+        const snap = await getDoc(doc(db, 'users', user.uid));
+        if (snap.exists()) {
+          if (snap.data().photoURL) setPhotoURL(snap.data().photoURL);
+          if (snap.data().username) setFullName(snap.data().username);
+          if (snap.data().notificationsEnabled !== undefined) setNotificationsEnabled(snap.data().notificationsEnabled);
+          if (snap.data().hideContactInfo !== undefined) setHideContactInfo(snap.data().hideContactInfo);
+          if (snap.data().preferredSports !== undefined) setPreferredSports(snap.data().preferredSports);
+        }
+      } catch (e) { console.error(e); }
+      setLoadingProfile(false);
     };
     loadUserData();
 
@@ -303,6 +309,14 @@ export default function ProfileScreen() {
     : '??';
 
   const photoLoading = uploadingPhoto || removingPhoto;
+
+  if (loadingProfile) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#008080" />
+      </View>
+    );
+  }
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -709,6 +723,7 @@ export default function ProfileScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F5F0E8' },
+  loadingContainer: { flex: 1, backgroundColor: '#F5F0E8', alignItems: 'center', justifyContent: 'center' },
   content: { paddingTop: 60, alignItems: 'center', paddingBottom: 60 },
   avatarSection: { alignItems: 'center', marginBottom: 20 },
   avatar: { width: 84, height: 84, borderRadius: 22, borderWidth: 4, borderColor: '#F5F0E8', alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 8, elevation: 4 },
