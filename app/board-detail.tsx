@@ -53,7 +53,7 @@ function SportIcon({ sport, size = 12, color = '#fff' }: { sport: string; size?:
   return <BasketballIcon size={size} color={color} />;
 }
 
-// Trophy icon, replaces 🏅 / 🏆
+// Trophy icon, used for forTournament badge
 function TrophyIcon({ size = 12, color = '#fff' }: { size?: number; color?: string }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -62,6 +62,16 @@ function TrophyIcon({ size = 12, color = '#fff' }: { size?: number; color?: stri
       <Path d="M7 4h10v5a5 5 0 0 1-10 0z" />
       <Path d="M17 5h3a2 2 0 0 1-2 4h-1" />
       <Path d="M7 5H4a2 2 0 0 0 2 4h1" />
+    </Svg>
+  );
+}
+
+// Person icon, used for division badge
+function PersonIcon({ size = 12, color = '#fff' }: { size?: number; color?: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <Circle cx="12" cy="8" r="4" />
+      <Path d="M4 21c0-4 3.6-7 8-7s8 3 8 7" />
     </Svg>
   );
 }
@@ -202,7 +212,7 @@ const [hideContactInfo, setHideContactInfo] = useState<boolean | null>(null);
   return (
     <View style={styles.container}>
       <View style={[styles.headerBlock, { backgroundColor: sportColor }]} onLayout={e => setHeaderHeight(e.nativeEvent.layout.height)}>
-        <Svg style={StyleSheet.absoluteFill} width="100%" height={headerHeight} viewBox="0 0 390 160" preserveAspectRatio="xMidYMid slice">
+        <Svg style={StyleSheet.absoluteFill} width="100%" height={headerHeight} viewBox="0 0 390 280" preserveAspectRatio="xMidYMid slice">
           <Polygon points="0,0 80,30 40,80" fill="white" opacity={0.04} />
           <Polygon points="80,30 160,10 120,70" fill="white" opacity={0.07} />
           <Polygon points="40,80 120,70 80,130" fill="white" opacity={0.05} />
@@ -218,6 +228,18 @@ const [hideContactInfo, setHideContactInfo] = useState<boolean | null>(null);
           <Polygon points="260,0 330,20 390,0" fill="white" opacity={0.06} />
           <Polygon points="240,130 310,80 390,130" fill="white" opacity={0.05} />
           <Polygon points="80,130 180,90 240,130" fill="white" opacity={0.04} />
+          <Polygon points="0,130 80,130 40,180" fill="white" opacity={0.05} />
+          <Polygon points="80,130 240,130 160,190" fill="white" opacity={0.07} />
+          <Polygon points="240,130 390,130 320,190" fill="white" opacity={0.04} />
+          <Polygon points="0,130 0,200 40,180" fill="white" opacity={0.06} />
+          <Polygon points="390,130 390,200 320,190" fill="white" opacity={0.05} />
+          <Polygon points="40,180 160,190 100,240" fill="white" opacity={0.06} />
+          <Polygon points="160,190 320,190 240,240" fill="white" opacity={0.08} />
+          <Polygon points="0,200 40,180 100,240 0,280" fill="white" opacity={0.04} />
+          <Polygon points="100,240 240,240 170,280" fill="white" opacity={0.05} />
+          <Polygon points="240,240 320,190 390,200 390,280" fill="white" opacity={0.06} />
+          <Polygon points="0,280 100,240 170,280" fill="white" opacity={0.07} />
+          <Polygon points="170,280 240,240 390,280" fill="white" opacity={0.05} />
         </Svg>
         <View style={styles.topRow}>
           <TouchableOpacity onPress={() => router.back()} style={styles.back}>
@@ -246,7 +268,7 @@ const [hideContactInfo, setHideContactInfo] = useState<boolean | null>(null);
               ) : null}
               {post.division ? (
                 <View style={styles.badgeRow2}>
-                  <TrophyIcon size={12} color="#fff" />
+                  <PersonIcon size={12} color="#fff" />
                   <Text style={styles.badgeText}>{post.division}</Text>
                 </View>
               ) : null}

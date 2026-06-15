@@ -19,10 +19,11 @@ GoogleSignin.configure({
 
 function TrophyIcon() {
   return (
-    <Svg width={52} height={52} viewBox="0 0 36 36" fill="none">
-      <Path d="M10 6h16v16a8 8 0 0 1-16 0V6Z" stroke="white" strokeWidth="2" strokeLinejoin="round"/>
-      <Path d="M10 11H6a4 4 0 0 0 0 8h4M26 11h4a4 4 0 0 1 0 8h-4" stroke="white" strokeWidth="2" strokeLinecap="round"/>
-      <Path d="M18 28v4M14 34h8" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+    <Svg width={56} height={56} viewBox="0 0 24 24" fill="none">
+      <Path d="M8 7h8v8a4 4 0 0 1-8 0V7Z" stroke="white" strokeWidth="1.8" strokeLinejoin="round" fill="none"/>
+      <Path d="M8 9H6.5a2 2 0 0 0 0 4H8M16 9h1.5a2 2 0 0 1 0 4H16" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+      <Path d="M12 19v1.5M10 22h4" stroke="white" strokeWidth="1.8" strokeLinecap="round"/>
+      <Path d="M12 9.3l1 2 2.2.3-1.6 1.5.4 2.2-2-1-2 1 .4-2.2-1.6-1.5 2.2-.3z" fill="white"/>
     </Svg>
   );
 }
@@ -362,8 +363,8 @@ export default function LoginScreen() {
           </TouchableOpacity>
           {Platform.OS === 'ios' && (
             <TouchableOpacity style={styles.socialBtn} onPress={handleAppleSignIn}>
-              <Svg width={18} height={18} viewBox="0 0 18 18" style={{ marginRight: 8 }}>
-                <Path d="M9 0C4.029 0 0 4.029 0 9c0 3.982 2.579 7.356 6.155 8.555.45.083.615-.195.615-.433 0-.214-.008-.779-.012-1.529-2.504.543-3.033-1.207-3.033-1.207-.409-1.04-1-1.317-1-1.317-.817-.559.062-.547.062-.547.903.063 1.379.928 1.379.928.803 1.376 2.107.979 2.62.748.082-.581.314-.979.572-1.204-2-.227-4.103-1-4.103-4.455 0-.984.351-1.788.928-2.418-.093-.228-.402-1.144.088-2.384 0 0 .757-.242 2.479.924A8.641 8.641 0 0 1 9 4.128c.766.003 1.537.104 2.257.303 1.72-1.166 2.477-.924 2.477-.924.491 1.24.182 2.156.09 2.384.578.63.926 1.434.926 2.418 0 3.464-2.107 4.226-4.115 4.449.323.279.612.829.612 1.671 0 1.206-.011 2.179-.011 2.476 0 .241.162.521.619.433C15.424 16.353 18 12.981 18 9c0-4.971-4.029-9-9-9Z" fill="#111"/>
+              <Svg width={18} height={18} viewBox="0 0 384 512" style={{ marginRight: 8 }}>
+                <Path d="M318.7 268.7c-.2-36.7 16.4-64.4 50-84.8-18.8-26.9-47.2-41.7-84.7-44.6-35.5-2.8-74.3 20.7-88.5 20.7-15 0-49.4-19.7-76.4-19.7C63.3 141.2 4 184.8 4 273.5q0 39.3 14.4 81.2c12.8 36.7 59 126.7 107.2 125.2 25.2-.6 43-17.9 75.8-17.9 31.8 0 48.3 17.9 76.4 17.9 48.6-.7 90.4-82.5 102.6-119.3-65.2-30.7-61.7-90-61.7-91.9zm-56.6-164.2c27.3-32.4 24.8-61.9 24-72.5-24.1 1.4-52 16.4-67.9 34.9-17.5 19.8-27.8 44.3-25.6 71.9 26.1-2 49.9-15.4 69.5-34.3z" fill="#111"/>
               </Svg>
               <Text style={styles.socialBtnText}>Apple</Text>
             </TouchableOpacity>
@@ -395,10 +396,10 @@ const styles = StyleSheet.create({
     width: 96,
     height: 96,
     borderRadius: 24,
-    backgroundColor: '#008080',
+    backgroundColor: '#8B1A1A',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#008080',
+    shadowColor: '#8B1A1A',
     shadowOpacity: 0.4,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 4 },
