@@ -6,7 +6,7 @@ import { createUserWithEmailAndPassword, GoogleAuthProvider, OAuthProvider, send
 import { doc, setDoc } from 'firebase/firestore';
 import { useState } from 'react';
 import {
-  KeyboardAvoidingView, Platform, StyleSheet, Text,
+  Image, KeyboardAvoidingView, Platform, StyleSheet, Text,
   TextInput, TouchableOpacity, View
 } from 'react-native';
 import Svg, { Circle, Line, Path } from 'react-native-svg';
@@ -16,17 +16,6 @@ GoogleSignin.configure({
   webClientId: '295900317104-6issabib0tcbp5ktf3tdpegi5mifs6or.apps.googleusercontent.com',
   iosClientId: '295900317104-dk7n2cq2obdc9a2v37p1p6ih61pj9fha.apps.googleusercontent.com',
 });
-
-function TrophyIcon() {
-  return (
-    <Svg width={56} height={56} viewBox="0 0 24 24" fill="none">
-      <Path d="M8 7h8v8a4 4 0 0 1-8 0V7Z" stroke="white" strokeWidth="1.8" strokeLinejoin="round" fill="none"/>
-      <Path d="M8 9H6.5a2 2 0 0 0 0 4H8M16 9h1.5a2 2 0 0 1 0 4H16" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-      <Path d="M12 19v1.5M10 22h4" stroke="white" strokeWidth="1.8" strokeLinecap="round"/>
-      <Path d="M12 9.3l1 2 2.2.3-1.6 1.5.4 2.2-2-1-2 1 .4-2.2-1.6-1.5 2.2-.3z" fill="white"/>
-    </Svg>
-  );
-}
 
 function EmailIcon() {
   return (
@@ -241,9 +230,7 @@ export default function LoginScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <View style={styles.top}>
-        <View style={styles.logoBox}>
-          <TrophyIcon />
-        </View>
+        <Image source={require('../assets/images/trophy-logo.png')} style={styles.logoBox} resizeMode="cover" />
         <Text style={[styles.appName, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>
           ZONY
         </Text>
@@ -396,15 +383,13 @@ const styles = StyleSheet.create({
     width: 96,
     height: 96,
     borderRadius: 24,
-    backgroundColor: '#8B1A1A',
-    alignItems: 'center',
-    justifyContent: 'center',
     shadowColor: '#8B1A1A',
     shadowOpacity: 0.4,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 4 },
     elevation: 8,
     marginBottom: 16,
+    overflow: 'hidden',
   },
   appName: {
     fontSize: 48,

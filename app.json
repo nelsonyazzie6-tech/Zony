@@ -36,7 +36,7 @@
     "android": {
       "package": "com.nelzony.zony",
       "adaptiveIcon": {
-        "backgroundColor": "#008080",
+        "backgroundColor": "#8B1A1A",
         "foregroundImage": "./assets/images/icon.png"
       },
       "edgeToEdgeEnabled": true,
@@ -45,6 +45,10 @@
     "web": {
       "output": "static",
       "favicon": "./assets/images/icon.png"
+    },
+    "notification": {
+      "icon": "./assets/images/icon.png",
+      "color": "#8B1A1A"
     },
     "plugins": [
       "expo-router",

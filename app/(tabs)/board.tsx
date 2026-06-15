@@ -3,7 +3,7 @@ import { useRouter } from 'expo-router';
 import { collection, doc, getDoc, onSnapshot } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import Svg, { Path, Polygon } from 'react-native-svg';
+import Svg, { Circle, Path, Polygon } from 'react-native-svg';
 import { db } from '../../firebaseConfig';
 
 function SadFace() {
@@ -17,7 +17,7 @@ function SadFace() {
   );
 }
 
-// Trophy icon to replace 🏅 / 🏆
+// Trophy icon, used for forTournament
 function TrophyIcon({ size = 13, color = '#5a5a5a' }: { size?: number; color?: string }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -26,6 +26,16 @@ function TrophyIcon({ size = 13, color = '#5a5a5a' }: { size?: number; color?: s
       <Path d="M7 4h10v5a5 5 0 0 1-10 0z" />
       <Path d="M17 5h3a2 2 0 0 1-2 4h-1" />
       <Path d="M7 5H4a2 2 0 0 0 2 4h1" />
+    </Svg>
+  );
+}
+
+// Person icon, used for division
+function PersonIcon({ size = 13, color = '#5a5a5a' }: { size?: number; color?: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <Circle cx="12" cy="8" r="4" />
+      <Path d="M4 21c0-4 3.6-7 8-7s8 3 8 7" />
     </Svg>
   );
 }
@@ -266,7 +276,7 @@ export default function BoardScreen() {
 
                   {p.division ? (
                     <View style={styles.detailRow}>
-                      <TrophyIcon size={13} color="#5a5a5a" />
+                      <PersonIcon size={13} color="#5a5a5a" />
                       <Text style={styles.detail}>{p.division}</Text>
                     </View>
                   ) : null}
