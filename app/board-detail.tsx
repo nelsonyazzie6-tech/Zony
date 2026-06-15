@@ -212,31 +212,24 @@ const [hideContactInfo, setHideContactInfo] = useState<boolean | null>(null);
   return (
     <View style={styles.container}>
       <View style={[styles.headerBlock, { backgroundColor: sportColor }]} onLayout={e => setHeaderHeight(e.nativeEvent.layout.height)}>
-        <Svg style={StyleSheet.absoluteFill} width="100%" height={headerHeight} viewBox="0 0 390 280" preserveAspectRatio="xMidYMid slice">
-          <Rect x="0" y="0" width="390" height="280" fill={sportColor} />
-          <Polygon points="0,0 130,0 60,70" fill="white" opacity={0.05} />
-          <Polygon points="130,0 260,0 195,70" fill="white" opacity={0.07} />
-          <Polygon points="260,0 390,0 325,70" fill="white" opacity={0.05} />
-          <Polygon points="0,0 60,70 0,140" fill="white" opacity={0.04} />
-          <Polygon points="130,0 60,70 195,70" fill="white" opacity={0.08} />
-          <Polygon points="260,0 195,70 325,70" fill="white" opacity={0.05} />
-          <Polygon points="390,0 325,70 390,140" fill="white" opacity={0.06} />
-          <Polygon points="60,70 195,70 130,140" fill="white" opacity={0.06} />
-          <Polygon points="195,70 325,70 260,140" fill="white" opacity={0.04} />
-          <Polygon points="0,140 60,70 130,140" fill="white" opacity={0.05} />
-          <Polygon points="195,70 130,140 260,140" fill="white" opacity={0.07} />
-          <Polygon points="325,70 260,140 390,140" fill="white" opacity={0.05} />
-          <Polygon points="0,140 130,140 65,210" fill="white" opacity={0.07} />
-          <Polygon points="130,140 260,140 195,210" fill="white" opacity={0.04} />
-          <Polygon points="260,140 390,140 325,210" fill="white" opacity={0.06} />
-          <Polygon points="0,140 65,210 0,280" fill="white" opacity={0.05} />
-          <Polygon points="130,140 65,210 195,210" fill="white" opacity={0.05} />
-          <Polygon points="260,140 195,210 325,210" fill="white" opacity={0.08} />
-          <Polygon points="390,140 325,210 390,280" fill="white" opacity={0.04} />
-          <Polygon points="65,210 195,210 130,280" fill="white" opacity={0.06} />
-          <Polygon points="195,210 325,210 260,280" fill="white" opacity={0.05} />
-          <Polygon points="0,280 65,210 130,280" fill="white" opacity={0.04} />
-          <Polygon points="325,210 390,280 260,280" fill="white" opacity={0.07} />
+        <Svg style={StyleSheet.absoluteFill} width="100%" height={headerHeight} viewBox="0 0 390 130" preserveAspectRatio="xMidYMid slice">
+          <Polygon points="0,0 80,30 40,80" fill="white" opacity={0.04} />
+          <Polygon points="80,30 160,10 120,70" fill="white" opacity={0.07} />
+          <Polygon points="40,80 120,70 80,130" fill="white" opacity={0.05} />
+          <Polygon points="160,10 260,50 180,90" fill="white" opacity={0.06} />
+          <Polygon points="120,70 180,90 100,130" fill="white" opacity={0.08} />
+          <Polygon points="260,50 330,20 310,80" fill="white" opacity={0.05} />
+          <Polygon points="180,90 310,80 240,130" fill="white" opacity={0.07} />
+          <Polygon points="330,20 390,0 390,60" fill="white" opacity={0.04} />
+          <Polygon points="310,80 390,60 390,130" fill="white" opacity={0.06} />
+          <Polygon points="0,60 40,80 0,130" fill="white" opacity={0.05} />
+          <Polygon points="0,0 40,0 80,30" fill="white" opacity={0.08} />
+          <Polygon points="160,10 260,0 260,50" fill="white" opacity={0.04} />
+          <Polygon points="260,0 330,20 390,0" fill="white" opacity={0.06} />
+          <Polygon points="240,130 310,80 390,130" fill="white" opacity={0.05} />
+          <Polygon points="80,130 180,90 240,130" fill="white" opacity={0.04} />
+          <Polygon points="0,0 0,60 40,80 0,130 80,130 40,80" fill="white" opacity={0.03} />
+          <Polygon points="0,60 0,0 40,0 80,30 40,80" fill="white" opacity={0.03} />
         </Svg>
         <View style={styles.topRow}>
           <TouchableOpacity onPress={() => router.back()} style={styles.back}>

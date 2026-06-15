@@ -21,6 +21,7 @@ const divisionOptions = [
   '14U Boys', '14U Girls', '14U Coed',
   '16U Boys', '16U Girls', '16U Coed',
   '18U Boys', '18U Girls', '18U Coed',
+  'HS Boys', 'HS Girls', 'HS Coed',
   'Adult Men', 'Adult Women', 'Adult Coed',
 ];
 const placeLabels = ['1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th'];
@@ -176,6 +177,7 @@ function TournamentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
   const [divisionFees, setDivisionFees] = useState<Record<string, string>>({});
   const [divisionSpots, setDivisionSpots] = useState<Record<string, string>>({});
   const [spectatorFee, setSpectatorFee] = useState('');
+  const [isFreeSpectator, setIsFreeSpectator] = useState(false);
 
   const [spectatorPaymentMethods, setSpectatorPaymentMethods] = useState<string[]>([]);
   const [spectatorPaymentOther, setSpectatorPaymentOther] = useState('');
@@ -247,6 +249,7 @@ function TournamentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
     setName(''); setSport(''); setStartDate(''); setEndDate('');
     setAddress(''); setCity(''); setState(''); setZip('');
     setSpots(''); setDivisionFees({}); setDivisionSpots({}); setSpectatorFee('');
+    setIsFreeSpectator(false);
     setSpectatorPaymentMethods([]); setSpectatorPaymentOther('');
     setDivisions([]); setRosterSize('');
     setContactName(''); setContactPhone(''); setContactEmail('');
@@ -358,7 +361,7 @@ function TournamentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
         location: `${finalCity}, ${finalState}`, spots: parseInt(spots) || 0,
         divisionFees,
         divisionSpots: divisions.length > 0 ? finalDivisionSpots : {},
-        spectatorFee: spectatorFee ? `$${spectatorFee}` : '',
+        spectatorFee: isFreeSpectator ? 'Free' : (spectatorFee ? `$${spectatorFee}` : ''),
         spectatorPaymentMethods,
         spectatorPaymentOther: spectatorPaymentMethods.includes('Other') ? spectatorPaymentOther.trim() : '',
         divisions, rosterSize, contactName, contactPhone, contactEmail,
@@ -621,9 +624,25 @@ function TournamentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
           )}
 
           <Text style={styles.label}>Spectator Entrance Fee <Text style={styles.optional}>(optional)</Text></Text>
-          <TextInput ref={spectatorFeeRef} style={styles.input} placeholder="Amount in dollars" placeholderTextColor="#a0b8b8" value={spectatorFee} onChangeText={setSpectatorFee} keyboardType="numeric" returnKeyType="next" blurOnSubmit={false} onSubmitEditing={() => rosterSizeRef.current?.focus()} />
+          <TouchableOpacity
+            style={styles.freeSpectatorToggle}
+            onPress={() => {
+              const next = !isFreeSpectator;
+              setIsFreeSpectator(next);
+              if (next) { setSpectatorFee(''); setSpectatorPaymentMethods([]); setSpectatorPaymentOther(''); }
+            }}
+          >
+            <View style={[styles.checkbox, isFreeSpectator && styles.checkboxActive]}>
+              {isFreeSpectator ? <CheckIcon size={12} color="#fff" /> : null}
+            </View>
+            <Text style={styles.freeSpectatorText}>Open to Public — Free</Text>
+          </TouchableOpacity>
 
-          {spectatorFee ? (
+          {!isFreeSpectator && (
+            <TextInput ref={spectatorFeeRef} style={styles.input} placeholder="Amount in dollars" placeholderTextColor="#a0b8b8" value={spectatorFee} onChangeText={setSpectatorFee} keyboardType="numeric" returnKeyType="next" blurOnSubmit={false} onSubmitEditing={() => rosterSizeRef.current?.focus()} />
+          )}
+
+          {spectatorFee && !isFreeSpectator ? (
             <View style={styles.paymentMethodsBlock}>
               <Text style={styles.paymentMethodsLabel}>Accepted Payment Methods <Text style={styles.optional}>(optional)</Text></Text>
               <View style={styles.paymentMethodsRow}>
@@ -753,7 +772,6 @@ function TournamentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
     </KeyboardAvoidingView>
   );
 }
-
 function BoardForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: () => void }) {
   const [fontsLoaded] = useFonts({ Rajdhani_700Bold });
   const [headerHeight, setHeaderHeight] = useState(120);
@@ -1109,6 +1127,10 @@ const styles = StyleSheet.create({
   paymentMethodPillActive: { backgroundColor: '#008080', borderColor: '#008080' },
   paymentMethodPillText: { fontSize: 13, color: '#5a7a7a', fontWeight: '600' },
   paymentMethodPillTextActive: { color: '#fff' },
+  freeSpectatorToggle: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
+  checkbox: { width: 20, height: 20, borderRadius: 6, borderWidth: 1.5, borderColor: '#e0d8c8', backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' },
+  checkboxActive: { backgroundColor: '#008080', borderColor: '#008080' },
+  freeSpectatorText: { fontSize: 14, color: '#003333', fontWeight: '600' },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 },
   modalBox: { backgroundColor: '#f5ede0', borderRadius: 24, padding: 24, width: '100%', shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 16, elevation: 8 },
   modalTitle: { fontSize: 20, color: '#003333', letterSpacing: 2, marginBottom: 8, textAlign: 'center' },

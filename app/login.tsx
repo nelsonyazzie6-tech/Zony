@@ -1,8 +1,8 @@
 import { Rajdhani_700Bold, useFonts } from '@expo-google-fonts/rajdhani';
-import { GoogleSignin } from '@react-native-google-signin/google-signin';
+// import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import { useRouter } from 'expo-router';
-import { createUserWithEmailAndPassword, GoogleAuthProvider, OAuthProvider, sendPasswordResetEmail, signInWithCredential, signInWithEmailAndPassword } from 'firebase/auth';
+import { createUserWithEmailAndPassword, OAuthProvider, sendPasswordResetEmail, signInWithCredential, signInWithEmailAndPassword } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
 import { useState } from 'react';
 import {
@@ -12,10 +12,10 @@ import {
 import Svg, { Circle, Line, Path } from 'react-native-svg';
 import { auth, db } from '../firebaseConfig';
 
-GoogleSignin.configure({
-  webClientId: '295900317104-6issabib0tcbp5ktf3tdpegi5mifs6or.apps.googleusercontent.com',
-  iosClientId: '295900317104-dk7n2cq2obdc9a2v37p1p6ih61pj9fha.apps.googleusercontent.com',
-});
+// GoogleSignin.configure({
+//   webClientId: '295900317104-6issabib0tcbp5ktf3tdpegi5mifs6or.apps.googleusercontent.com',
+//   iosClientId: '295900317104-dk7n2cq2obdc9a2v37p1p6ih61pj9fha.apps.googleusercontent.com',
+// });
 
 function EmailIcon() {
   return (
@@ -192,36 +192,38 @@ export default function LoginScreen() {
     }
   };
 
+  // Temporarily disabled for Expo Go testing (RNGoogleSignin native module not available)
   const handleGoogleSignIn = async () => {
     setErrorMsg('');
     setSuccessMsg('');
-    try {
-      await GoogleSignin.hasPlayServices();
-      const userInfo = await GoogleSignin.signIn();
-      const idToken = userInfo.data?.idToken;
-      if (!idToken) throw new Error('No ID token returned');
+    setErrorMsg('Google sign-in disabled in this test build.');
+    // try {
+    //   await GoogleSignin.hasPlayServices();
+    //   const userInfo = await GoogleSignin.signIn();
+    //   const idToken = userInfo.data?.idToken;
+    //   if (!idToken) throw new Error('No ID token returned');
 
-      const credential = GoogleAuthProvider.credential(idToken);
-      const userCred = await signInWithCredential(auth, credential);
+    //   const credential = GoogleAuthProvider.credential(idToken);
+    //   const userCred = await signInWithCredential(auth, credential);
 
-      const userDocRef = doc(db, 'users', userCred.user.uid);
-      const username = userCred.user.displayName || userCred.user.email?.split('@')[0] || 'Player';
+    //   const userDocRef = doc(db, 'users', userCred.user.uid);
+    //   const username = userCred.user.displayName || userCred.user.email?.split('@')[0] || 'Player';
 
-      await setDoc(userDocRef, {
-        username,
-        email: userCred.user.email,
-        createdAt: new Date(),
-      }, { merge: true });
+    //   await setDoc(userDocRef, {
+    //     username,
+    //     email: userCred.user.email,
+    //     createdAt: new Date(),
+    //   }, { merge: true });
 
-      router.replace('/');
-    } catch (e: any) {
-      if (e.code === 'SIGN_IN_CANCELLED' || e.code === '-5') {
-        // user canceled
-      } else {
-        console.log(e);
-        setErrorMsg('Google sign-in failed. Please try again.');
-      }
-    }
+    //   router.replace('/');
+    // } catch (e: any) {
+    //   if (e.code === 'SIGN_IN_CANCELLED' || e.code === '-5') {
+    //     // user canceled
+    //   } else {
+    //     console.log(e);
+    //     setErrorMsg('Google sign-in failed. Please try again.');
+    //   }
+    // }
   };
 
   return (
@@ -230,7 +232,7 @@ export default function LoginScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <View style={styles.top}>
-        <Image source={require('../assets/images/trophy-logo.png')} style={styles.logoBox} resizeMode="cover" />
+        <Image source={require('../assets/images/icon.png')} style={styles.logoBox} resizeMode="cover" />
         <Text style={[styles.appName, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>
           ZONY
         </Text>
@@ -339,6 +341,7 @@ export default function LoginScreen() {
         </View>
 
         <View style={styles.socialRow}>
+          {/* Temporarily hidden for Expo Go testing
           <TouchableOpacity style={styles.socialBtn} onPress={handleGoogleSignIn}>
             <Svg width={18} height={18} viewBox="0 0 18 18" style={{ marginRight: 8 }}>
               <Path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 0 1-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615Z" fill="#4285F4"/>
@@ -348,6 +351,7 @@ export default function LoginScreen() {
             </Svg>
             <Text style={styles.socialBtnText}>Google</Text>
           </TouchableOpacity>
+          */}
           {Platform.OS === 'ios' && (
             <TouchableOpacity style={styles.socialBtn} onPress={handleAppleSignIn}>
               <Svg width={18} height={18} viewBox="0 0 384 512" style={{ marginRight: 8 }}>
@@ -464,13 +468,13 @@ const styles = StyleSheet.create({
   },
   forgotRow: { alignItems: 'flex-end', marginBottom: 4 },
   forgotText: { fontSize: 12, color: '#008080', fontWeight: '600' },
-  signInBtn: {
-    backgroundColor: '#8B1A1A',
+ signInBtn: {
+    backgroundColor: '#008080',
     borderRadius: 16,
     paddingVertical: 16,
     alignItems: 'center',
     marginTop: 8,
-    shadowColor: '#8B1A1A',
+    shadowColor: '#008080',
     shadowOpacity: 0.3,
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 3 },

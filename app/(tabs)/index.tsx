@@ -22,6 +22,36 @@ function getSportColor(sport: string) {
   return '#008080';
 }
 
+function simplifyDivisions(divisions: string[]): string {
+  const groups = ['6U', '8U', '10U', '12U', '14U', '16U', '18U', 'HS'];
+  const result: string[] = [];
+  const adultDivisions = divisions.filter(d => d.startsWith('Adult'));
+  const groupDivisions = divisions.filter(d => !d.startsWith('Adult'));
+
+  groups.forEach(g => {
+    const hasBoys = groupDivisions.includes(`${g} Boys`);
+    const hasGirls = groupDivisions.includes(`${g} Girls`);
+    const hasCoed = groupDivisions.includes(`${g} Coed`);
+    if (hasBoys && hasGirls) {
+      result.push(g);
+    } else if (hasBoys) {
+      result.push(`${g} Boys`);
+    } else if (hasGirls) {
+      result.push(`${g} Girls`);
+    } else if (hasCoed) {
+      result.push(`${g} Coed`);
+    }
+  });
+
+  if (adultDivisions.length === 1) {
+    result.push(adultDivisions[0]);
+  } else if (adultDivisions.length > 1) {
+    result.push('Adults');
+  }
+
+  return result.join(', ');
+}
+
 function BellIcon({ color, hasNew }: { color: string; hasNew: boolean }) {
   return (
     <View>
@@ -97,6 +127,16 @@ function TrophyIcon({ size = 13, color = '#008080' }: { size?: number; color?: s
       <Path d="M7 4h10v5a5 5 0 0 1-10 0z" />
       <Path d="M17 5h3a2 2 0 0 1-2 4h-1" />
       <Path d="M7 5H4a2 2 0 0 0 2 4h1" />
+    </Svg>
+  );
+}
+
+// Person icon, replaces division trophy
+function PersonIcon({ size = 13, color = '#008080' }: { size?: number; color?: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <Circle cx="12" cy="8" r="4" />
+      <Path d="M4 21c0-4 3.6-7 8-7s8 3 8 7" />
     </Svg>
   );
 }
@@ -203,7 +243,12 @@ export default function HomeScreen() {
       t.name?.toLowerCase().includes(search.toLowerCase()) ||
       t.city?.toLowerCase().includes(search.toLowerCase()) ||
       t.state?.toLowerCase().includes(search.toLowerCase())
-    );
+    )
+    .sort((a: any, b: any) => {
+      const dateA = new Date(a.date?.split(' - ')[0] || 0).getTime();
+      const dateB = new Date(b.date?.split(' - ')[0] || 0).getTime();
+      return dateA - dateB;
+    });
 
   const hasActiveFilters = sport !== 'All' || stateFilter !== 'All States' || search.trim() !== '';
 
@@ -316,7 +361,7 @@ export default function HomeScreen() {
 
             return (
               <TouchableOpacity
-                style={styles.card}
+                style={[styles.card, t.status === 'canceled' && styles.cardCanceled]}
                 onPress={() => router.push({ pathname: '/tournament', params: { id: t.id, postedBy: t.postedBy } })}
               >
                 <View style={[styles.cardHeader, { backgroundColor: sportColor }]}>
@@ -325,8 +370,8 @@ export default function HomeScreen() {
                 </View>
                 <View style={styles.cardBody}>
                   <View style={styles.detailRow}>
-                    <CalendarIcon size={14} color="#5a5a5a" />
-                    <Text style={styles.detail}>{t.date}</Text>
+                    <CalendarIcon size={14} color={sportColor} />
+                    <Text style={[styles.dateText, { color: sportColor }]}>{t.date}</Text>
                   </View>
                   <View style={styles.detailRow}>
                     <LocationIcon size={14} color="#5a5a5a" />
@@ -336,10 +381,8 @@ export default function HomeScreen() {
                   {hasDivisions ? (
                     <View style={styles.divisionsRow}>
                       <View style={styles.detailRow}>
-                        <TrophyIcon size={13} color={sportColor} />
-                        <Text style={[styles.divisionsText, { color: sportColor }]}>
-                          {t.divisions.length === 1 ? t.divisions[0] : 'Multiple Divisions Available'}
-                        </Text>
+                        <PersonIcon size={13} color={sportColor} />
+                        <Text style={styles.divisionsText}>{simplifyDivisions(t.divisions)}</Text>
                       </View>
                       {t.status === 'canceled' && (
                         <View style={[styles.canceledBadge, { marginTop: 4, alignSelf: 'flex-start' }]}>
@@ -372,6 +415,8 @@ export default function HomeScreen() {
                       <Text style={styles.organizerName}>by {t.organizerName}</Text>
                     </View>
                   ) : null}
+
+                  <Text style={styles.viewMoreHint}>View card for more details</Text>
                 </View>
               </TouchableOpacity>
             );
@@ -488,14 +533,16 @@ const styles = StyleSheet.create({
   dropdownMenuTextActive: { color: '#008080', fontWeight: '700' },
   list: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 20 },
   card: { backgroundColor: '#fff', borderRadius: 12, marginBottom: 14, overflow: 'hidden', borderWidth: 1, borderColor: '#e0d8c8', elevation: 3, shadowColor: '#003333', shadowOpacity: 0.1, shadowRadius: 8 },
+  cardCanceled: { opacity: 0.5 },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 10 },
   cardBody: { paddingHorizontal: 14, paddingTop: 10, paddingBottom: 12 },
   name: { fontSize: 17, fontWeight: 'bold', color: '#f5ede0', flex: 1, marginRight: 8, textTransform: 'uppercase', letterSpacing: 1.2 },
   sportBadge: { fontSize: 11, backgroundColor: '#f5ede0', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, overflow: 'hidden', fontWeight: 'bold' },
   detailRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 },
   detail: { fontSize: 14, color: '#5a5a5a' },
+  dateText: { fontSize: 14, fontWeight: '700' },
   divisionsRow: { marginTop: 6 },
-  divisionsText: { fontSize: 13, fontWeight: '600' },
+  divisionsText: { fontSize: 13, fontWeight: '400', color: '#1a1a1a' },
   spotsRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 6 },
   spotsBadge: { borderRadius: 10, paddingHorizontal: 10, paddingVertical: 4, borderWidth: 1, alignSelf: 'flex-start' },
   spots: { fontSize: 13, fontWeight: '900' },
@@ -506,6 +553,7 @@ const styles = StyleSheet.create({
   organizerAvatar: { width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   organizerAvatarText: { fontSize: 8, color: '#fff', fontWeight: 'bold' },
   organizerName: { fontSize: 11, color: '#a0b8b8', fontWeight: '500' },
+  viewMoreHint: { fontSize: 11, color: '#c0c0c0', marginTop: 6, textAlign: 'center' },
   emptyContainer: { alignItems: 'center', marginTop: 60, gap: 10 },
   emptyTitle: { fontSize: 18, fontWeight: 'bold', color: '#a0b8b8', marginTop: 8 },
   emptySub: { fontSize: 14, color: '#a0b8b8', textAlign: 'center', paddingHorizontal: 40 },
