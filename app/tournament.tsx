@@ -1,10 +1,11 @@
 import { Rajdhani_700Bold, useFonts } from '@expo-google-fonts/rajdhani';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { addDoc, arrayRemove, arrayUnion, collection, deleteDoc, doc, getDoc, getDocs, increment, onSnapshot, orderBy, query, runTransaction, serverTimestamp, updateDoc, where } from 'firebase/firestore';
+import { deleteObject, ref } from 'firebase/storage';
 import { useEffect, useState } from 'react';
 import { Clipboard, Image, KeyboardAvoidingView, Linking, Modal, Platform, ScrollView, Share, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import Svg, { Circle, Line, Path, Rect } from 'react-native-svg';
-import { auth, db } from '../firebaseConfig';
+import { auth, db, storage } from '../firebaseConfig';
 
 function SadFace() {
   return (
@@ -166,6 +167,18 @@ function MessageIcon({ size = 18, color = '#fff' }: IconProps) {
   );
 }
 
+function TrashIcon({ size = 18, color = '#fff' }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <Path d="M3 6h18" />
+      <Path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+      <Path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+      <Line x1="10" y1="11" x2="10" y2="17" />
+      <Line x1="14" y1="11" x2="14" y2="17" />
+    </Svg>
+  );
+}
+
 function formatPhone(val: string) {
   const digits = val.replace(/\D/g, '').slice(0, 10);
   if (digits.length <= 3) return digits;
@@ -213,6 +226,8 @@ export default function TournamentScreen() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [showOrganizerReminderModal, setShowOrganizerReminderModal] = useState(false);
+  const [showDeleteEventModal, setShowDeleteEventModal] = useState(false);
+  const [deleteEventLoading, setDeleteEventLoading] = useState(false);
   const [successData, setSuccessData] = useState<{ teamName: string; tournamentName: string; depositMsg: string; contactInfo: string } | null>(null);
   const [teamName, setTeamName] = useState('');
   const [contactName, setContactName] = useState('');
@@ -673,6 +688,8 @@ export default function TournamentScreen() {
               toUserId: teamData.registeredBy,
               message: `⚠️ ${tournament.name} has been canceled by the organizer.`,
               link: `/`,
+              organizerName: tournament.organizerName || tournament.contactName || '',
+              organizerPhone: tournament.contactPhone || '',
               createdAt: serverTimestamp(),
               read: false,
             });
@@ -691,11 +708,41 @@ export default function TournamentScreen() {
           }
         })
       );
-      await deleteDoc(doc(db, 'tournaments', id as string));
+      await updateDoc(doc(db, 'tournaments', id as string), { status: 'canceled' });
       setShowDeleteModal(false);
       setShowOrganizerReminderModal(true);
     } catch (e: any) { console.error(e); }
     setDeleteLoading(false);
+  };
+
+  const confirmDeleteEvent = async () => {
+    setDeleteEventLoading(true);
+    try {
+      const tournamentId = id as string;
+
+      const teamsSnap = await getDocs(collection(db, 'tournaments', tournamentId, 'teams'));
+      await Promise.all(teamsSnap.docs.map((teamDoc) => deleteDoc(teamDoc.ref)));
+
+      const waitlistSnap = await getDocs(collection(db, 'tournaments', tournamentId, 'waitlist'));
+      await Promise.all(waitlistSnap.docs.map((entryDoc) => deleteDoc(entryDoc.ref)));
+
+      if (tournament?.imagePath) {
+        try {
+          await deleteObject(ref(storage, tournament.imagePath));
+        } catch (imgErr) {
+          console.error(imgErr);
+        }
+      }
+
+      await deleteDoc(doc(db, 'tournaments', tournamentId));
+
+      setShowDeleteEventModal(false);
+      setDeleteEventLoading(false);
+      router.replace('/');
+    } catch (e: any) {
+      console.error(e);
+      setDeleteEventLoading(false);
+    }
   };
 
   const handleShare = async () => {
@@ -997,9 +1044,16 @@ export default function TournamentScreen() {
                 <TouchableOpacity style={styles.editBtn} onPress={() => router.push({ pathname: '/edit-tournament', params: { id } })}>
                   <Text style={[styles.editBtnText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>Edit Tournament</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.deleteBtn} onPress={() => setShowDeleteModal(true)}>
-                  <Text style={[styles.deleteBtnText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>Delete Tournament</Text>
-                </TouchableOpacity>
+                {isCanceled ? (
+                  <TouchableOpacity style={styles.deleteEventBtn} onPress={() => setShowDeleteEventModal(true)}>
+                    <TrashIcon size={18} color="#fff" />
+                    <Text style={[styles.deleteBtnText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>Delete Event</Text>
+                  </TouchableOpacity>
+                ) : (
+                  <TouchableOpacity style={styles.deleteBtn} onPress={() => setShowDeleteModal(true)}>
+                    <Text style={[styles.deleteBtnText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>Cancel Tournament</Text>
+                  </TouchableOpacity>
+                )}
               </View>
             ) : (
               <View style={styles.registrationActions}>
@@ -1057,9 +1111,9 @@ export default function TournamentScreen() {
                 </TouchableOpacity>
               </View>
               <Text style={styles.modalLabel}>Team Name</Text>
-              <TextInput style={styles.modalInput} placeholder="e.g. Gallup Ballers" placeholderTextColor="#a0b8b8" value={teamName} onChangeText={setTeamName} />
+              <TextInput style={styles.modalInput} placeholder="e.g. All Stars" placeholderTextColor="#a0b8b8" value={teamName} onChangeText={setTeamName} />
               <Text style={styles.modalLabel}>Your Name</Text>
-              <TextInput style={styles.modalInput} placeholder="e.g. John Begay" placeholderTextColor="#a0b8b8" value={contactName} onChangeText={setContactName} />
+              <TextInput style={styles.modalInput} placeholder="e.g. Nel Zony" placeholderTextColor="#a0b8b8" value={contactName} onChangeText={setContactName} />
               <Text style={styles.modalLabel}>Your Contact Info</Text>
               <TextInput style={styles.modalInput} placeholder="e.g. 928-555-1234" placeholderTextColor="#a0b8b8" value={contactInfo} onChangeText={v => setContactInfo(formatPhone(v))} keyboardType="phone-pad" maxLength={12} />
               <Text style={styles.modalLabel}>Division</Text>
@@ -1210,21 +1264,42 @@ export default function TournamentScreen() {
         </View>
       </Modal>
 
-      {/* Delete Tournament Modal */}
+      {/* Cancel Tournament Modal */}
       <Modal visible={showDeleteModal} animationType="fade" transparent>
         <View style={styles.successOverlay}>
           <View style={styles.deleteBox}>
-            <Text style={[styles.deleteModalTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>DELETE TOURNAMENT</Text>
+            <Text style={[styles.deleteModalTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>CANCEL TOURNAMENT</Text>
             <Text style={styles.deleteModalMsg}>
-              This will notify all registered teams and permanently delete{' '}
-              <Text style={{ fontWeight: '700', color: '#003333' }}>{tournament.name}</Text>.{'\n\n'}This cannot be undone.
+              This will notify all registered teams that{' '}
+              <Text style={{ fontWeight: '700', color: '#003333' }}>{tournament.name}</Text> has been canceled.{'\n\n'}You'll still be able to view your registered teams and their contact info under the Teams tab so you can follow up about refunds or rescheduling.{'\n\n'}If you're rescheduling rather than canceling, use Edit Tournament instead to update the date.
             </Text>
             <View style={styles.deleteModalBtns}>
               <TouchableOpacity style={styles.deleteModalCancelBtn} onPress={() => setShowDeleteModal(false)}>
                 <Text style={[styles.deleteModalCancelText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>KEEP IT</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.deleteModalConfirmBtn} onPress={confirmDelete} disabled={deleteLoading}>
-                <Text style={[styles.deleteModalConfirmText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>{deleteLoading ? 'DELETING...' : 'DELETE'}</Text>
+                <Text style={[styles.deleteModalConfirmText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>{deleteLoading ? 'CANCELING...' : 'CANCEL'}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Delete Event Confirm Modal */}
+      <Modal visible={showDeleteEventModal} animationType="fade" transparent>
+        <View style={styles.successOverlay}>
+          <View style={styles.deleteBox}>
+            <WarningIcon size={32} color="#cc4444" />
+            <Text style={[styles.deleteModalTitle, { color: '#cc4444', marginTop: 12 }, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>DELETE EVENT?</Text>
+            <Text style={styles.deleteModalMsg}>
+              This will permanently delete <Text style={{ fontWeight: '700', color: '#003333' }}>{tournament.name}</Text> and cannot be undone.{'\n\n'}All registered team data and event details will be removed. Be sure to save any team contact information you need before continuing.
+            </Text>
+            <View style={styles.deleteModalBtns}>
+              <TouchableOpacity style={styles.deleteModalCancelBtn} onPress={() => setShowDeleteEventModal(false)}>
+                <Text style={[styles.deleteModalCancelText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>KEEP IT</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.deleteModalConfirmBtn, { backgroundColor: '#cc4444' }]} onPress={confirmDeleteEvent} disabled={deleteEventLoading}>
+                <Text style={[styles.deleteModalConfirmText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>{deleteEventLoading ? 'DELETING...' : 'DELETE'}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1265,13 +1340,13 @@ export default function TournamentScreen() {
           <View style={styles.deleteBox}>
             <Text style={[styles.deleteModalTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>TOURNAMENT CANCELED</Text>
             <Text style={styles.deleteModalMsg}>
-              Your registered teams have been notified. Please reach out to them directly to let them know about next steps — refunds, rescheduling, or alternative events.{'\n\n'}You can message them through the Messages tab or use the contact info they submitted at registration.
+              Your registered teams have been notified. Please reach out to them directly to let them know about next steps — refunds, rescheduling, or alternative events.{'\n\n'}You can find their contact info under the Teams tab, or message them through the Messages tab.
             </Text>
             <TouchableOpacity
-              style={[styles.deleteModalConfirmBtn, { backgroundColor: '#008080', width: '100%' }]}
+              style={{ backgroundColor: '#008080', borderRadius: 14, paddingVertical: 14, alignItems: 'center', width: '100%' }}
               onPress={() => {
                 setShowOrganizerReminderModal(false);
-                router.replace('/');
+                setActiveTab('teams');
               }}
             >
               <Text style={[styles.deleteModalConfirmText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>GOT IT</Text>
@@ -1359,6 +1434,7 @@ const styles = StyleSheet.create({
   editBtnText: { color: '#fff', fontSize: 18, letterSpacing: 1 },
   deleteBtn: { backgroundColor: '#1a1a2e', borderRadius: 12, paddingVertical: 16, alignItems: 'center' },
   deleteBtnText: { color: '#fff', fontSize: 18, letterSpacing: 1 },
+  deleteEventBtn: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, backgroundColor: '#cc4444', borderRadius: 12, paddingVertical: 16 },
   registrationActions: { gap: 10, marginBottom: 20 },
   joinBtn: { backgroundColor: '#008080', borderRadius: 16, paddingVertical: 16, alignItems: 'center' },
   joinedBtn: { backgroundColor: '#a0b8b8' },
@@ -1375,52 +1451,101 @@ const styles = StyleSheet.create({
   modalTitle: { fontSize: 22, color: '#003333', letterSpacing: 1, marginBottom: 4 },
   modalSub: { fontSize: 14, color: '#5a7a7a', marginBottom: 20 },
   modalLabel: { fontSize: 14, fontWeight: '600', color: '#003333', marginBottom: 6, marginTop: 10 },
-  modalInput: { backgroundColor: '#fff', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, fontSize: 15, color: '#003333', marginBottom: 4, borderWidth: 1, borderColor: '#e0f0f0' },
-  modalDropdown: { backgroundColor: '#fff', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderWidth: 1, borderColor: '#e0f0f0' },
-  modalDropdownPlaceholder: { fontSize: 15, color: '#a0b8b8' },
-  modalDropdownSelected: { fontSize: 15, color: '#003333' },
-  dropdownArrow: { fontSize: 12, color: '#008080' },
-  modalDropdownList: { backgroundColor: '#fff', borderRadius: 12, marginTop: 4, marginBottom: 8, borderWidth: 1, borderColor: '#e0f0f0', overflow: 'hidden' },
-  modalDropdownItem: { paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#f0fafa' },
-  modalDropdownItemText: { fontSize: 15, color: '#003333' },
-  modalDropdownItemActive: { color: '#008080', fontWeight: 'bold' },
-  divisionPickerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  divisionFeeTag: { fontSize: 13, color: '#008080', fontWeight: '700' },
-  selectedDivisionFeeBox: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#e0f5f5', borderRadius: 10, padding: 10, marginTop: 6, marginBottom: 4 },
-  selectedDivisionFeeText: { flex: 1, fontSize: 13, color: '#003333', fontWeight: '600' },
-  depositNotice: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, backgroundColor: '#fff8e0', borderRadius: 10, padding: 12, marginTop: 12, borderWidth: 1, borderColor: '#f0d080' },
-  depositNoticeText: { flex: 1, fontSize: 13, color: '#7a5a00', fontWeight: '600' },
-  modalBtns: { flexDirection: 'row', gap: 10, marginTop: 20, marginBottom: 10 },
-  modalCancelBtn: { flex: 1, borderRadius: 12, paddingVertical: 14, alignItems: 'center', borderWidth: 1, borderColor: '#c0d8d8' },
-  modalCancelText: { fontSize: 16, color: '#5a7a7a', fontWeight: '600' },
-  modalSubmitBtn: { flex: 1, backgroundColor: '#008080', borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
-  modalSubmitText: { color: '#fff', fontSize: 16, letterSpacing: 1 },
-  successOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 },
-  successBox: { backgroundColor: '#f5ede0', borderRadius: 24, padding: 28, alignItems: 'center', width: '100%', shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 16, elevation: 8 },
-  successTitle: { fontSize: 28, color: '#003333', letterSpacing: 2, marginTop: 12, marginBottom: 8, textAlign: 'center' },
-  successMsg: { fontSize: 15, color: '#555', textAlign: 'center', marginBottom: 12, lineHeight: 22 },
-  successDepositBox: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#fff8e0', borderRadius: 12, padding: 14, marginBottom: 12, borderWidth: 1, borderColor: '#f0d080', width: '100%' },
-  successDepositText: { flex: 1, fontSize: 13, color: '#7a5a00', fontWeight: '600', textAlign: 'left', lineHeight: 20 },
-  paymentPromptBox: { backgroundColor: '#e0f5f5', borderRadius: 12, padding: 14, marginBottom: 20, width: '100%', borderWidth: 1, borderColor: '#c0e8e8' },
-  paymentPromptTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 },
-  paymentPromptTitle: { fontSize: 13, fontWeight: '700', color: '#003333' },
-  paymentPromptText: { fontSize: 13, color: '#5a7a7a', lineHeight: 18 },
-  paymentContactInfo: { fontSize: 13, color: '#008080', fontWeight: '600', marginTop: 6 },
-  successBtn: { borderRadius: 14, paddingVertical: 14, paddingHorizontal: 40, alignItems: 'center', marginTop: 4 },
-  successBtnText: { color: '#fff', fontSize: 18, letterSpacing: 1 },
-  deleteBox: { backgroundColor: '#f5ede0', borderRadius: 24, padding: 28, alignItems: 'center', width: '100%', shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 16, elevation: 8 },
-  deleteModalTitle: { fontSize: 26, color: '#1a1a2e', letterSpacing: 2, marginBottom: 12, textAlign: 'center' },
-  deleteModalMsg: { fontSize: 15, color: '#555', textAlign: 'center', lineHeight: 24, marginBottom: 24 },
-  deleteModalBtns: { flexDirection: 'row', gap: 12, width: '100%' },
-  deleteModalCancelBtn: { flex: 1, backgroundColor: '#fff', borderRadius: 14, paddingVertical: 14, alignItems: 'center', borderWidth: 1, borderColor: '#e0d8c8' },
-  deleteModalCancelText: { fontSize: 16, color: '#555', letterSpacing: 1 },
-  deleteModalConfirmBtn: { flex: 1, backgroundColor: '#1a1a2e', borderRadius: 14, paddingVertical: 14, alignItems: 'center' },
-  deleteModalConfirmText: { color: '#fff', fontSize: 16, letterSpacing: 1 },
-  waitlistPhoneInput: { backgroundColor: '#fff', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, fontSize: 15, color: '#003333', borderWidth: 1, borderColor: '#e0d8c8', width: '100%', marginBottom: 16 },
-  waitlistModalBtns: { flexDirection: 'row', gap: 10, width: '100%' },
-  waitlistModalCancelBtn: { flex: 1, borderRadius: 14, paddingVertical: 14, alignItems: 'center', borderWidth: 1, borderColor: '#e0d8c8' },
-  waitlistModalCancelText: { fontSize: 16, color: '#5a7a7a', fontWeight: '600' },
-  waitlistModalConfirmBtn: { flex: 1, borderRadius: 14, paddingVertical: 14, alignItems: 'center' },
-  disclaimerBox: { marginTop: 16, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#f0f0f0' },
-  disclaimerText: { fontSize: 11, color: '#b0b0b0', fontStyle: 'italic', lineHeight: 16, textAlign: 'center' },
+
+modalInput: { backgroundColor: '#fff', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, fontSize: 15, color: '#003333', marginBottom: 4, borderWidth: 1, borderColor: '#e0f0f0' },
+
+modalDropdown: { backgroundColor: '#fff', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderWidth: 1, borderColor: '#e0f0f0' },
+
+modalDropdownPlaceholder: { fontSize: 15, color: '#a0b8b8' },
+
+modalDropdownSelected: { fontSize: 15, color: '#003333' },
+
+dropdownArrow: { fontSize: 12, color: '#008080' },
+
+modalDropdownList: { backgroundColor: '#fff', borderRadius: 12, marginTop: 4, marginBottom: 8, borderWidth: 1, borderColor: '#e0f0f0', overflow: 'hidden' },
+
+modalDropdownItem: { paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#f0fafa' },
+
+modalDropdownItemText: { fontSize: 15, color: '#003333' },
+
+modalDropdownItemActive: { color: '#008080', fontWeight: 'bold' },
+
+divisionPickerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+
+divisionFeeTag: { fontSize: 13, color: '#008080', fontWeight: '700' },
+
+selectedDivisionFeeBox: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#e0f5f5', borderRadius: 10, padding: 10, marginTop: 6, marginBottom: 4 },
+
+selectedDivisionFeeText: { flex: 1, fontSize: 13, color: '#003333', fontWeight: '600' },
+
+depositNotice: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, backgroundColor: '#fff8e0', borderRadius: 10, padding: 12, marginTop: 12, borderWidth: 1, borderColor: '#f0d080' },
+
+depositNoticeText: { flex: 1, fontSize: 13, color: '#7a5a00', fontWeight: '600' },
+
+modalBtns: { flexDirection: 'row', gap: 10, marginTop: 20, marginBottom: 10 },
+
+modalCancelBtn: { flex: 1, borderRadius: 12, paddingVertical: 14, alignItems: 'center', borderWidth: 1, borderColor: '#c0d8d8' },
+
+modalCancelText: { fontSize: 16, color: '#5a7a7a', fontWeight: '600' },
+
+modalSubmitBtn: { flex: 1, backgroundColor: '#008080', borderRadius: 12, paddingVertical: 14, alignItems: 'center' },
+
+modalSubmitText: { color: '#fff', fontSize: 16, letterSpacing: 1 },
+
+successOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 },
+
+successBox: { backgroundColor: '#f5ede0', borderRadius: 24, padding: 28, alignItems: 'center', width: '100%', shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 16, elevation: 8 },
+
+successTitle: { fontSize: 28, color: '#003333', letterSpacing: 2, marginTop: 12, marginBottom: 8, textAlign: 'center' },
+
+successMsg: { fontSize: 15, color: '#555', textAlign: 'center', marginBottom: 12, lineHeight: 22 },
+
+successDepositBox: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#fff8e0', borderRadius: 12, padding: 14, marginBottom: 12, borderWidth: 1, borderColor: '#f0d080', width: '100%' },
+
+successDepositText: { flex: 1, fontSize: 13, color: '#7a5a00', fontWeight: '600', textAlign: 'left', lineHeight: 20 },
+
+paymentPromptBox: { backgroundColor: '#e0f5f5', borderRadius: 12, padding: 14, marginBottom: 20, width: '100%', borderWidth: 1, borderColor: '#c0e8e8' },
+
+paymentPromptTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 },
+
+paymentPromptTitle: { fontSize: 13, fontWeight: '700', color: '#003333' },
+
+paymentPromptText: { fontSize: 13, color: '#5a7a7a', lineHeight: 18 },
+
+paymentContactInfo: { fontSize: 13, color: '#008080', fontWeight: '600', marginTop: 6 },
+
+successBtn: { borderRadius: 14, paddingVertical: 14, paddingHorizontal: 40, alignItems: 'center', marginTop: 4 },
+
+successBtnText: { color: '#fff', fontSize: 18, letterSpacing: 1 },
+
+deleteBox: { backgroundColor: '#f5ede0', borderRadius: 24, padding: 28, alignItems: 'center', width: '100%', shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 16, elevation: 8 },
+
+deleteModalTitle: { fontSize: 26, color: '#1a1a2e', letterSpacing: 2, marginBottom: 12, textAlign: 'center' },
+
+deleteModalMsg: { fontSize: 15, color: '#555', textAlign: 'center', lineHeight: 24, marginBottom: 24 },
+
+deleteModalBtns: { flexDirection: 'row', gap: 12, width: '100%' },
+
+deleteModalCancelBtn: { flex: 1, backgroundColor: '#fff', borderRadius: 14, paddingVertical: 14, alignItems: 'center', borderWidth: 1, borderColor: '#e0d8c8' },
+
+deleteModalCancelText: { fontSize: 16, color: '#555', letterSpacing: 1 },
+
+deleteModalConfirmBtn: { flex: 1, backgroundColor: '#1a1a2e', borderRadius: 14, paddingVertical: 14, alignItems: 'center' },
+
+deleteModalConfirmText: { color: '#fff', fontSize: 16, letterSpacing: 1 },
+
+waitlistPhoneInput: { backgroundColor: '#fff', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, fontSize: 15, color: '#003333', borderWidth: 1, borderColor: '#e0d8c8', width: '100%', marginBottom: 16 },
+
+waitlistModalBtns: { flexDirection: 'row', gap: 10, width: '100%' },
+
+waitlistModalCancelBtn: { flex: 1, borderRadius: 14, paddingVertical: 14, alignItems: 'center', borderWidth: 1, borderColor: '#e0d8c8' },
+
+waitlistModalCancelText: { fontSize: 16, color: '#5a7a7a', fontWeight: '600' },
+
+waitlistModalConfirmBtn: { flex: 1, borderRadius: 14, paddingVertical: 14, alignItems: 'center' },
+
+disclaimerBox: { marginTop: 16, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#f0f0f0' },
+
+disclaimerText: { fontSize: 11, color: '#b0b0b0', fontStyle: 'italic', lineHeight: 16, textAlign: 'center' },
+
 });

@@ -175,7 +175,9 @@ export default function HomeScreen() {
   const [headerHeight, setHeaderHeight] = useState(140);
   const [showNotifications, setShowNotifications] = useState(false);
   const [notifications, setNotifications] = useState([]);
-  const [canceledNotiModal, setCanceledNotiModal] = useState<{ visible: boolean; tournamentName: string }>({ visible: false, tournamentName: '' });
+  const [canceledNotiModal, setCanceledNotiModal] = useState<{ visible: boolean; tournamentName: string; organizerName: string; organizerPhone: string }>({
+    visible: false, tournamentName: '', organizerName: '', organizerPhone: '',
+  });
   const router = useRouter();
   const user = auth.currentUser;
   const [fontsLoaded] = useFonts({ Rajdhani_700Bold });
@@ -240,11 +242,15 @@ export default function HomeScreen() {
     const isCanceled = n.message?.includes('canceled by the organizer');
 
     if (isCanceled) {
-      // Extract tournament name from message e.g. "⚠️ Dr Pepper Classic has been canceled by the organizer."
       const match = n.message?.match(/^[^\w]*(.+?) has been canceled by the organizer/);
       const tournamentName = match?.[1] || 'This tournament';
       setShowNotifications(false);
-      setCanceledNotiModal({ visible: true, tournamentName });
+      setCanceledNotiModal({
+        visible: true,
+        tournamentName,
+        organizerName: n.organizerName || '',
+        organizerPhone: n.organizerPhone || '',
+      });
       return;
     }
 
@@ -268,8 +274,8 @@ export default function HomeScreen() {
       t.state?.toLowerCase().includes(search.toLowerCase())
     )
     .sort((a: any, b: any) => {
-      const dateA = new Date(a.date?.split(' - ')[0] || 0).getTime();
-      const dateB = new Date(b.date?.split(' - ')[0] || 0).getTime();
+      const dateA = a.startDateValue?.toMillis?.() ?? new Date(a.date?.split(' - ')[0] || 0).getTime();
+      const dateB = b.startDateValue?.toMillis?.() ?? new Date(b.date?.split(' - ')[0] || 0).getTime();
       return dateA - dateB;
     });
 
@@ -544,16 +550,22 @@ export default function HomeScreen() {
               This event has been canceled by the organizer. We recommend reaching out to them directly for information about next steps — such as refunds, rescheduling, or alternative events.
             </Text>
             <View style={styles.canceledModalSteps}>
-              <Text style={styles.canceledModalStepTitle}>How to reach the organizer:</Text>
-              <Text style={styles.canceledModalStep}>1. Find the tournament card on the home screen</Text>
-              <Text style={styles.canceledModalStep}>2. Tap the card and use the Message button to contact them directly</Text>
-              <Text style={styles.canceledModalStep}>3. Check the contact info on the tournament detail page for phone or email</Text>
+              <Text style={styles.canceledModalStepTitle}>Contact Organizer for Details</Text>
+              {canceledNotiModal.organizerName ? (
+                <Text style={styles.canceledModalContactLine}>{canceledNotiModal.organizerName}</Text>
+              ) : null}
+              {canceledNotiModal.organizerPhone ? (
+                <Text style={styles.canceledModalContactLine}>{canceledNotiModal.organizerPhone}</Text>
+              ) : null}
+              {!canceledNotiModal.organizerName && !canceledNotiModal.organizerPhone ? (
+                <Text style={styles.canceledModalContactLine}>No contact info available. Try the Messages tab.</Text>
+              ) : null}
             </View>
             <TouchableOpacity
               style={styles.canceledModalBtn}
-              onPress={() => setCanceledNotiModal({ visible: false, tournamentName: '' })}
+              onPress={() => setCanceledNotiModal({ visible: false, tournamentName: '', organizerName: '', organizerPhone: '' })}
             >
-              <Text style={[styles.canceledModalBtnText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>GOT IT</Text>
+              <Text style={[styles.canceledModalBtnText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>CONFIRM</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -655,6 +667,7 @@ const styles = StyleSheet.create({
   canceledModalSteps: { backgroundColor: '#fff', borderRadius: 14, padding: 16, width: '100%', marginBottom: 20, borderWidth: 1, borderColor: '#e0d8c8' },
   canceledModalStepTitle: { fontSize: 13, fontWeight: '700', color: '#003333', marginBottom: 10 },
   canceledModalStep: { fontSize: 13, color: '#555', lineHeight: 20, marginBottom: 6 },
+  canceledModalContactLine: { fontSize: 14, color: '#003333', fontWeight: '700', marginBottom: 4 },
   canceledModalBtn: { backgroundColor: '#cc4444', borderRadius: 14, paddingVertical: 14, paddingHorizontal: 40, alignItems: 'center' },
   canceledModalBtnText: { color: '#fff', fontSize: 18, letterSpacing: 1 },
 });

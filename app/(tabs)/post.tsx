@@ -163,6 +163,7 @@ function TournamentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
   const [sport, setSport] = useState('');
   const [showSportPicker, setShowSportPicker] = useState(false);
   const [startDate, setStartDate] = useState('');
+  const [startDateObj, setStartDateObj] = useState<Date | null>(null);
   const [endDate, setEndDate] = useState('');
   const [showStartPicker, setShowStartPicker] = useState(false);
   const [showEndPicker, setShowEndPicker] = useState(false);
@@ -246,7 +247,7 @@ function TournamentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
   };
 
   const resetFields = () => {
-    setName(''); setSport(''); setStartDate(''); setEndDate('');
+    setName(''); setSport(''); setStartDate(''); setStartDateObj(null); setEndDate('');
     setAddress(''); setCity(''); setState(''); setZip('');
     setSpots(''); setDivisionFees({}); setDivisionSpots({}); setSpectatorFee('');
     setIsFreeSpectator(false);
@@ -316,7 +317,11 @@ function TournamentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
   };
 
   const focusDeposit = () => { depositAmountRef.current?.focus(); scrollRef.current?.scrollTo({ y: 999, animated: true }); };
-  const handleStartConfirm = (date: Date) => { setStartDate(date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })); setShowStartPicker(false); };
+  const handleStartConfirm = (date: Date) => {
+    setStartDate(date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }));
+    setStartDateObj(date);
+    setShowStartPicker(false);
+  };
   const handleEndConfirm = (date: Date) => { setEndDate(date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })); setShowEndPicker(false); };
   const handleDepositDueConfirm = (date: Date) => { setDepositDue(date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })); setShowDepositDuePicker(false); };
 
@@ -357,6 +362,7 @@ function TournamentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
       const organizerPhoto = userSnap.exists() ? (userSnap.data().photoURL || '') : '';
       const tournamentRef = await addDoc(collection(db, 'tournaments'), {
         name, sport, date: `${startDate} - ${endDate}`,
+        startDateValue: startDateObj ? Timestamp.fromDate(startDateObj) : null,
         address: finalAddress, city: finalCity, state: finalState, zip: finalZip,
         location: `${finalCity}, ${finalState}`, spots: parseInt(spots) || 0,
         divisionFees,
