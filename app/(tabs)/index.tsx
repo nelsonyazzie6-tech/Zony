@@ -151,6 +151,17 @@ function XIcon({ size = 12, color = '#ccc' }: { size?: number; color?: string })
   );
 }
 
+// Warning icon for canceled modal
+function WarningIcon({ size = 32, color = '#cc4444' }: { size?: number; color?: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <Path d="m12 2 10 18H2L12 2z" />
+      <Line x1="12" y1="9" x2="12" y2="13" />
+      <Line x1="12" y1="17" x2="12" y2="17" />
+    </Svg>
+  );
+}
+
 export default function HomeScreen() {
   const [sport, setSport] = useState('All');
   const [showSportPicker, setShowSportPicker] = useState(false);
@@ -164,6 +175,7 @@ export default function HomeScreen() {
   const [headerHeight, setHeaderHeight] = useState(140);
   const [showNotifications, setShowNotifications] = useState(false);
   const [notifications, setNotifications] = useState([]);
+  const [canceledNotiModal, setCanceledNotiModal] = useState<{ visible: boolean; tournamentName: string }>({ visible: false, tournamentName: '' });
   const router = useRouter();
   const user = auth.currentUser;
   const [fontsLoaded] = useFonts({ Rajdhani_700Bold });
@@ -224,6 +236,17 @@ export default function HomeScreen() {
         await updateDoc(doc(db, 'notifications', n.id), { read: true });
       }
     } catch (e) { console.log(e); }
+
+    const isCanceled = n.message?.includes('canceled by the organizer');
+
+    if (isCanceled) {
+      // Extract tournament name from message e.g. "⚠️ Dr Pepper Classic has been canceled by the organizer."
+      const match = n.message?.match(/^[^\w]*(.+?) has been canceled by the organizer/);
+      const tournamentName = match?.[1] || 'This tournament';
+      setShowNotifications(false);
+      setCanceledNotiModal({ visible: true, tournamentName });
+      return;
+    }
 
     setShowNotifications(false);
 
@@ -381,7 +404,7 @@ export default function HomeScreen() {
                   {hasDivisions ? (
                     <View style={styles.divisionsRow}>
                       <View style={styles.detailRow}>
-                        <PersonIcon size={13} color={sportColor} />
+                        <PersonIcon size={14} color="#5a5a5a" />
                         <Text style={styles.divisionsText}>{simplifyDivisions(t.divisions)}</Text>
                       </View>
                       {t.status === 'canceled' && (
@@ -473,25 +496,29 @@ export default function HomeScreen() {
                 contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 8 }}
                 renderItem={({ item: n }: any) => {
                   const isRead = n.read === true;
+                  const isCanceled = n.message?.includes('canceled by the organizer');
                   const parts = n.message?.match(/^(.+?) registered (.+?) into (.+?)!$/);
                   const contactName = parts?.[1] || '';
                   const teamName = parts?.[2] || '';
                   const tournamentName = parts?.[3] || '';
                   return (
                     <TouchableOpacity
-                      style={[styles.notiCard, isRead && styles.notiCardRead]}
+                      style={[styles.notiCard, isRead && styles.notiCardRead, isCanceled && styles.notiCardCanceled]}
                       onPress={() => handleNotificationPress(n)}
                     >
-                      <View style={styles.notiIcon}>
-                        <NotiTrophyIcon />
+                      <View style={[styles.notiIcon, isCanceled && styles.notiIconCanceled]}>
+                        {isCanceled ? <WarningIcon size={20} color="#cc4444" /> : <NotiTrophyIcon />}
                       </View>
                       <View style={styles.notiContent}>
                         <View style={styles.notiTopRow}>
-                          <Text style={[styles.notiTeamName, isRead && styles.notiMessageRead]} numberOfLines={3}>
+                          <Text style={[styles.notiTeamName, isRead && styles.notiMessageRead, isCanceled && styles.notiCanceledText]} numberOfLines={3}>
                             {parts ? `${contactName} registered ${teamName} into ${tournamentName}!` : n.message}
                           </Text>
                           <Text style={styles.notiTime}>{n.createdAt?.toDate?.()?.toLocaleDateString()}</Text>
                         </View>
+                        {isCanceled && (
+                          <Text style={styles.notiCanceledHint}>Tap for next steps</Text>
+                        )}
                       </View>
                       {!isRead && <View style={styles.notiDot} />}
                       <TouchableOpacity onPress={() => handleDeleteNotification(n.id)} style={styles.notiDelete}>
@@ -502,6 +529,32 @@ export default function HomeScreen() {
                 }}
               />
             )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* Canceled Event Modal */}
+      <Modal visible={canceledNotiModal.visible} animationType="fade" transparent>
+        <View style={styles.canceledModalOverlay}>
+          <View style={styles.canceledModalBox}>
+            <WarningIcon size={40} color="#cc4444" />
+            <Text style={[styles.canceledModalTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>EVENT CANCELED</Text>
+            <Text style={styles.canceledModalName}>{canceledNotiModal.tournamentName}</Text>
+            <Text style={styles.canceledModalMsg}>
+              This event has been canceled by the organizer. We recommend reaching out to them directly for information about next steps — such as refunds, rescheduling, or alternative events.
+            </Text>
+            <View style={styles.canceledModalSteps}>
+              <Text style={styles.canceledModalStepTitle}>How to reach the organizer:</Text>
+              <Text style={styles.canceledModalStep}>1. Find the tournament card on the home screen</Text>
+              <Text style={styles.canceledModalStep}>2. Tap the card and use the Message button to contact them directly</Text>
+              <Text style={styles.canceledModalStep}>3. Check the contact info on the tournament detail page for phone or email</Text>
+            </View>
+            <TouchableOpacity
+              style={styles.canceledModalBtn}
+              onPress={() => setCanceledNotiModal({ visible: false, tournamentName: '' })}
+            >
+              <Text style={[styles.canceledModalBtnText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>GOT IT</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -538,11 +591,11 @@ const styles = StyleSheet.create({
   cardBody: { paddingHorizontal: 14, paddingTop: 10, paddingBottom: 12 },
   name: { fontSize: 17, fontWeight: 'bold', color: '#f5ede0', flex: 1, marginRight: 8, textTransform: 'uppercase', letterSpacing: 1.2 },
   sportBadge: { fontSize: 11, backgroundColor: '#f5ede0', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, overflow: 'hidden', fontWeight: 'bold' },
-  detailRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 },
+  detailRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 },
   detail: { fontSize: 14, color: '#5a5a5a' },
   dateText: { fontSize: 14, fontWeight: '700' },
-  divisionsRow: { marginTop: 6 },
-  divisionsText: { fontSize: 13, fontWeight: '400', color: '#1a1a1a' },
+  divisionsRow: { marginTop: 0 },
+  divisionsText: { fontSize: 14, fontWeight: '400', color: '#5a5a5a' },
   spotsRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 6 },
   spotsBadge: { borderRadius: 10, paddingHorizontal: 10, paddingVertical: 4, borderWidth: 1, alignSelf: 'flex-start' },
   spots: { fontSize: 13, fontWeight: '900' },
@@ -580,13 +633,28 @@ const styles = StyleSheet.create({
   sheetEmptySub: { fontSize: 14, color: '#a0b8b8', textAlign: 'center', paddingHorizontal: 40 },
   notiCard: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, backgroundColor: '#fff', borderRadius: 16, padding: 12, marginBottom: 8, shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 4, elevation: 1 },
   notiCardRead: { backgroundColor: 'transparent', shadowOpacity: 0, elevation: 0 },
+  notiCardCanceled: { backgroundColor: '#fff5f5', borderWidth: 1, borderColor: '#ffcccc' },
   notiIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(0,128,128,0.1)', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  notiIconCanceled: { backgroundColor: 'rgba(204,68,68,0.1)' },
   notiContent: { flex: 1 },
   notiTopRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 },
   notiTeamName: { fontSize: 13, fontWeight: '700', color: '#111', flex: 1, lineHeight: 18 },
   notiMessageRead: { fontWeight: '500', color: '#666' },
+  notiCanceledText: { color: '#cc4444' },
+  notiCanceledHint: { fontSize: 11, color: '#cc4444', marginTop: 4, fontWeight: '600' },
   notiTime: { fontSize: 10, color: '#aaa', flexShrink: 0 },
   notiDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#8B1A1A', flexShrink: 0 },
   notiDelete: { padding: 4 },
   notiDeleteText: { fontSize: 12, color: '#ccc' },
+  // Canceled event modal
+  canceledModalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 24 },
+  canceledModalBox: { backgroundColor: '#f5ede0', borderRadius: 24, padding: 28, alignItems: 'center', width: '100%', shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 16, elevation: 8 },
+  canceledModalTitle: { fontSize: 26, color: '#cc4444', letterSpacing: 2, marginTop: 12, marginBottom: 4, textAlign: 'center' },
+  canceledModalName: { fontSize: 16, fontWeight: '700', color: '#003333', marginBottom: 12, textAlign: 'center' },
+  canceledModalMsg: { fontSize: 14, color: '#555', textAlign: 'center', lineHeight: 22, marginBottom: 16 },
+  canceledModalSteps: { backgroundColor: '#fff', borderRadius: 14, padding: 16, width: '100%', marginBottom: 20, borderWidth: 1, borderColor: '#e0d8c8' },
+  canceledModalStepTitle: { fontSize: 13, fontWeight: '700', color: '#003333', marginBottom: 10 },
+  canceledModalStep: { fontSize: 13, color: '#555', lineHeight: 20, marginBottom: 6 },
+  canceledModalBtn: { backgroundColor: '#cc4444', borderRadius: 14, paddingVertical: 14, paddingHorizontal: 40, alignItems: 'center' },
+  canceledModalBtnText: { color: '#fff', fontSize: 18, letterSpacing: 1 },
 });

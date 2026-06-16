@@ -27,7 +27,6 @@ function SuccessTrophy() {
   );
 }
 
-// ---- Inline icon set (replaces emojis) ----
 type IconProps = { size?: number; color?: string };
 
 function CalendarIcon({ size = 15, color = '#008080' }: IconProps) {
@@ -166,7 +165,6 @@ function MessageIcon({ size = 18, color = '#fff' }: IconProps) {
     </Svg>
   );
 }
-// ---- End icon set ----
 
 function formatPhone(val: string) {
   const digits = val.replace(/\D/g, '').slice(0, 10);
@@ -175,7 +173,6 @@ function formatPhone(val: string) {
   return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}`;
 }
 
-// Reusable styled info modal matching app theme
 function InfoModal({ visible, title, message, onClose }: { visible: boolean; title: string; message: string; onClose: () => void }) {
   const [fontsLoaded] = useFonts({ Rajdhani_700Bold });
   return (
@@ -200,15 +197,9 @@ export default function TournamentScreen() {
   const [joined, setJoined] = useState(false);
   const [onWaitlist, setOnWaitlist] = useState(false);
   const [myWaitlistDivision, setMyWaitlistDivision] = useState<string | null>(null);
-
-  // Name of the current user's registered team, used to show the
-  // "[Team Name] is Registered" banner on the details card.
   const [myTeamName, setMyTeamName] = useState<string | null>(null);
-
-  // spotsLeft is per-division when the tournament has divisions, otherwise a single number
   const [divisionSpotsLeft, setDivisionSpotsLeft] = useState<Record<string, number>>({});
   const [spotsLeft, setSpotsLeft] = useState(0);
-
   const [activeTab, setActiveTab] = useState<'details' | 'teams' | 'waitlist'>('details');
   const [teams, setTeams] = useState([]);
   const [waitlistEntries, setWaitlistEntries] = useState([]);
@@ -221,6 +212,7 @@ export default function TournamentScreen() {
   const [leaveWaitlistLoading, setLeaveWaitlistLoading] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [showOrganizerReminderModal, setShowOrganizerReminderModal] = useState(false);
   const [successData, setSuccessData] = useState<{ teamName: string; tournamentName: string; depositMsg: string; contactInfo: string } | null>(null);
   const [teamName, setTeamName] = useState('');
   const [contactName, setContactName] = useState('');
@@ -235,8 +227,6 @@ export default function TournamentScreen() {
   const [waitlistPhone, setWaitlistPhone] = useState('');
   const [waitlistDivision, setWaitlistDivision] = useState('');
   const [showWaitlistDivisionPicker, setShowWaitlistDivisionPicker] = useState(false);
-
-  // Info modal (replaces silent failures for "division full" etc.)
   const [infoModal, setInfoModal] = useState<{ visible: boolean; title: string; message: string }>({
     visible: false, title: '', message: '',
   });
@@ -269,9 +259,6 @@ export default function TournamentScreen() {
           setOnWaitlist(true);
           setMyWaitlistDivision(myEntry.data().division || null);
         }
-
-        // Look up the user's registered team (if any) so we can show
-        // the "[Team Name] is Registered" banner immediately.
         const teamsSnap = await getDocs(collection(db, 'tournaments', id as string, 'teams'));
         const myTeam = teamsSnap.docs.find(d => d.data().registeredBy === user.uid);
         if (myTeam) {
@@ -364,7 +351,6 @@ export default function TournamentScreen() {
         });
       }
 
-      // Promote next waitlisted person FOR THE SAME DIVISION (or any, if no divisions)
       let waitlistQueryRef;
       if (usesDivisionSpots && cancelingDivision) {
         waitlistQueryRef = query(
@@ -494,7 +480,6 @@ export default function TournamentScreen() {
     } catch (e: any) { console.error(e); }
   };
 
-  // Leave waitlist
   const doLeaveWaitlist = async () => {
     if (!user) return;
     setLeaveWaitlistLoading(true);
@@ -552,15 +537,11 @@ export default function TournamentScreen() {
     return divisionSpotsLeft[div] ?? tournament.divisionSpots[div] ?? 0;
   };
 
-  // Builds the "Cash, Card, Zelle, Venmo accepted" string for the spectator
-  // fee line. "Other" is replaced by whatever the organizer typed in.
   const getSpectatorPaymentMethodsText = (): string | null => {
     const methods: string[] = tournament?.spectatorPaymentMethods || [];
     if (methods.length === 0) return null;
     const display = methods.map(m => {
-      if (m === 'Other') {
-        return tournament?.spectatorPaymentOther?.trim() || null;
-      }
+      if (m === 'Other') return tournament?.spectatorPaymentOther?.trim() || null;
       return m;
     }).filter(Boolean) as string[];
     if (display.length === 0) return null;
@@ -711,7 +692,8 @@ export default function TournamentScreen() {
         })
       );
       await deleteDoc(doc(db, 'tournaments', id as string));
-      router.replace('/');
+      setShowDeleteModal(false);
+      setShowOrganizerReminderModal(true);
     } catch (e: any) { console.error(e); }
     setDeleteLoading(false);
   };
@@ -741,7 +723,6 @@ export default function TournamentScreen() {
   const isCanceled = tournament.status === 'canceled';
   const usesDivisionSpots = hasDivisionSpots(tournament);
 
-  // "Full" means: no divisions and spots <= 0, OR every division is at 0
   const isFull = usesDivisionSpots
     ? tournament.divisions.every((d: string) => getDivisionSpotsLeft(d) === 0)
     : spotsLeft <= 0;
@@ -756,9 +737,7 @@ export default function TournamentScreen() {
     : '?';
 
   const registrationDivisions = tournament.divisions?.length > 0 ? tournament.divisions : [];
-
   const spectatorPaymentMethodsText = getSpectatorPaymentMethodsText();
-
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <View style={styles.container}>
@@ -873,7 +852,6 @@ export default function TournamentScreen() {
                 </View>
               </View>
 
-              {/* Hard-to-miss banner shown when the current user has a team registered */}
               {joined && !isOwner && (
                 <View style={[styles.registeredBanner, { backgroundColor: sportColor }]}>
                   <CheckIcon size={18} color="#fff" />
@@ -927,9 +905,7 @@ export default function TournamentScreen() {
                     const divSpots = getDivisionSpotsLeft(d);
                     return (
                       <View key={d} style={styles.divisionRow}>
-                        <Text style={styles.divisionRowLabel}>
-                          {d}{fee ? `  —  ${fee}` : ''}
-                        </Text>
+                        <Text style={styles.divisionRowLabel}>{d}{fee ? `  —  ${fee}` : ''}</Text>
                         {divSpots !== null ? (
                           <Text style={[styles.divisionRowSpots, { color: divSpots === 0 ? '#cc4444' : sportColor }]}>
                             {divSpots === 0 ? 'Full' : `${divSpots} spot${divSpots === 1 ? '' : 's'} left`}
@@ -945,7 +921,9 @@ export default function TournamentScreen() {
                 <>
                   <View style={[styles.row, { marginTop: 16 }]}><TicketIcon color={sportColor} /><Text style={styles.rowLabel}>Spectator Fee</Text></View>
                   <Text style={styles.rowValue}>
-                    {tournament.spectatorFee} at the door{spectatorPaymentMethodsText ? `  ·  ${spectatorPaymentMethodsText}` : ''}
+                    {tournament.spectatorFee === 'Free'
+                      ? 'Open to Public — Free'
+                      : `${tournament.spectatorFee} at the door${spectatorPaymentMethodsText ? `  ·  ${spectatorPaymentMethodsText}` : ''}`}
                   </Text>
                 </>
               ) : null}
@@ -997,6 +975,7 @@ export default function TournamentScreen() {
                   {isFull ? 'Tournament Full' : `${spotsLeft} spots left`}
                 </Text>
               )}
+
               <View style={styles.disclaimerBox}>
                 <Text style={styles.disclaimerText}>
                   Committee is not responsible for any injuries, accidents, lost or stolen items, or damages incurred during the tournament. Participation is at your own risk.
@@ -1034,29 +1013,18 @@ export default function TournamentScreen() {
                     </TouchableOpacity>
                   </>
                 ) : onWaitlist ? (
-                  // Already on a waitlist — show leave option, but still allow registering
-                  // in case a different division has room
                   <>
-                    <TouchableOpacity
-                      style={styles.leaveWaitlistBtn}
-                      onPress={() => setShowLeaveWaitlistModal(true)}
-                    >
+                    <TouchableOpacity style={styles.leaveWaitlistBtn} onPress={() => setShowLeaveWaitlistModal(true)}>
                       <Text style={styles.leaveWaitlistText}>✓ On Waitlist{myWaitlistDivision ? ` (${myWaitlistDivision})` : ''}  ·  Leave</Text>
                     </TouchableOpacity>
                     {!isFull && !isCanceled && (
-                      <TouchableOpacity
-                        style={[styles.joinBtn, { backgroundColor: sportColor }]}
-                        onPress={() => setShowTeamModal(true)}
-                      >
+                      <TouchableOpacity style={[styles.joinBtn, { backgroundColor: sportColor }]} onPress={() => setShowTeamModal(true)}>
                         <Text style={styles.joinText}>Register Team</Text>
                       </TouchableOpacity>
                     )}
                   </>
                 ) : isFull && !isCanceled ? (
-                  <TouchableOpacity
-                    style={[styles.joinBtn, { backgroundColor: sportColor }]}
-                    onPress={() => setShowWaitlistModal(true)}
-                  >
+                  <TouchableOpacity style={[styles.joinBtn, { backgroundColor: sportColor }]} onPress={() => setShowWaitlistModal(true)}>
                     <Text style={styles.joinText}>Join Waitlist</Text>
                   </TouchableOpacity>
                 ) : (
@@ -1073,6 +1041,7 @@ export default function TournamentScreen() {
           </ScrollView>
         )}
       </View>
+
       {/* Registration Modal */}
       <Modal visible={showTeamModal} animationType="slide" transparent onRequestClose={tryCloseModal}>
         <View style={styles.modalOverlay}>
@@ -1201,7 +1170,6 @@ export default function TournamentScreen() {
                 <ClipboardIcon size={40} color="#008080" />
                 <Text style={[styles.successTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>JOIN WAITLIST</Text>
                 <Text style={styles.successMsg}>You'll be automatically added if a spot opens. Add your phone so the organizer can reach you.</Text>
-
                 {usesDivisionSpots && (
                   <View style={{ width: '100%', marginBottom: 12 }}>
                     <TouchableOpacity style={styles.modalDropdown} onPress={() => setShowWaitlistDivisionPicker(!showWaitlistDivisionPicker)}>
@@ -1219,7 +1187,6 @@ export default function TournamentScreen() {
                     )}
                   </View>
                 )}
-
                 <TextInput
                   style={styles.waitlistPhoneInput}
                   placeholder="Phone number (optional)"
@@ -1292,6 +1259,27 @@ export default function TournamentScreen() {
         </View>
       </Modal>
 
+      {/* Organizer Reminder Modal */}
+      <Modal visible={showOrganizerReminderModal} animationType="fade" transparent>
+        <View style={styles.successOverlay}>
+          <View style={styles.deleteBox}>
+            <Text style={[styles.deleteModalTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>TOURNAMENT CANCELED</Text>
+            <Text style={styles.deleteModalMsg}>
+              Your registered teams have been notified. Please reach out to them directly to let them know about next steps — refunds, rescheduling, or alternative events.{'\n\n'}You can message them through the Messages tab or use the contact info they submitted at registration.
+            </Text>
+            <TouchableOpacity
+              style={[styles.deleteModalConfirmBtn, { backgroundColor: '#008080', width: '100%' }]}
+              onPress={() => {
+                setShowOrganizerReminderModal(false);
+                router.replace('/');
+              }}
+            >
+              <Text style={[styles.deleteModalConfirmText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>GOT IT</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       <InfoModal
         visible={infoModal.visible}
         title={infoModal.title}
@@ -1330,7 +1318,6 @@ const styles = StyleSheet.create({
   contactName: { fontSize: 14, fontWeight: '600', color: '#333', marginBottom: 4 },
   contactLine: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2, paddingLeft: 24 },
   contactLineNoIndent: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 },
-  contactLineIcon: { fontSize: 12 },
   contactLineText: { fontSize: 12, color: '#777' },
   tappableLink: { fontSize: 14, color: '#008080', textDecorationLine: 'underline' },
   waitlistCard: { flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: '#fff', borderRadius: 16, padding: 16, marginBottom: 10, borderWidth: 1, borderColor: '#f0f0f0', shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 4, elevation: 1 },
@@ -1347,7 +1334,6 @@ const styles = StyleSheet.create({
   sportBadge: { alignSelf: 'flex-start', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 4 },
   sportBadgeText: { color: '#fff', fontSize: 12, fontWeight: '700' },
   registeredBanner: { flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: 14, paddingVertical: 12, paddingHorizontal: 16, marginBottom: 14 },
-  registeredBannerIcon: { color: '#fff', fontSize: 18, fontWeight: '900' },
   registeredBannerText: { flex: 1, color: '#fff', fontSize: 16, letterSpacing: 0.5 },
   tournamentName: { fontSize: 26, fontWeight: '900', color: '#111', marginBottom: 12, lineHeight: 30 },
   organizerRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 14, backgroundColor: '#f5ede0', borderRadius: 12, padding: 10 },
@@ -1360,7 +1346,6 @@ const styles = StyleSheet.create({
   messageOrganizerBtnText: { color: '#fff', fontSize: 12, fontWeight: '600' },
   divider: { height: 1, backgroundColor: '#f0f0f0', marginBottom: 12 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
-  rowIcon: { fontSize: 15 },
   rowLabel: { fontSize: 13, fontWeight: '700', color: '#333' },
   rowValue: { fontSize: 14, color: '#555', paddingLeft: 24, marginBottom: 2 },
   divisionRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingLeft: 24, paddingRight: 4, paddingVertical: 4 },

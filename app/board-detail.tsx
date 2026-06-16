@@ -103,7 +103,7 @@ export default function BoardDetailScreen() {
   const router = useRouter();
   const [post, setPost] = useState<any>(null);
   const [poster, setPoster] = useState<{ username: string; photoURL: string } | null>(null);
-const [hideContactInfo, setHideContactInfo] = useState<boolean | null>(null);
+  const [hideContactInfo, setHideContactInfo] = useState<boolean | null>(null);
   const [fontsLoaded] = useFonts({ Rajdhani_700Bold });
   const [headerHeight, setHeaderHeight] = useState(160);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -160,8 +160,7 @@ const [hideContactInfo, setHideContactInfo] = useState<boolean | null>(null);
     ? poster.username.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase()
     : '?';
 
-  // Contact info visible to owner always, hidden to others if toggle is on
- const showContact = isOwner || hideContactInfo === false;
+  const showContact = isOwner || hideContactInfo === false;
 
   const handleDelete = async () => {
     setDeleteLoading(true);
@@ -302,7 +301,6 @@ const [hideContactInfo, setHideContactInfo] = useState<boolean | null>(null);
             </View>
           ) : null}
 
-          {/* Phone — hidden if poster has hideContactInfo on */}
           {post.contactPhone ? (
             showContact ? (
               <TouchableOpacity
@@ -319,7 +317,6 @@ const [hideContactInfo, setHideContactInfo] = useState<boolean | null>(null);
             ) : null
           ) : null}
 
-          {/* Email — hidden if poster has hideContactInfo on */}
           {post.contactEmail ? (
             showContact ? (
               <TouchableOpacity
@@ -336,7 +333,6 @@ const [hideContactInfo, setHideContactInfo] = useState<boolean | null>(null);
             ) : null
           ) : null}
 
-          {/* Nudge shown when contact is hidden */}
           {!showContact && (post.contactPhone || post.contactEmail) ? (
             <View style={[styles.infoRow, { borderBottomWidth: 0 }]}>
               <Text style={styles.infoLabel}>Contact</Text>
@@ -402,7 +398,6 @@ const [hideContactInfo, setHideContactInfo] = useState<boolean | null>(null);
         </View>
       </Modal>
 
-      {/* Report Reason Modal */}
       <Modal visible={showReportModal} animationType="fade" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalBox}>
@@ -426,7 +421,6 @@ const [hideContactInfo, setHideContactInfo] = useState<boolean | null>(null);
         </View>
       </Modal>
 
-      {/* Report Confirmation Modal */}
       <Modal visible={showReportConfirm} animationType="fade" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalBox}>
@@ -445,13 +439,13 @@ const [hideContactInfo, setHideContactInfo] = useState<boolean | null>(null);
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f5ede0' },
   loadingContainer: { justifyContent: 'center', alignItems: 'center' },
-  headerBlock: { paddingTop: 60, paddingBottom: 24, paddingHorizontal: 20 },
-  topRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
+  headerBlock: { paddingTop: 60, paddingBottom: 24, paddingHorizontal: 0 },
+  topRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, paddingHorizontal: 20 },
   back: {},
   backText: { fontSize: 16, color: 'rgba(255,255,255,0.9)', fontWeight: '600' },
   reportBtn: { backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 20, paddingHorizontal: 14, paddingVertical: 6, borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' },
   reportBtnText: { color: 'rgba(255,255,255,0.9)', fontSize: 13, fontWeight: '600' },
-  heroInner: { flexDirection: 'row', alignItems: 'center', gap: 16 },
+  heroInner: { flexDirection: 'row', alignItems: 'center', gap: 16, paddingHorizontal: 20 },
   avatarLarge: { width: 72, height: 72, borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.2)', borderWidth: 2, borderColor: 'rgba(255,255,255,0.4)', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   avatarLargeText: { color: '#fff', fontSize: 24, fontWeight: '900' },
   heroInfo: { flex: 1 },

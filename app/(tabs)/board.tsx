@@ -82,6 +82,9 @@ const divisionOptions = [
   { label: '18U Boys', value: '18U Boys' },
   { label: '18U Girls', value: '18U Girls' },
   { label: '18U Coed', value: '18U Coed' },
+  { label: 'HS Boys', value: 'HS Boys' },
+  { label: 'HS Girls', value: 'HS Girls' },
+  { label: 'HS Coed', value: 'HS Coed' },
   { label: 'Adult Men', value: 'Adult Men' },
   { label: 'Adult Women', value: 'Adult Women' },
   { label: 'Adult Coed', value: 'Adult Coed' },
@@ -257,12 +260,10 @@ export default function BoardScreen() {
                 activeOpacity={0.85}
                 onPress={() => router.push({ pathname: '/board-detail', params: { id: p.id } })}
               >
-                {/* Item 8 — colored left border accent */}
                 <View style={[styles.cardAccentBar, { backgroundColor: sportColor }]} />
 
                 <View style={styles.cardInner}>
                   <View style={styles.cardTopRow}>
-                    {/* Item 8 — bold name in sport color */}
                     <Text
                       style={[styles.cardName, { color: sportColor }, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}
                       numberOfLines={1}
@@ -299,6 +300,7 @@ export default function BoardScreen() {
                     <Text style={styles.posterName}>{poster?.username || 'Unknown'}</Text>
                     {timeAgo ? <Text style={styles.timeAgo}>· {timeAgo}</Text> : null}
                   </View>
+                  <Text style={styles.viewMoreHint}>View card for more details</Text>
                 </View>
               </TouchableOpacity>
             );
@@ -343,6 +345,7 @@ const styles = StyleSheet.create({
   posterAvatarText: { fontSize: 9, color: '#fff', fontWeight: 'bold' },
   posterName: { fontSize: 12, color: '#555', fontWeight: '600' },
   timeAgo: { fontSize: 11, color: '#a0b8b8' },
+  viewMoreHint: { fontSize: 11, color: '#c0c0c0', marginTop: 6, textAlign: 'center' },
   emptyContainer: { alignItems: 'center', marginTop: 60, gap: 10 },
   emptyTitle: { fontSize: 18, fontWeight: 'bold', color: '#a0b8b8', marginTop: 8 },
   emptySub: { fontSize: 15, color: '#a0b8b8', textAlign: 'center' },
