@@ -25,6 +25,8 @@ export default function MapScreen() {
         return null;
       }));
       setTournaments(data.filter(Boolean));
+    }, (error) => {
+      console.log('Map listener error:', error);
     });
     return () => unsub();
   }, []);

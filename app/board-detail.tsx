@@ -114,6 +114,9 @@ export default function BoardDetailScreen() {
   const [showReportModal, setShowReportModal] = useState(false);
   const [reportSubmitting, setReportSubmitting] = useState(false);
   const [showReportConfirm, setShowReportConfirm] = useState(false);
+  const [errorModal, setErrorModal] = useState<{ visible: boolean; title: string; message: string }>({
+    visible: false, title: '', message: '',
+  });
 
   const user = auth.currentUser;
 
@@ -167,7 +170,14 @@ export default function BoardDetailScreen() {
     try {
       await deleteDoc(doc(db, 'board', id as string));
       router.replace('/(tabs)/board');
-    } catch (e: any) { console.log(e); }
+    } catch (e: any) {
+      console.log(e);
+      setErrorModal({
+        visible: true,
+        title: 'SOMETHING WENT WRONG',
+        message: "We couldn't delete this post. Please check your connection and try again.",
+      });
+    }
     setDeleteLoading(false);
   };
 
@@ -204,7 +214,14 @@ export default function BoardDetailScreen() {
       });
       setShowReportModal(false);
       setShowReportConfirm(true);
-    } catch (e: any) { console.log(e); }
+    } catch (e: any) {
+      console.log(e);
+      setErrorModal({
+        visible: true,
+        title: 'SOMETHING WENT WRONG',
+        message: "We couldn't submit your report. Please check your connection and try again.",
+      });
+    }
     setReportSubmitting(false);
   };
 
@@ -427,6 +444,18 @@ export default function BoardDetailScreen() {
             <Text style={[styles.modalTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>REPORT SUBMITTED</Text>
             <Text style={styles.modalMsg}>Thanks for letting us know. Our team will review this post.</Text>
             <TouchableOpacity style={styles.modalOkBtn} onPress={() => setShowReportConfirm(false)}>
+              <Text style={[styles.modalOkText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>OK</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={errorModal.visible} animationType="fade" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalBox}>
+            <Text style={[styles.modalTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>{errorModal.title}</Text>
+            <Text style={styles.modalMsg}>{errorModal.message}</Text>
+            <TouchableOpacity style={styles.modalOkBtn} onPress={() => setErrorModal({ visible: false, title: '', message: '' })}>
               <Text style={[styles.modalOkText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>OK</Text>
             </TouchableOpacity>
           </View>

@@ -114,6 +114,9 @@ export default function ProfileScreen() {
 
   const [showDeleteAccountModal, setShowDeleteAccountModal] = useState(false);
   const [deletingAccount, setDeletingAccount] = useState(false);
+  const [errorModal, setErrorModal] = useState<{ visible: boolean; title: string; message: string }>({
+    visible: false, title: '', message: '',
+  });
 
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [hideContactInfo, setHideContactInfo] = useState(false);
@@ -160,6 +163,8 @@ export default function ProfileScreen() {
           return true;
         });
       setMyPosted(active);
+    }, (error) => {
+      console.log('Posted tournaments listener error:', error);
     });
 
     // Item 6 — listen for registered tournaments
@@ -179,6 +184,8 @@ export default function ProfileScreen() {
           return true;
         });
       setMyRegistered(active);
+    }, (error) => {
+      console.log('Joined tournaments listener error:', error);
     });
 
     return () => { unsubPosted(); unsubJoined(); };
@@ -212,7 +219,14 @@ export default function ProfileScreen() {
       const downloadURL = await getDownloadURL(storageRef);
       setPhotoURL(downloadURL);
       await setDoc(doc(db, 'users', user!.uid), { photoURL: downloadURL }, { merge: true });
-    } catch (e: any) { console.error(e); }
+    } catch (e: any) {
+      console.error(e);
+      setErrorModal({
+        visible: true,
+        title: 'UPLOAD FAILED',
+        message: "We couldn't upload your photo. Please check your connection and try again.",
+      });
+    }
     setUploadingPhoto(false);
   };
 
@@ -243,7 +257,14 @@ export default function ProfileScreen() {
       await setDoc(doc(db, 'users', user!.uid), { username: nameInput.trim() }, { merge: true });
       setFullName(nameInput.trim());
       setShowNameModal(false);
-    } catch (e: any) { console.error(e); }
+    } catch (e: any) {
+      console.error(e);
+      setErrorModal({
+        visible: true,
+        title: 'SOMETHING WENT WRONG',
+        message: "We couldn't save your name. Please check your connection and try again.",
+      });
+    }
   };
 
   const handleToggleNotifications = async (val: boolean) => {
@@ -347,6 +368,11 @@ export default function ProfileScreen() {
       console.error(e);
       setDeletingAccount(false);
       setShowDeleteAccountModal(false);
+      setErrorModal({
+        visible: true,
+        title: 'SOMETHING WENT WRONG',
+        message: "We couldn't fully delete your account. Some of your data may have already been removed. Please try again, or contact support if this keeps happening.",
+      });
     }
   };
 
@@ -666,6 +692,22 @@ export default function ProfileScreen() {
                 )}
               </TouchableOpacity>
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Error Modal */}
+      <Modal visible={errorModal.visible} animationType="fade" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalBox}>
+            <Text style={[styles.modalTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>{errorModal.title}</Text>
+            <Text style={styles.modalSub}>{errorModal.message}</Text>
+            <TouchableOpacity
+              style={[styles.modalConfirmBtn, { alignSelf: 'stretch' }]}
+              onPress={() => setErrorModal({ visible: false, title: '', message: '' })}
+            >
+              <Text style={[styles.modalConfirmText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>OK</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>

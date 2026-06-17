@@ -32,6 +32,7 @@ export default function EditBoardScreen() {
   const router = useRouter();
   const [fontsLoaded] = useFonts({ Rajdhani_700Bold });
   const [loading, setLoading] = useState(false);
+  const [saveError, setSaveError] = useState(false);
   const [headerHeight, setHeaderHeight] = useState(120);
 
   const [name, setName] = useState('');
@@ -103,6 +104,7 @@ export default function EditBoardScreen() {
   const handleSave = async () => {
     if (!name || !type || !sport || !division) return;
     setLoading(true);
+    setSaveError(false);
     try {
       await updateDoc(doc(db, 'board', id as string), {
         name, type, lookingFor, forTournament, forTournamentId,
@@ -110,7 +112,10 @@ export default function EditBoardScreen() {
         contactPhone, contactEmail, description,
       });
       router.back();
-    } catch (e: any) { console.error(e); }
+    } catch (e: any) {
+      console.error(e);
+      setSaveError(true);
+    }
     setLoading(false);
   };
 
@@ -312,6 +317,10 @@ export default function EditBoardScreen() {
               numberOfLines={4}
             />
 
+            {saveError && (
+              <Text style={styles.saveErrorText}>We couldn't save your changes. Check your connection and try again.</Text>
+            )}
+
             <TouchableOpacity style={styles.saveBtn} onPress={handleSave} disabled={loading} activeOpacity={0.85}>
               <Text style={[styles.saveBtnText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>
                 {loading ? 'Saving...' : 'SAVE CHANGES'}
@@ -348,4 +357,5 @@ const styles = StyleSheet.create({
   divisionHint: { fontSize: 11, color: '#a0b8b8', marginTop: -4, marginBottom: 8, paddingLeft: 4 },
   saveBtn: { backgroundColor: '#7A1E1E', borderRadius: 12, paddingVertical: 16, alignItems: 'center', marginTop: 20 },
   saveBtnText: { color: '#fff', fontSize: 18, letterSpacing: 1 },
+  saveErrorText: { color: '#cc4444', fontSize: 13, fontWeight: '600', textAlign: 'center', marginTop: 16 },
 });

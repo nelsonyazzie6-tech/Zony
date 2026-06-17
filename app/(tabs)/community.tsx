@@ -84,6 +84,9 @@ export default function CommunityScreen() {
     const unsub = onSnapshot(q, (snap) => {
       setPosts(snap.docs.map(d => ({ id: d.id, ...d.data() })));
       setLoading(false);
+    }, (error) => {
+      console.log('Community listener error:', error);
+      setLoading(false);
     });
     return () => unsub();
   }, []);

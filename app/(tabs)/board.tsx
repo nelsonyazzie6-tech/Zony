@@ -137,6 +137,9 @@ export default function BoardScreen() {
         } catch (_) {}
       }));
       setUserCache(prev => ({ ...prev, ...newCache }));
+    }, (error) => {
+      console.log('Board listener error:', error);
+      setLoading(false);
     });
     return () => unsub();
   }, []);

@@ -29,6 +29,7 @@ export default function ChatScreen() {
   const [thread, setThread] = useState<any>(null);
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
+  const [sendError, setSendError] = useState(false);
   const [otherIsViewing, setOtherIsViewing] = useState(false);
   const flatRef = useRef<FlatList>(null);
   const user = auth.currentUser;
@@ -54,6 +55,8 @@ export default function ChatScreen() {
         const otherId = data.participants?.find((p: string) => p !== user.uid);
         setOtherIsViewing(!!data.viewing?.[otherId]);
       }
+    }, (error) => {
+      console.log('Thread listener error:', error);
     });
 
     const q = query(collection(db, 'messages', threadId as string, 'chats'), orderBy('createdAt', 'asc'));
@@ -61,6 +64,8 @@ export default function ChatScreen() {
       setMessages(snap.docs.map(d => ({ id: d.id, ...d.data() })));
       updateDoc(threadRef, { [`unreadCount.${user.uid}`]: 0 }).catch(() => {});
       setTimeout(() => flatRef.current?.scrollToEnd({ animated: true }), 100);
+    }, (error) => {
+      console.log('Messages listener error:', error);
     });
 
     return () => {
@@ -73,6 +78,7 @@ export default function ChatScreen() {
   const handleSend = async () => {
     if (!text.trim() || !user || !threadId) return;
     setSending(true);
+    setSendError(false);
     const msgBody = text.trim();
     setText('');
     try {
@@ -101,7 +107,11 @@ export default function ChatScreen() {
           await sendPushNotification(pushToken, username, msgBody);
         }
       }
-    } catch (e: any) { console.log(e); }
+    } catch (e: any) {
+      console.log(e);
+      setText(msgBody);
+      setSendError(true);
+    }
     setSending(false);
   };
 
@@ -187,13 +197,19 @@ export default function ChatScreen() {
           ListEmptyComponent={<View style={styles.emptyChat}><Text style={styles.emptyChatText}>Say hello 👋</Text></View>}
         />
 
+        {sendError && (
+          <View style={styles.sendErrorBanner}>
+            <Text style={styles.sendErrorText}>Message didn't send. Check your connection and try again.</Text>
+          </View>
+        )}
+
         <View style={styles.inputRow}>
           <TextInput
             style={styles.input}
             placeholder="Message..."
             placeholderTextColor="#a0b8b8"
             value={text}
-            onChangeText={setText}
+            onChangeText={(v) => { setText(v); if (sendError) setSendError(false); }}
             multiline
             maxLength={500}
           />
@@ -240,6 +256,8 @@ const styles = StyleSheet.create({
   emptyChat: { flex: 1, alignItems: 'center', marginTop: 60 },
   emptyChatText: { fontSize: 14, color: '#a0b8b8' },
   inputRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 10, paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: '#f0f0f0' },
+  sendErrorBanner: { backgroundColor: '#fdeaea', paddingHorizontal: 16, paddingVertical: 8, borderTopWidth: 1, borderTopColor: '#f5c6c6' },
+  sendErrorText: { fontSize: 12, color: '#cc4444', fontWeight: '600' },
   input: { flex: 1, backgroundColor: '#f5ede0', borderRadius: 20, paddingHorizontal: 16, paddingVertical: 10, fontSize: 14, color: '#003333', borderWidth: 1, borderColor: '#e8e8e8', maxHeight: 100 },
   sendBtn: { width: 42, height: 42, borderRadius: 21, backgroundColor: '#008080', alignItems: 'center', justifyContent: 'center' },
   sendBtnDisabled: { backgroundColor: '#a0b8b8' },

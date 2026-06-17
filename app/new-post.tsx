@@ -112,7 +112,10 @@ export default function NewPostScreen() {
           await uploadBytes(storageRef, blob);
           const downloadURL = await getDownloadURL(storageRef);
           await updateDoc(doc(db, 'community', docRef.id), { imageUrl: downloadURL });
-        } catch (e: any) { console.log('Photo upload error:', e); }
+        } catch (e: any) {
+          console.log('Photo upload error:', e);
+          Alert.alert('Photo didn\'t upload', 'Your post was created, but the photo failed to attach. You can delete this post and try again if you want the photo included.');
+        }
         setUploadingPhoto(false);
       }
 

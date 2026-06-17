@@ -3,7 +3,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { addDoc, arrayRemove, arrayUnion, collection, deleteDoc, doc, getDoc, getDocs, increment, onSnapshot, orderBy, query, runTransaction, serverTimestamp, updateDoc, where } from 'firebase/firestore';
 import { deleteObject, ref } from 'firebase/storage';
 import { useEffect, useState } from 'react';
-import { Clipboard, Image, KeyboardAvoidingView, Linking, Modal, Platform, ScrollView, Share, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Clipboard, Image, Keyboard, KeyboardAvoidingView, Linking, Modal, Platform, ScrollView, Share, StyleSheet, Text, TextInput, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
 import Svg, { Circle, Line, Path, Rect } from 'react-native-svg';
 import { auth, db, storage } from '../firebaseConfig';
 
@@ -252,48 +252,57 @@ export default function TournamentScreen() {
   const hasDivisionSpots = (data: any) => data?.divisionSpots && Object.keys(data.divisionSpots).length > 0;
 
   useEffect(() => {
-    const load = async () => {
-      if (!id) return;
-      const snap = await getDoc(doc(db, 'tournaments', id as string));
-      if (snap.exists()) {
-        const data = snap.data();
-        setTournament(data);
-        if (hasDivisionSpots(data)) {
-          setDivisionSpotsLeft(data.divisionSpots);
-        } else {
-          setSpotsLeft(data.spots);
-        }
-        if (data.joinedUsers?.includes(user?.uid)) setJoined(true);
-      }
-      if (user) {
-        const userSnap = await getDoc(doc(db, 'users', user.uid));
-        if (userSnap.exists()) setCurrentUsername(userSnap.data().username || user.email || '');
-        const waitlistSnap = await getDocs(collection(db, 'tournaments', id as string, 'waitlist'));
-        const myEntry = waitlistSnap.docs.find(d => d.data().userId === user.uid);
-        if (myEntry) {
-          setOnWaitlist(true);
-          setMyWaitlistDivision(myEntry.data().division || null);
-        }
-        const teamsSnap = await getDocs(collection(db, 'tournaments', id as string, 'teams'));
-        const myTeam = teamsSnap.docs.find(d => d.data().registeredBy === user.uid);
-        if (myTeam) {
-          setMyTeamName(myTeam.data().teamName || null);
-        }
-      }
+    const loadUsername = async () => {
+      if (!user) return;
+      const userSnap = await getDoc(doc(db, 'users', user.uid));
+      if (userSnap.exists()) setCurrentUsername(userSnap.data().username || user.email || '');
     };
-    load();
+    loadUsername();
+
+    if (!id) return;
+
+    const tournamentRef = doc(db, 'tournaments', id as string);
+    const unsubTournament = onSnapshot(tournamentRef, (snap) => {
+      if (!snap.exists()) return;
+      const data = snap.data();
+      setTournament(data);
+      if (hasDivisionSpots(data)) {
+        setDivisionSpotsLeft(data.divisionSpots);
+      } else {
+        setSpotsLeft(data.spots);
+      }
+      setJoined(!!data.joinedUsers?.includes(user?.uid));
+    }, (error) => {
+      console.log('Tournament listener error:', error);
+    });
 
     const teamsQuery = query(collection(db, 'tournaments', id as string, 'teams'), orderBy('createdAt', 'asc'));
     const unsubTeams = onSnapshot(teamsQuery, (snap) => {
-      setTeams(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      const docs = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setTeams(docs);
+      const myTeam = docs.find((t: any) => t.registeredBy === user?.uid);
+      setMyTeamName(myTeam ? (myTeam as any).teamName || null : null);
+    }, (error) => {
+      console.log('Teams listener error:', error);
     });
 
     const waitlistQuery = query(collection(db, 'tournaments', id as string, 'waitlist'), orderBy('createdAt', 'asc'));
     const unsubWaitlist = onSnapshot(waitlistQuery, (snap) => {
-      setWaitlistEntries(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      const docs = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setWaitlistEntries(docs);
+      const myEntry = docs.find((w: any) => w.userId === user?.uid);
+      if (myEntry) {
+        setOnWaitlist(true);
+        setMyWaitlistDivision((myEntry as any).division || null);
+      } else {
+        setOnWaitlist(false);
+        setMyWaitlistDivision(null);
+      }
+    }, (error) => {
+      console.log('Waitlist listener error:', error);
     });
 
-    return () => { unsubTeams(); unsubWaitlist(); };
+    return () => { unsubTournament(); unsubTeams(); unsubWaitlist(); };
   }, []);
 
   const handleCopyAddress = () => {
@@ -447,7 +456,14 @@ export default function TournamentScreen() {
           read: false,
         });
       }
-    } catch (e: any) { console.error(e); }
+    } catch (e: any) {
+      console.error(e);
+      setInfoModal({
+        visible: true,
+        title: 'SOMETHING WENT WRONG',
+        message: "We couldn't finish canceling your registration. Please check your connection and try again. If this keeps happening, contact the organizer directly.",
+      });
+    }
   };
 
   const handleJoinWaitlist = async () => {
@@ -492,7 +508,14 @@ export default function TournamentScreen() {
           }),
         });
       }
-    } catch (e: any) { console.error(e); }
+    } catch (e: any) {
+      console.error(e);
+      setInfoModal({
+        visible: true,
+        title: 'SOMETHING WENT WRONG',
+        message: "We couldn't add you to the waitlist. Please check your connection and try again.",
+      });
+    }
   };
 
   const doLeaveWaitlist = async () => {
@@ -514,7 +537,14 @@ export default function TournamentScreen() {
         createdAt: serverTimestamp(),
         read: false,
       });
-    } catch (e: any) { console.error(e); }
+    } catch (e: any) {
+      console.error(e);
+      setInfoModal({
+        visible: true,
+        title: 'SOMETHING WENT WRONG',
+        message: "We couldn't remove you from the waitlist. Please check your connection and try again.",
+      });
+    }
     setLeaveWaitlistLoading(false);
   };
 
@@ -672,7 +702,14 @@ export default function TournamentScreen() {
         setSuccessData({ teamName, tournamentName: tournament?.name, depositMsg, contactInfo: orgContact });
         setShowSuccessModal(true);
       }
-    } catch (e: any) { console.error(e); }
+    } catch (e: any) {
+      console.error(e);
+      setInfoModal({
+        visible: true,
+        title: 'REGISTRATION FAILED',
+        message: "We couldn't complete your registration. Please check your connection and try again. If this keeps happening, contact the organizer to confirm your spot.",
+      });
+    }
     setTeamLoading(false);
   };
 
@@ -711,7 +748,14 @@ export default function TournamentScreen() {
       await updateDoc(doc(db, 'tournaments', id as string), { status: 'canceled' });
       setShowDeleteModal(false);
       setShowOrganizerReminderModal(true);
-    } catch (e: any) { console.error(e); }
+    } catch (e: any) {
+      console.error(e);
+      setInfoModal({
+        visible: true,
+        title: 'SOMETHING WENT WRONG',
+        message: "We couldn't cancel the tournament. Please check your connection and try again.",
+      });
+    }
     setDeleteLoading(false);
   };
 
@@ -742,6 +786,11 @@ export default function TournamentScreen() {
     } catch (e: any) {
       console.error(e);
       setDeleteEventLoading(false);
+      setInfoModal({
+        visible: true,
+        title: 'SOMETHING WENT WRONG',
+        message: "We couldn't delete this event. Please check your connection and try again.",
+      });
     }
   };
 
@@ -899,7 +948,7 @@ export default function TournamentScreen() {
                 </View>
               </View>
 
-              {joined && !isOwner && (
+              {(joined || myTeamName) && !isOwner && (
                 <View style={[styles.registeredBanner, { backgroundColor: sportColor }]}>
                   <CheckIcon size={18} color="#fff" />
                   <Text style={[styles.registeredBannerText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]} numberOfLines={2}>
@@ -1057,7 +1106,7 @@ export default function TournamentScreen() {
               </View>
             ) : (
               <View style={styles.registrationActions}>
-                {joined ? (
+                {joined || myTeamName ? (
                   <>
                     <TouchableOpacity style={[styles.joinBtn, { backgroundColor: sportColor }]} onPress={openEditRegistration}>
                       <Text style={styles.joinText}>Edit Registration</Text>
@@ -1208,7 +1257,12 @@ export default function TournamentScreen() {
 
       {/* Waitlist Join Modal */}
       <Modal visible={showWaitlistModal} animationType="fade" transparent>
-        <View style={styles.successOverlay}>
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+            <View style={styles.successOverlay}>
           <View style={styles.successBox}>
             {onWaitlist ? (
               <>
@@ -1261,7 +1315,9 @@ export default function TournamentScreen() {
               </>
             )}
           </View>
-        </View>
+            </View>
+          </TouchableWithoutFeedback>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Cancel Tournament Modal */}

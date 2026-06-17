@@ -187,6 +187,9 @@ export default function HomeScreen() {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setTournaments(data);
       setLoading(false);
+    }, (error) => {
+      console.log('Tournaments feed listener error:', error);
+      setLoading(false);
     });
     return () => unsub();
   }, []);
@@ -199,6 +202,8 @@ export default function HomeScreen() {
       data.sort((a: any, b: any) => b.createdAt?.seconds - a.createdAt?.seconds);
       setNotifications(data);
       setHasNewNotifications(data.some((n: any) => !n.read));
+    }, (error) => {
+      console.log('Home notifications listener error:', error);
     });
     return () => unsub();
   }, []);
@@ -212,6 +217,8 @@ export default function HomeScreen() {
         return (data.unreadCount?.[user.uid] || 0) > 0;
       });
       setHasUnreadMessages(hasUnread);
+    }, (error) => {
+      console.log('Unread messages listener error:', error);
     });
     return () => unsub();
   }, []);
