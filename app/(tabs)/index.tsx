@@ -239,6 +239,14 @@ export default function HomeScreen() {
     } catch (e) { console.log(e); }
   };
 
+  const handleClearAllNotifications = async () => {
+    try {
+      await Promise.all(
+        notifications.map((n: any) => deleteDoc(doc(db, 'notifications', n.id)))
+      );
+    } catch (e) { console.log(e); }
+  };
+
   const handleNotificationPress = async (n: any) => {
     try {
       if (!n.read) {
@@ -540,6 +548,11 @@ export default function HomeScreen() {
                     </TouchableOpacity>
                   );
                 }}
+                ListFooterComponent={
+                  <TouchableOpacity style={styles.clearAllNotisBtn} onPress={handleClearAllNotifications}>
+                    <Text style={styles.clearAllNotisText}>Clear All</Text>
+                  </TouchableOpacity>
+                }
               />
             )}
           </View>
@@ -664,6 +677,8 @@ const styles = StyleSheet.create({
   notiTime: { fontSize: 10, color: '#aaa', flexShrink: 0 },
   notiDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#8B1A1A', flexShrink: 0 },
   notiDelete: { padding: 4 },
+  clearAllNotisBtn: { alignSelf: 'center', marginTop: 12, marginBottom: 8, paddingHorizontal: 20, paddingVertical: 10, opacity: 0.5 },
+  clearAllNotisText: { fontSize: 13, color: '#bbb', fontWeight: '400' },
   notiDeleteText: { fontSize: 12, color: '#ccc' },
   // Canceled event modal
   canceledModalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 24 },

@@ -496,6 +496,15 @@ export default function TournamentScreen() {
         read: false,
       });
 
+      await addDoc(collection(db, 'notifications'), {
+        toUserId: user.uid,
+        message: `You're on the waitlist for ${tournament?.name}!`,
+        body: `We'll notify you if a spot opens${divisionNote ? ` in ${waitlistDivision}` : ''}.`,
+        link: `/tournament?id=${id}&postedBy=${postedBy}`,
+        createdAt: serverTimestamp(),
+        read: false,
+      });
+
       const ownerSnap = await getDoc(doc(db, 'users', postedBy as string));
       if (ownerSnap.exists() && ownerSnap.data().pushToken) {
         await fetch('https://exp.host/--/api/v2/push/send', {
@@ -745,6 +754,37 @@ export default function TournamentScreen() {
           }
         })
       );
+
+      const waitlistSnap = await getDocs(collection(db, 'tournaments', id as string, 'waitlist'));
+      await Promise.all(
+        waitlistSnap.docs.map(async (waitlistDoc) => {
+          const waitlistData = waitlistDoc.data();
+          if (waitlistData.userId) {
+            await addDoc(collection(db, 'notifications'), {
+              toUserId: waitlistData.userId,
+              message: `⚠️ ${tournament.name} has been canceled by the organizer.`,
+              link: `/`,
+              organizerName: tournament.organizerName || tournament.contactName || '',
+              organizerPhone: tournament.contactPhone || '',
+              createdAt: serverTimestamp(),
+              read: false,
+            });
+            const userSnap = await getDoc(doc(db, 'users', waitlistData.userId));
+            if (userSnap.exists() && userSnap.data().pushToken) {
+              await fetch('https://exp.host/--/api/v2/push/send', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  to: userSnap.data().pushToken,
+                  title: '⚠️ Tournament Canceled',
+                  body: `${tournament.name} has been canceled by the organizer.`,
+                }),
+              });
+            }
+          }
+        })
+      );
+
       await updateDoc(doc(db, 'tournaments', id as string), { status: 'canceled' });
       setShowDeleteModal(false);
       setShowOrganizerReminderModal(true);

@@ -237,7 +237,7 @@ const styles = StyleSheet.create({
   swipeDelete: { justifyContent: 'center', alignItems: 'center', borderRadius: 16 },
   swipeDeleteInner: { flex: 1, width: '100%', backgroundColor: '#cc4444', justifyContent: 'center', alignItems: 'center', borderRadius: 16 },
   swipeDeleteText: { color: '#fff', fontWeight: 'bold', fontSize: 14 },
-  clearAllBtn: { alignSelf: 'center', marginTop: 16, paddingHorizontal: 20, paddingVertical: 10 },
+  clearAllBtn: { alignSelf: 'center', marginTop: 16, paddingHorizontal: 20, paddingVertical: 10, opacity: 0.5 },
   clearAllText: { fontSize: 13, color: '#bbb', fontWeight: '400' },
   emptyContainer: { alignItems: 'center', marginTop: 60 },
   emptyIcon: { fontSize: 50, marginBottom: 12 },

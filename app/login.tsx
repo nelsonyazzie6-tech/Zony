@@ -6,8 +6,8 @@ import { createUserWithEmailAndPassword, OAuthProvider, sendPasswordResetEmail, 
 import { doc, setDoc } from 'firebase/firestore';
 import { useState } from 'react';
 import {
-  Image, KeyboardAvoidingView, Platform, StyleSheet, Text,
-  TextInput, TouchableOpacity, View
+  Image, Keyboard, KeyboardAvoidingView, Platform, StyleSheet, Text,
+  TextInput, TouchableOpacity, TouchableWithoutFeedback, View
 } from 'react-native';
 import Svg, { Circle, Line, Path } from 'react-native-svg';
 import { auth, db } from '../firebaseConfig';
@@ -231,6 +231,8 @@ export default function LoginScreen() {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+        <View style={{ flex: 1 }}>
       <View style={styles.top}>
         <Image source={require('../assets/images/icon.png')} style={styles.logoBox} resizeMode="cover" />
         <Text style={[styles.appName, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>
@@ -279,7 +281,7 @@ export default function LoginScreen() {
             <EmailIcon />
             <TextInput
               style={styles.input}
-              placeholder="jordan@email.com"
+              placeholder="zony@email.com"
               placeholderTextColor="#bbb"
               value={email}
               onChangeText={t => { setEmail(t); setErrorMsg(''); setSuccessMsg(''); }}
@@ -370,6 +372,8 @@ export default function LoginScreen() {
         </TouchableOpacity>
       </View>
 
+        </View>
+      </TouchableWithoutFeedback>
     </KeyboardAvoidingView>
   );
 }

@@ -3,7 +3,7 @@ import * as ImageManipulator from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { deleteUser, signOut } from 'firebase/auth';
-import { arrayRemove, collection, deleteDoc, doc, getDoc, getDocs, increment, onSnapshot, query, runTransaction, setDoc, where } from 'firebase/firestore';
+import { addDoc, arrayRemove, collection, deleteDoc, doc, getDoc, getDocs, increment, onSnapshot, query, runTransaction, serverTimestamp, setDoc, updateDoc, where } from 'firebase/firestore';
 import { deleteObject, getStorage, ref } from 'firebase/storage';
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Image, Linking, Modal, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
@@ -292,11 +292,79 @@ export default function ProfileScreen() {
 
   const confirmDeleteTournament = async () => {
     if (!tournamentToDelete) return;
-    setDeletingTournamentId(tournamentToDelete.id);
+    const tournamentId = tournamentToDelete.id;
+    setDeletingTournamentId(tournamentId);
     setShowDeleteTournamentModal(false);
     try {
-      await deleteDoc(doc(db, 'tournaments', tournamentToDelete.id));
-    } catch (e: any) { console.error(e); }
+      const teamsSnap = await getDocs(collection(db, 'tournaments', tournamentId, 'teams'));
+      await Promise.all(
+        teamsSnap.docs.map(async (teamDoc) => {
+          const teamData = teamDoc.data();
+          if (teamData.registeredBy) {
+            await addDoc(collection(db, 'notifications'), {
+              toUserId: teamData.registeredBy,
+              message: `⚠️ ${tournamentToDelete.name} has been canceled by the organizer.`,
+              link: `/`,
+              organizerName: tournamentToDelete.organizerName || tournamentToDelete.contactName || '',
+              organizerPhone: tournamentToDelete.contactPhone || '',
+              createdAt: serverTimestamp(),
+              read: false,
+            });
+            const userSnap = await getDoc(doc(db, 'users', teamData.registeredBy));
+            if (userSnap.exists() && userSnap.data().pushToken) {
+              await fetch('https://exp.host/--/api/v2/push/send', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  to: userSnap.data().pushToken,
+                  title: '⚠️ Tournament Canceled',
+                  body: `${tournamentToDelete.name} has been canceled by the organizer.`,
+                }),
+              });
+            }
+          }
+        })
+      );
+
+      const waitlistSnap = await getDocs(collection(db, 'tournaments', tournamentId, 'waitlist'));
+      await Promise.all(
+        waitlistSnap.docs.map(async (waitlistDoc) => {
+          const waitlistData = waitlistDoc.data();
+          if (waitlistData.userId) {
+            await addDoc(collection(db, 'notifications'), {
+              toUserId: waitlistData.userId,
+              message: `⚠️ ${tournamentToDelete.name} has been canceled by the organizer.`,
+              link: `/`,
+              organizerName: tournamentToDelete.organizerName || tournamentToDelete.contactName || '',
+              organizerPhone: tournamentToDelete.contactPhone || '',
+              createdAt: serverTimestamp(),
+              read: false,
+            });
+            const userSnap = await getDoc(doc(db, 'users', waitlistData.userId));
+            if (userSnap.exists() && userSnap.data().pushToken) {
+              await fetch('https://exp.host/--/api/v2/push/send', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  to: userSnap.data().pushToken,
+                  title: '⚠️ Tournament Canceled',
+                  body: `${tournamentToDelete.name} has been canceled by the organizer.`,
+                }),
+              });
+            }
+          }
+        })
+      );
+
+      await updateDoc(doc(db, 'tournaments', tournamentId), { status: 'canceled' });
+    } catch (e: any) {
+      console.error(e);
+      setErrorModal({
+        visible: true,
+        title: 'SOMETHING WENT WRONG',
+        message: "We couldn't cancel the tournament. Please check your connection and try again.",
+      });
+    }
     setDeletingTournamentId(null);
     setTournamentToDelete(null);
   };
@@ -507,7 +575,7 @@ export default function ProfileScreen() {
                     {isDeleting ? (
                       <ActivityIndicator size="small" color="#cc4444" />
                     ) : (
-                      <Text style={styles.tournamentDeleteText}>Delete</Text>
+                      <Text style={styles.tournamentDeleteText}>Cancel Event</Text>
                     )}
                   </TouchableOpacity>
                 </View>
@@ -656,18 +724,20 @@ export default function ProfileScreen() {
         </View>
       </Modal>
 
-      {/* Delete Tournament Modal */}
+      {/* Cancel Tournament Modal */}
       <Modal visible={showDeleteTournamentModal} animationType="fade" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalBox}>
-            <Text style={[styles.modalTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>DELETE TOURNAMENT</Text>
-            <Text style={styles.modalSub}>Delete "{tournamentToDelete?.name}"? This cannot be undone.</Text>
+            <Text style={[styles.modalTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>CANCEL TOURNAMENT</Text>
+            <Text style={styles.modalSub}>
+              This will notify all registered teams that "{tournamentToDelete?.name}" has been canceled. You'll still be able to view registered teams and their contact info so you can follow up about refunds or rescheduling.
+            </Text>
             <View style={styles.modalBtns}>
               <TouchableOpacity style={styles.modalCancelBtn} onPress={() => { setShowDeleteTournamentModal(false); setTournamentToDelete(null); }}>
-                <Text style={[styles.modalCancelText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>CANCEL</Text>
+                <Text style={[styles.modalCancelText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>KEEP IT</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.modalConfirmBtn} onPress={confirmDeleteTournament}>
-                <Text style={[styles.modalConfirmText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>DELETE</Text>
+                <Text style={[styles.modalConfirmText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>CANCEL</Text>
               </TouchableOpacity>
             </View>
           </View>

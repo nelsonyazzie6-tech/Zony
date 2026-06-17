@@ -1,6 +1,6 @@
 import { Rajdhani_700Bold, useFonts } from '@expo-google-fonts/rajdhani';
 import { useRouter } from 'expo-router';
-import { collection, doc, getDoc, onSnapshot } from 'firebase/firestore';
+import { collection, deleteDoc, doc, getDoc, onSnapshot } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import Svg, { Circle, Path, Polygon } from 'react-native-svg';
@@ -113,13 +113,34 @@ export default function BoardScreen() {
   useEffect(() => {
     const unsub = onSnapshot(collection(db, 'board'), async (snapshot) => {
       const now = new Date();
-      const data = snapshot.docs
-        .map(doc => ({ id: doc.id, ...doc.data() }))
-        .filter((p: any) => {
-          if (!p.expiresAt) return true;
-          const expDate = p.expiresAt.toDate ? p.expiresAt.toDate() : new Date(p.expiresAt);
-          return expDate > now;
-        });
+      const allDocs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+      const active = allDocs.filter((p: any) => {
+        if (!p.expiresAt) return true;
+        const expDate = p.expiresAt.toDate ? p.expiresAt.toDate() : new Date(p.expiresAt);
+        return expDate > now;
+      });
+
+      const expired = allDocs.filter((p: any) => {
+        if (!p.expiresAt) return false;
+        const expDate = p.expiresAt.toDate ? p.expiresAt.toDate() : new Date(p.expiresAt);
+        return expDate <= now;
+      });
+
+      // Opportunistically clean up expired posts from the database.
+      // This isn't on a fixed schedule, but runs whenever anyone has this
+      // screen open, which keeps the database from accumulating old posts
+      // without needing a paid scheduled function.
+      if (expired.length > 0) {
+        Promise.all(expired.map((p: any) => deleteDoc(doc(db, 'board', p.id)).catch(() => {}))).catch(() => {});
+      }
+
+      const data = active.sort((a: any, b: any) => {
+        const aTime = a.createdAt?.toMillis ? a.createdAt.toMillis() : 0;
+        const bTime = b.createdAt?.toMillis ? b.createdAt.toMillis() : 0;
+        return bTime - aTime;
+      });
+
       setPosts(data);
       setLoading(false);
 
