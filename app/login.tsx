@@ -3,7 +3,7 @@ import { Rajdhani_700Bold, useFonts } from '@expo-google-fonts/rajdhani';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import { useRouter } from 'expo-router';
 import { createUserWithEmailAndPassword, OAuthProvider, sendPasswordResetEmail, signInWithCredential, signInWithEmailAndPassword } from 'firebase/auth';
-import { doc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { useState } from 'react';
 import {
   Image, Keyboard, KeyboardAvoidingView, Platform, StyleSheet, Text,
@@ -125,10 +125,11 @@ export default function LoginScreen() {
           email: cred.user.email,
           createdAt: new Date(),
         });
+        router.replace('/onboarding');
       } else {
         await signInWithEmailAndPassword(auth, email, password);
+        router.replace('/');
       }
-      router.replace('/');
     } catch (e: any) {
       setErrorMsg(getAuthErrorMessage(e.code));
     }
@@ -171,6 +172,9 @@ export default function LoginScreen() {
       const userCred = await signInWithCredential(auth, authCredential);
 
       const userDocRef = doc(db, 'users', userCred.user.uid);
+      const existingDoc = await getDoc(userDocRef);
+      const isNewUser = !existingDoc.exists();
+
       const username = credential.fullName?.givenName
         ? `${credential.fullName.givenName} ${credential.fullName.lastName || ''}`.trim()
         : (userCred.user.email?.split('@')[0] || 'Player');
@@ -181,7 +185,7 @@ export default function LoginScreen() {
         createdAt: new Date(),
       }, { merge: true });
 
-      router.replace('/');
+      router.replace(isNewUser ? '/onboarding' : '/');
     } catch (e: any) {
       if (e.code === 'ERR_REQUEST_CANCELED') {
         // user canceled, do nothing

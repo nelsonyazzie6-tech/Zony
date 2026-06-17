@@ -7,8 +7,8 @@ import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { onAuthStateChanged } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
-import { useEffect, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { Animated, StyleSheet, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import 'react-native-reanimated';
 import { auth, db } from '../firebaseConfig';
@@ -43,13 +43,38 @@ async function registerPushToken(uid: string) {
   }
 }
 
-function SplashLoading({ fontsLoaded }: { fontsLoaded: boolean }) {
+function SplashLoading({ fontsLoaded, fadeOut, onFadeComplete }: { fontsLoaded: boolean; fadeOut: boolean; onFadeComplete: () => void }) {
+  const scaleAnim = useRef(new Animated.Value(0.85)).current;
+  const opacityAnim = useRef(new Animated.Value(0)).current;
+  const exitOpacity = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(opacityAnim, { toValue: 1, duration: 450, useNativeDriver: true }),
+      Animated.spring(scaleAnim, { toValue: 1, friction: 6, tension: 60, useNativeDriver: true }),
+    ]).start();
+  }, []);
+
+  useEffect(() => {
+    if (fadeOut) {
+      Animated.timing(exitOpacity, { toValue: 0, duration: 350, useNativeDriver: true }).start(() => {
+        onFadeComplete();
+      });
+    }
+  }, [fadeOut]);
+
   return (
-    <View style={styles.splashContainer}>
-      <Text style={[styles.splashText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>
+    <Animated.View style={[styles.splashContainer, { opacity: exitOpacity }]}>
+      <Animated.Text
+        style={[
+          styles.splashText,
+          fontsLoaded && { fontFamily: 'Rajdhani_700Bold' },
+          { opacity: opacityAnim, transform: [{ scale: scaleAnim }] },
+        ]}
+      >
         ZONY
-      </Text>
-    </View>
+      </Animated.Text>
+    </Animated.View>
   );
 }
 
@@ -61,6 +86,7 @@ export default function RootLayout() {
   const [ready, setReady] = useState(false);
   const [fontsLoaded] = useFonts({ Rajdhani_700Bold });
   const [forceShow, setForceShow] = useState(true);
+  const [splashDone, setSplashDone] = useState(false);
 
   useEffect(() => {
     const t = setTimeout(() => setForceShow(false), 1200);
@@ -96,9 +122,7 @@ export default function RootLayout() {
     return null;
   }
 
-  if (!ready || forceShow) {
-    return <SplashLoading fontsLoaded={fontsLoaded} />;
-  }
+  const showSplash = !ready || forceShow;
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
@@ -106,6 +130,7 @@ export default function RootLayout() {
         <Stack>
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen name="login" options={{ headerShown: false }} />
+          <Stack.Screen name="onboarding" options={{ headerShown: false }} />
           <Stack.Screen name="tournament" options={{ headerShown: false }} />
           <Stack.Screen name="map" options={{ headerShown: false }} />
           <Stack.Screen name="postboard" options={{ headerShown: false }} />
@@ -120,6 +145,15 @@ export default function RootLayout() {
         </Stack>
         <StatusBar style="auto" />
       </ThemeProvider>
+      {(!splashDone) && (
+        <View style={StyleSheet.absoluteFill} pointerEvents={showSplash ? 'auto' : 'none'}>
+          <SplashLoading
+            fontsLoaded={fontsLoaded}
+            fadeOut={!showSplash}
+            onFadeComplete={() => setSplashDone(true)}
+          />
+        </View>
+      )}
     </GestureHandlerRootView>
   );
 }
