@@ -82,6 +82,14 @@
             ]
           }
         }
+      ],
+      [
+        "@sentry/react-native/expo",
+        {
+          "url": "https://sentry.io/",
+          "project": "zony-mobile",
+          "organization": "zony-ok"
+        }
       ]
     ],
     "experiments": {

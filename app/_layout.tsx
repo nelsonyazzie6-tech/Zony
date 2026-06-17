@@ -12,6 +12,22 @@ import { Animated, StyleSheet, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import 'react-native-reanimated';
 import { auth, db } from '../firebaseConfig';
+import * as Sentry from '@sentry/react-native';
+
+Sentry.init({
+  dsn: 'https://3e555aa3301825d73fc1da854b7fd082@o4511583367528448.ingest.us.sentry.io/4511583375130624',
+
+  // Adds more context data to events (IP address, cookies, user, etc.)
+  // For more information, visit: https://docs.sentry.io/platforms/react-native/data-management/data-collected/
+  sendDefaultPii: true,
+
+  // Enable Logs
+  enableLogs: true,
+  integrations: [Sentry.feedbackIntegration()],
+
+  // uncomment the line below to enable Spotlight (https://spotlightjs.com)
+  // spotlight: __DEV__,
+});
 
 export const unstable_settings = {
   anchor: '(tabs)',
@@ -78,7 +94,7 @@ function SplashLoading({ fontsLoaded, fadeOut, onFadeComplete }: { fontsLoaded: 
   );
 }
 
-export default function RootLayout() {
+export default Sentry.wrap(function RootLayout() {
   const colorScheme = useColorScheme();
   const router = useRouter();
   const segments = useSegments();
@@ -156,7 +172,7 @@ export default function RootLayout() {
       )}
     </GestureHandlerRootView>
   );
-}
+});
 
 const styles = StyleSheet.create({
   splashContainer: {
