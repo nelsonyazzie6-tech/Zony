@@ -215,12 +215,111 @@ assert(
   'Same input always produces identical bracket structure'
 );
 
+// ─── Step 3: Bye Placement and Seeding ───────────────────────────────────────
+//
+// For any non-power-of-two team count:
+//   - Bracket size rounds up to next power of two
+//   - Correct number of byes are created
+//   - Byes land on TOP seed positions (after random shuffle, the teams in
+//     positions 1..byeCount get the byes — per spec)
+//   - Bye games are marked isBye=true
+//   - Bye games only appear in winners R1
+//   - Every bye game has exactly one real team and one null (BYE) opponent
+
+console.log('\n── Step 3: Bye Placement ──');
+
+// Helper: count byes in a bracket
+function countByeGames(bracket: BracketStructure): number {
+  return bracket.games.filter(g => g.isBye).length;
+}
+
+// 5 teams → size 8, 3 byes
+const b5 = generateBracketFromTeams(['T1','T2','T3','T4','T5']);
+assert(b5.bracketSize === 8, '5 teams → bracket size 8');
+assert(countByeGames(b5) === 3, '5 teams → 3 bye games');
+assert(
+  b5.games.filter(g => g.isBye).every(g => g.bracket === 'winners' && g.round === 1),
+  'All bye games are in winners R1'
+);
+
+// 6 teams → size 8, 2 byes
+const b6 = generateBracketFromTeams(['T1','T2','T3','T4','T5','T6']);
+assert(b6.bracketSize === 8, '6 teams → bracket size 8');
+assert(countByeGames(b6) === 2, '6 teams → 2 bye games');
+
+// 7 teams → size 8, 1 bye
+const b7 = generateBracketFromTeams(['T1','T2','T3','T4','T5','T6','T7']);
+assert(b7.bracketSize === 8, '7 teams → bracket size 8');
+assert(countByeGames(b7) === 1, '7 teams → 1 bye game');
+
+// 9 teams → size 16, 7 byes
+const b9 = generateBracketFromTeams(['T1','T2','T3','T4','T5','T6','T7','T8','T9']);
+assert(b9.bracketSize === 16, '9 teams → bracket size 16');
+assert(countByeGames(b9) === 7, '9 teams → 7 bye games');
+
+// 11 teams → size 16, 5 byes
+const b11 = generateBracketFromTeams(Array.from({length:11},(_,i)=>`T${i+1}`));
+assert(b11.bracketSize === 16, '11 teams → bracket size 16');
+assert(countByeGames(b11) === 5, '11 teams → 5 bye games');
+
+// 13 teams → size 16, 3 byes
+const b13 = generateBracketFromTeams(Array.from({length:13},(_,i)=>`T${i+1}`));
+assert(b13.bracketSize === 16, '13 teams → bracket size 16');
+assert(countByeGames(b13) === 3, '13 teams → 3 bye games');
+
+// 17 teams → size 32, 15 byes
+const b17 = generateBracketFromTeams(Array.from({length:17},(_,i)=>`T${i+1}`));
+assert(b17.bracketSize === 32, '17 teams → bracket size 32');
+assert(countByeGames(b17) === 15, '17 teams → 15 bye games');
+
+console.log('\n── Step 3: Bye Game Structure ──');
+
+// Bye games should have exactly one real team and one null slot
+// topSeed or bottomSeed should be -1 (BYE marker) on bye games
+const byeGames5 = b5.games.filter(g => g.isBye);
+assert(
+  byeGames5.every(g => g.topSeed === -1 || g.bottomSeed === -1),
+  'Every bye game has exactly one BYE slot (-1)'
+);
+assert(
+  byeGames5.every(g => !(g.topSeed === -1 && g.bottomSeed === -1)),
+  'No bye game has two BYE slots (at least one real team per game)'
+);
+
+// Byes should be on the top seed positions
+// After generateSeedPlacements for 5 teams in size 8:
+// Top seeds (positions 1, 2, 3) get byes — their games are marked isBye
+const placements5 = generateSeedPlacements(8, 5);
+const byeSlotCount5 = placements5.filter(s => s === -1).length;
+assert(byeSlotCount5 === 3, `5 teams in size-8 bracket has 3 bye slots in placement (got ${byeSlotCount5})`);
+
+console.log('\n── Step 3: Bye Auto-Advancement ──');
+
+// Per spec: a bye team automatically advances to round 2 with no loss.
+// In the bracket structure, this means:
+//   - The bye game's winner advances to a round 2 game (winnerAdvancesTo is set)
+//   - The bye game has no loserDropsTo (no one loses a bye game)
+//   - The bye game is NOT fed by two prior games (fedByWinner is null — seeded directly)
+
+byeGames5.forEach(g => {
+  assert(g.winnerAdvancesTo !== null, `${g.id}: bye game winner has an advancement destination`);
+  assert(g.loserDropsTo === null, `${g.id}: bye game has no loser drop (no one loses a bye)`);
+  assert(g.fedByWinner === null, `${g.id}: bye game is seeded directly, not fed by prior games`);
+});
+
+// The round 2 games that receive bye auto-advancers should exist
+byeGames5.forEach(g => {
+  const r2Game = findGame(b5, g.winnerAdvancesTo!);
+  assert(!!r2Game, `${g.id}: winnerAdvancesTo game '${g.winnerAdvancesTo}' exists in bracket`);
+  assert(r2Game?.round === 2, `${g.id}: bye winner advances to a round 2 game`);
+});
+
 // ─── Summary ──────────────────────────────────────────────────────────────────
 
 console.log(`\n── Results: ${passed} passed, ${failed} failed ──\n`);
 if (failed > 0) {
-  console.error('❌ Some validations failed. Do not proceed to step 3 until all pass.');
+  console.error('❌ Some validations failed. Do not proceed to step 4 until all pass.');
   process.exit(1);
 } else {
-  console.log('✅ All validations passed. Safe to proceed to step 3.');
+  console.log('✅ All validations passed. Safe to proceed to step 4.');
 }

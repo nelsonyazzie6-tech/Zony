@@ -61,45 +61,40 @@ function log2(n: number): number {
  * Produces slot assignments so that seed 1 and seed 2 are on opposite sides,
  * and can only meet in the final.
  *
+ * Byes (-1) are placed last in the seed list before the separation algorithm runs,
+ * so they land in the "bottom seed" positions in each matchup — meaning top seeds
+ * (1, 2, 3...) are always the ones paired against byes and get the free pass.
+ *
  * Returns an array of length N where each index is a bracket slot (0-indexed)
  * and the value is the seed number (1-indexed) assigned to that slot.
  * Byes are represented by -1.
  */
 export function generateSeedPlacements(bracketSize: number, teamCount: number): number[] {
-  const slots: number[] = new Array(bracketSize).fill(-1); // -1 = BYE
+  const byeCount = bracketSize - teamCount;
 
-  // Standard tournament seeding algorithm: place seeds to maximize separation
-  // Seeds 1..teamCount get placed, rest are byes
-  const placements: number[] = [];
+  // Real seeds first, byes at the end.
+  // The separation algorithm places later-listed seeds as opponents of earlier-listed seeds,
+  // so byes at the end means they become opponents of the top seeds — giving top seeds the bye.
+  const seedList: number[] = [
+    ...Array.from({ length: teamCount }, (_, i) => i + 1),
+    ...Array.from({ length: byeCount }, () => -1 as number),
+  ];
 
-  function place(seeds: number[]): number[] {
-    if (seeds.length === 1) return seeds;
-    const result: number[] = [];
+  // Recursive separation algorithm: ensures seed 1 and seed 2 end up on opposite
+  // halves of the bracket and can only meet in the final.
+  function separate(seeds: number[]): number[] {
+    if (seeds.length <= 2) return seeds;
     const half = seeds.length / 2;
-    const top = seeds.slice(0, half);
-    const bottom = seeds.slice(half);
-    for (let i = 0; i < half; i++) {
-      result.push(top[i], bottom[half - 1 - i]);
+    const top = separate(seeds.slice(0, half));
+    const bottom = separate(seeds.slice(half));
+    const result: number[] = [];
+    for (let i = 0; i < top.length; i++) {
+      result.push(top[i], bottom[top.length - 1 - i]);
     }
     return result;
   }
 
-  // Build seed list: 1..teamCount, padded with byes (-1) to bracketSize
-  const seedList = Array.from({ length: teamCount }, (_, i) => i + 1);
-  while (seedList.length < bracketSize) seedList.push(-1);
-
-  // Apply the separation placement
-  let arranged = [...seedList];
-  for (let round = 0; round < log2(bracketSize); round++) {
-    const chunks: number[][] = [];
-    const chunkSize = Math.pow(2, round + 1);
-    for (let i = 0; i < arranged.length; i += chunkSize) {
-      chunks.push(place(arranged.slice(i, i + chunkSize)));
-    }
-    arranged = chunks.flat();
-  }
-
-  return arranged;
+  return separate(seedList);
 }
 
 // ─── Losers Bracket Mapping ───────────────────────────────────────────────────
@@ -131,7 +126,7 @@ function buildLoserDropMap(
 
   // ── WR1 → LR1 cross-pairing ──────────────────────────────────────────────
   const wR1Games = winnersGames
-    .filter(g => g.round === 1)
+    .filter(g => g.round === 1 && !g.isBye)  // bye games have no real loser to drop
     .sort((a, b) => a.position - b.position);
   const lR1Games = losersGames
     .filter(g => g.round === 1)
