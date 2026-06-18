@@ -213,7 +213,7 @@ export default function TournamentScreen() {
   const [myTeamName, setMyTeamName] = useState<string | null>(null);
   const [divisionSpotsLeft, setDivisionSpotsLeft] = useState<Record<string, number>>({});
   const [spotsLeft, setSpotsLeft] = useState(0);
-  const [activeTab, setActiveTab] = useState<'details' | 'teams' | 'waitlist'>('details');
+  const [activeTab, setActiveTab] = useState<'details' | 'teams' | 'waitlist' | 'bracket'>('details');
   const [teams, setTeams] = useState([]);
   const [waitlistEntries, setWaitlistEntries] = useState([]);
   const [showTeamModal, setShowTeamModal] = useState(false);
@@ -905,6 +905,20 @@ export default function TournamentScreen() {
             <TouchableOpacity style={[styles.tab, activeTab === 'waitlist' && { backgroundColor: sportColor }]} onPress={() => setActiveTab('waitlist')}>
               <Text style={[styles.tabText, activeTab === 'waitlist' && styles.tabTextActive]}>Waitlist {waitlistEntries.length > 0 ? `(${waitlistEntries.length})` : ''}</Text>
             </TouchableOpacity>
+            {tournament?.bracketStatus === 'bracket_generated' && (
+              <TouchableOpacity
+                style={[styles.tab, activeTab === 'bracket' && { backgroundColor: sportColor }]}
+                onPress={() => {
+                  const firstDivision = tournament?.divisions?.[0] || 'open';
+                  router.push({
+                    pathname: '/bracket',
+                    params: { tournamentId: id, divisionId: firstDivision, postedBy },
+                  });
+                }}
+              >
+                <Text style={[styles.tabText, activeTab === 'bracket' && styles.tabTextActive]}>Bracket</Text>
+              </TouchableOpacity>
+            )}
           </View>
         )}
 
@@ -1133,6 +1147,25 @@ export default function TournamentScreen() {
                 <TouchableOpacity style={styles.editBtn} onPress={() => router.push({ pathname: '/edit-tournament', params: { id } })}>
                   <Text style={[styles.editBtnText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>Edit Tournament</Text>
                 </TouchableOpacity>
+
+                {/* Generate Bracket — shown when bracket hasn't been generated yet */}
+                {!isCanceled && tournament?.bracketSettings && !tournament?.bracketStatus?.includes('bracket_generated') && (
+                  <TouchableOpacity
+                    style={styles.generateBracketBtn}
+                    onPress={() => {
+                      const firstDivision = tournament?.divisions?.[0] || 'open';
+                      router.push({
+                        pathname: '/bracket-generate',
+                        params: { tournamentId: id, divisionId: firstDivision },
+                      });
+                    }}
+                  >
+                    <Text style={[styles.generateBracketBtnText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>
+                      Generate Bracket
+                    </Text>
+                  </TouchableOpacity>
+                )}
+
                 {isCanceled ? (
                   <TouchableOpacity style={styles.deleteEventBtn} onPress={() => setShowDeleteEventModal(true)}>
                     <TrashIcon size={18} color="#fff" />
@@ -1528,6 +1561,8 @@ const styles = StyleSheet.create({
   ownerActions: { gap: 10, marginBottom: 20 },
   editBtn: { backgroundColor: '#008080', borderRadius: 12, paddingVertical: 16, alignItems: 'center' },
   editBtnText: { color: '#fff', fontSize: 18, letterSpacing: 1 },
+  generateBracketBtn: { backgroundColor: '#B8860B', borderRadius: 12, paddingVertical: 16, alignItems: 'center', marginTop: 10 },
+  generateBracketBtnText: { color: '#fff', fontSize: 18, letterSpacing: 1 },
   deleteBtn: { backgroundColor: '#1a1a2e', borderRadius: 12, paddingVertical: 16, alignItems: 'center' },
   deleteBtnText: { color: '#fff', fontSize: 18, letterSpacing: 1 },
   deleteEventBtn: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8, backgroundColor: '#cc4444', borderRadius: 12, paddingVertical: 16 },
