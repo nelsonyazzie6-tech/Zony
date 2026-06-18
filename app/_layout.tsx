@@ -1,6 +1,7 @@
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { Rajdhani_700Bold, useFonts } from '@expo-google-fonts/rajdhani';
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
+import * as Sentry from '@sentry/react-native';
 import * as Notifications from 'expo-notifications';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
@@ -12,7 +13,6 @@ import { Animated, StyleSheet, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import 'react-native-reanimated';
 import { auth, db } from '../firebaseConfig';
-import * as Sentry from '@sentry/react-native';
 
 Sentry.init({
   dsn: 'https://3e555aa3301825d73fc1da854b7fd082@o4511583367528448.ingest.us.sentry.io/4511583375130624',
@@ -147,6 +147,8 @@ export default Sentry.wrap(function RootLayout() {
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen name="login" options={{ headerShown: false }} />
           <Stack.Screen name="onboarding" options={{ headerShown: false }} />
+          <Stack.Screen name="bracket-generate" options={{ headerShown: false }} />
+          <Stack.Screen name="bracket" options={{ headerShown: false }} />
           <Stack.Screen name="tournament" options={{ headerShown: false }} />
           <Stack.Screen name="map" options={{ headerShown: false }} />
           <Stack.Screen name="postboard" options={{ headerShown: false }} />

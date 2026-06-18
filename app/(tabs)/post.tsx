@@ -199,6 +199,15 @@ function TournamentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
   const [showDepositDuePicker, setShowDepositDuePicker] = useState(false);
   const [loading, setLoading] = useState(false);
 
+  // Bracket settings — stored on the tournament doc, used at bracket generation time
+  const [bracketCourts, setBracketCourts] = useState('2');
+  const [bracketGameDuration, setBracketGameDuration] = useState('50');
+  const [bracketBuffer, setBracketBuffer] = useState('10');
+  const [bracketDailyStart, setBracketDailyStart] = useState('08:00');
+  const [bracketDailyEnd, setBracketDailyEnd] = useState('20:00');
+  const [championshipFormat, setChampionshipFormat] = useState<'single' | 'double'>('single');
+  const [showChampionshipPicker, setShowChampionshipPicker] = useState(false);
+
   const [useManualLocation, setUseManualLocation] = useState(false);
   const [manualVenue, setManualVenue] = useState('');
   const [manualAddress, setManualAddress] = useState('');
@@ -375,6 +384,16 @@ function TournamentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
         depositAmount: depositAmount ? `$${depositAmount}` : '',
         depositDue, status: 'active', createdAt: serverTimestamp(), postedBy: user.uid,
         organizerName, organizerPhoto,
+        // Bracket settings — stored now, used when organizer generates bracket later
+        bracketSettings: {
+          courts: parseInt(bracketCourts) || 2,
+          gameDurationMinutes: parseInt(bracketGameDuration) || 50,
+          bufferMinutes: parseInt(bracketBuffer) || 10,
+          dailyStartTime: bracketDailyStart || '08:00',
+          dailyEndTime: bracketDailyEnd || '20:00',
+          championshipFormat,
+        },
+        bracketStatus: 'registration_open',
       });
 
       try {
@@ -693,6 +712,92 @@ function TournamentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
 
           <Text style={styles.label}>Contact Name</Text>
           <TextInput ref={contactNameRef} style={styles.input} placeholder="Contact name" placeholderTextColor="#a0b8b8" value={contactName} onChangeText={setContactName} returnKeyType="next" blurOnSubmit={false} onSubmitEditing={() => contactPhoneRef.current?.focus()} />
+
+          {/* ── Bracket Settings ── */}
+          <Text style={[styles.label, { marginTop: 20 }]}>Bracket Settings</Text>
+          <Text style={styles.bracketSettingsHint}>Used when you generate the bracket after registration closes.</Text>
+
+          <Text style={styles.label}>Number of Courts</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="e.g. 3"
+            placeholderTextColor="#a0b8b8"
+            value={bracketCourts}
+            onChangeText={setBracketCourts}
+            keyboardType="numeric"
+          />
+
+          <Text style={styles.label}>Daily Court Hours</Text>
+          <View style={{ flexDirection: 'row', gap: 10 }}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.bracketSettingsHint}>Start time</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="08:00"
+                placeholderTextColor="#a0b8b8"
+                value={bracketDailyStart}
+                onChangeText={setBracketDailyStart}
+              />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.bracketSettingsHint}>End time</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="20:00"
+                placeholderTextColor="#a0b8b8"
+                value={bracketDailyEnd}
+                onChangeText={setBracketDailyEnd}
+              />
+            </View>
+          </View>
+
+          <Text style={styles.label}>Game Duration (minutes)</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="e.g. 50"
+            placeholderTextColor="#a0b8b8"
+            value={bracketGameDuration}
+            onChangeText={setBracketGameDuration}
+            keyboardType="numeric"
+          />
+
+          <Text style={styles.label}>Buffer Between Games (minutes)</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="e.g. 10"
+            placeholderTextColor="#a0b8b8"
+            value={bracketBuffer}
+            onChangeText={setBracketBuffer}
+            keyboardType="numeric"
+          />
+
+          <Text style={styles.label}>Championship Format</Text>
+          <TouchableOpacity
+            style={styles.input}
+            onPress={() => setShowChampionshipPicker(true)}
+          >
+            <Text style={{ color: '#003333', fontSize: 15 }}>
+              {championshipFormat === 'single' ? 'Single Championship Game (default)' : 'Double Championship Game (bracket reset)'}
+            </Text>
+          </TouchableOpacity>
+
+          {showChampionshipPicker && (
+            <View style={styles.bracketPickerContainer}>
+              {(['single', 'double'] as const).map(fmt => (
+                <TouchableOpacity
+                  key={fmt}
+                  style={[styles.bracketPickerItem, championshipFormat === fmt && styles.bracketPickerItemActive]}
+                  onPress={() => { setChampionshipFormat(fmt); setShowChampionshipPicker(false); }}
+                >
+                  <Text style={[styles.bracketPickerText, championshipFormat === fmt && { color: '#008080', fontWeight: '700' }]}>
+                    {fmt === 'single' ? 'Single Championship Game' : 'Double Championship Game (bracket reset)'}
+                  </Text>
+                  {fmt === 'single' && <Text style={styles.bracketPickerHint}>Most common. One game decides the champion.</Text>}
+                  {fmt === 'double' && <Text style={styles.bracketPickerHint}>A second game is played if the losers-bracket team wins the first.</Text>}
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
 
           <Text style={styles.label}>Contact Phone <Text style={styles.optional}>(optional)</Text></Text>
           <TextInput ref={contactPhoneRef} style={styles.input} placeholder="Phone number" placeholderTextColor="#a0b8b8" value={contactPhone} onChangeText={v => setContactPhone(formatPhone(v))} keyboardType="phone-pad" maxLength={12} returnKeyType="next" blurOnSubmit={false} onSubmitEditing={() => contactEmailRef.current?.focus()} />
@@ -1074,6 +1179,12 @@ const styles = StyleSheet.create({
   form: { paddingHorizontal: 20, paddingBottom: 48 },
   label: { fontSize: 14, fontWeight: '600', color: '#003333', marginBottom: 6, marginTop: 10 },
   optional: { fontSize: 12, fontWeight: '400', color: '#a0b8b8' },
+  bracketSettingsHint: { fontSize: 12, color: '#a0b8b8', marginBottom: 6 },
+  bracketPickerContainer: { backgroundColor: '#fff', borderRadius: 12, borderWidth: 1, borderColor: '#e0d8c8', marginBottom: 12, overflow: 'hidden' },
+  bracketPickerItem: { padding: 14, borderBottomWidth: 1, borderBottomColor: '#f0e8d8' },
+  bracketPickerItemActive: { backgroundColor: '#f5ede0' },
+  bracketPickerText: { fontSize: 15, color: '#003333' },
+  bracketPickerHint: { fontSize: 12, color: '#a0b8b8', marginTop: 2 },
   input: { backgroundColor: '#fff', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, fontSize: 15, color: '#003333', marginBottom: 4, borderWidth: 1, borderColor: '#e0d8c8' },
   textArea: { height: 120, textAlignVertical: 'top' },
   dropdown: { backgroundColor: '#fff', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderWidth: 1, borderColor: '#e0d8c8', marginBottom: 4 },
