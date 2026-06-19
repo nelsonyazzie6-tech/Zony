@@ -33,7 +33,35 @@ const boardDescriptionPlaceholders = [
   'e.g. "Looking for a 14U player to complete our roster for an upcoming event."',
 ];
 
-// Location pin icon, replaces 📍
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+function formatTimeAmPm(time24: string): string {
+  if (!time24 || !time24.includes(':')) return time24;
+  const [hStr, mStr] = time24.split(':');
+  let h = parseInt(hStr, 10);
+  const m = mStr || '00';
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  if (h === 0) h = 12;
+  else if (h > 12) h -= 12;
+  return `${h}:${m} ${ampm}`;
+}
+
+function parseAmPmToTime24(input: string): string {
+  // Accept "8:00 AM", "8 AM", "8:30PM", "08:00", "20:00"
+  const cleaned = input.trim().toUpperCase();
+  const ampmMatch = cleaned.match(/^(\d{1,2})(?::(\d{2}))?\s*(AM|PM)$/);
+  if (ampmMatch) {
+    let h = parseInt(ampmMatch[1], 10);
+    const m = ampmMatch[2] || '00';
+    if (ampmMatch[3] === 'AM') { if (h === 12) h = 0; }
+    else { if (h !== 12) h += 12; }
+    return `${String(h).padStart(2, '0')}:${m}`;
+  }
+  // Already 24h format
+  if (/^\d{1,2}:\d{2}$/.test(cleaned)) return cleaned.padStart(5, '0');
+  return input;
+}
+
 function LocationIcon({ size = 13, color = '#003333' }: { size?: number; color?: string }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -43,7 +71,6 @@ function LocationIcon({ size = 13, color = '#003333' }: { size?: number; color?:
   );
 }
 
-// Check icon, replaces ✓ in division picker
 function CheckIcon({ size = 13, color = '#008080' }: { size?: number; color?: string }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -70,7 +97,6 @@ async function sendPush(token: string, title: string, body: string) {
   } catch (e) { console.log('Push error:', e); }
 }
 
-// Reusable styled info/error modal matching app theme
 function InfoModal({ visible, title, message, onClose }: { visible: boolean; title: string; message: string; onClose: () => void }) {
   const [fontsLoaded] = useFonts({ Rajdhani_700Bold });
   return (
@@ -133,7 +159,6 @@ function HubScreen({ onSelect }: { onSelect: (tab: 'tournament' | 'board') => vo
             <Text style={styles.hubCardArrowText}>›</Text>
           </View>
         </TouchableOpacity>
-
         <TouchableOpacity style={styles.hubCard} onPress={() => onSelect('board')} activeOpacity={0.85}>
           <View style={[styles.hubCardIcon, { backgroundColor: '#7A1E1E' }]}>
             <Svg width={36} height={36} viewBox="0 0 24 24" fill="none">
@@ -179,10 +204,8 @@ function TournamentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
   const [divisionSpots, setDivisionSpots] = useState<Record<string, string>>({});
   const [spectatorFee, setSpectatorFee] = useState('');
   const [isFreeSpectator, setIsFreeSpectator] = useState(false);
-
   const [spectatorPaymentMethods, setSpectatorPaymentMethods] = useState<string[]>([]);
   const [spectatorPaymentOther, setSpectatorPaymentOther] = useState('');
-
   const [rosterSize, setRosterSize] = useState('');
   const [contactName, setContactName] = useState('');
   const [contactPhone, setContactPhone] = useState('');
@@ -190,21 +213,21 @@ function TournamentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
   const [prizeRows, setPrizeRows] = useState<{ cash: string; physical: string }[]>([
     { cash: '', physical: '' }, { cash: '', physical: '' }, { cash: '', physical: '' },
   ]);
-
   const [useManualPrizes, setUseManualPrizes] = useState(false);
   const [manualPrizes, setManualPrizes] = useState('');
-
   const [depositAmount, setDepositAmount] = useState('');
   const [depositDue, setDepositDue] = useState('');
   const [showDepositDuePicker, setShowDepositDuePicker] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  // Bracket settings — stored on the tournament doc, used at bracket generation time
-  const [bracketCourts, setBracketCourts] = useState('2');
+  // Bracket settings
+  const [bracketEnabled, setBracketEnabled] = useState(false);
+  const [tournamentFormat, setTournamentFormat] = useState<'double' | 'single'>('double');
+  const [courtNames, setCourtNames] = useState<string[]>(['Court 1']); // start with one court
   const [bracketGameDuration, setBracketGameDuration] = useState('50');
   const [bracketBuffer, setBracketBuffer] = useState('10');
-  const [bracketDailyStart, setBracketDailyStart] = useState('08:00');
-  const [bracketDailyEnd, setBracketDailyEnd] = useState('20:00');
+  const [bracketDailyStartDisplay, setBracketDailyStartDisplay] = useState('8:00 AM');
+  const [bracketDailyEndDisplay, setBracketDailyEndDisplay] = useState('8:00 PM');
   const [championshipFormat, setChampionshipFormat] = useState<'single' | 'double'>('single');
   const [showChampionshipPicker, setShowChampionshipPicker] = useState(false);
 
@@ -214,10 +237,7 @@ function TournamentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
   const [manualCity, setManualCity] = useState('');
   const [manualState, setManualState] = useState('');
   const [manualZip, setManualZip] = useState('');
-
-  const [infoModal, setInfoModal] = useState<{ visible: boolean; title: string; message: string }>({
-    visible: false, title: '', message: '',
-  });
+  const [infoModal, setInfoModal] = useState<{ visible: boolean; title: string; message: string }>({ visible: false, title: '', message: '' });
 
   const spectatorFeeRef = useRef<TextInput>(null);
   const spectatorPaymentOtherRef = useRef<TextInput>(null);
@@ -237,9 +257,7 @@ function TournamentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
       if (user.email) setContactEmail(user.email);
       try {
         const snap = await getDoc(doc(db, 'users', user.uid));
-        if (snap.exists() && snap.data().username) {
-          setContactName(snap.data().username);
-        }
+        if (snap.exists() && snap.data().username) setContactName(snap.data().username);
       } catch (_) {}
     };
     load();
@@ -259,8 +277,7 @@ function TournamentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
     setName(''); setSport(''); setStartDate(''); setStartDateObj(null); setEndDate('');
     setAddress(''); setCity(''); setState(''); setZip('');
     setSpots(''); setDivisionFees({}); setDivisionSpots({}); setSpectatorFee('');
-    setIsFreeSpectator(false);
-    setSpectatorPaymentMethods([]); setSpectatorPaymentOther('');
+    setIsFreeSpectator(false); setSpectatorPaymentMethods([]); setSpectatorPaymentOther('');
     setDivisions([]); setRosterSize('');
     setContactName(''); setContactPhone(''); setContactEmail('');
     setPrizeRows([{ cash: '', physical: '' }, { cash: '', physical: '' }, { cash: '', physical: '' }]);
@@ -268,6 +285,12 @@ function TournamentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
     setDepositAmount(''); setDepositDue('');
     setUseManualLocation(false);
     setManualVenue(''); setManualAddress(''); setManualCity(''); setManualState(''); setManualZip('');
+    setBracketEnabled(true);
+    setTournamentFormat('double');
+    setCourtNames(['Court 1']);
+    setBracketGameDuration('50'); setBracketBuffer('10');
+    setBracketDailyStartDisplay('8:00 AM'); setBracketDailyEndDisplay('8:00 PM');
+    setChampionshipFormat('single');
   };
 
   const handlePlaceSelect = (data: any, details: any) => {
@@ -325,11 +348,14 @@ function TournamentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
     }).filter(Boolean).join('\n');
   };
 
+  const addCourtName = () => setCourtNames(prev => [...prev, `Court ${prev.length + 1}`]);
+  const removeCourtName = (i: number) => setCourtNames(prev => prev.filter((_, idx) => idx !== i));
+  const updateCourtName = (i: number, val: string) => setCourtNames(prev => prev.map((c, idx) => idx === i ? val : c));
+
   const focusDeposit = () => { depositAmountRef.current?.focus(); scrollRef.current?.scrollTo({ y: 999, animated: true }); };
   const handleStartConfirm = (date: Date) => {
     setStartDate(date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }));
-    setStartDateObj(date);
-    setShowStartPicker(false);
+    setStartDateObj(date); setShowStartPicker(false);
   };
   const handleEndConfirm = (date: Date) => { setEndDate(date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })); setShowEndPicker(false); };
   const handleDepositDueConfirm = (date: Date) => { setDepositDue(date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })); setShowDepositDuePicker(false); };
@@ -369,6 +395,7 @@ function TournamentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
       const userSnap = await getDoc(doc(db, 'users', user.uid));
       const organizerName = userSnap.exists() ? (userSnap.data().username || '') : '';
       const organizerPhoto = userSnap.exists() ? (userSnap.data().photoURL || '') : '';
+
       const tournamentRef = await addDoc(collection(db, 'tournaments'), {
         name, sport, date: `${startDate} - ${endDate}`,
         startDateValue: startDateObj ? Timestamp.fromDate(startDateObj) : null,
@@ -384,22 +411,21 @@ function TournamentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
         depositAmount: depositAmount ? `$${depositAmount}` : '',
         depositDue, status: 'active', createdAt: serverTimestamp(), postedBy: user.uid,
         organizerName, organizerPhoto,
-        // Bracket settings — stored now, used when organizer generates bracket later
-        bracketSettings: {
-          courts: parseInt(bracketCourts) || 2,
+        bracketEnabled,
+        tournamentFormat,
+        bracketSettings: bracketEnabled ? {
+          courtNames: courtNames.filter(c => c.trim()),
           gameDurationMinutes: parseInt(bracketGameDuration) || 50,
           bufferMinutes: parseInt(bracketBuffer) || 10,
-          dailyStartTime: bracketDailyStart || '08:00',
-          dailyEndTime: bracketDailyEnd || '20:00',
+          dailyStartTime: parseAmPmToTime24(bracketDailyStartDisplay),
+          dailyEndTime: parseAmPmToTime24(bracketDailyEndDisplay),
           championshipFormat,
-        },
+        } : null,
         bracketStatus: 'registration_open',
       });
 
       try {
-        const usersSnap = await getDocs(
-          query(collection(db, 'users'), where('preferredSports', 'array-contains', sport))
-        );
+        const usersSnap = await getDocs(query(collection(db, 'users'), where('preferredSports', 'array-contains', sport)));
         await Promise.all(
           usersSnap.docs
             .filter(d => d.id !== user.uid && d.data().notificationsEnabled !== false)
@@ -423,11 +449,7 @@ function TournamentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
       onSuccess();
     } catch (e) {
       console.error('Error posting tournament:', e);
-      setInfoModal({
-        visible: true,
-        title: 'POST FAILED',
-        message: 'We couldn\'t post your tournament. Check your internet connection and try again.',
-      });
+      setInfoModal({ visible: true, title: 'POST FAILED', message: 'We couldn\'t post your tournament. Check your internet connection and try again.' });
     }
     setLoading(false);
   };
@@ -453,8 +475,6 @@ function TournamentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
             <Polygon points="260,0 330,20 390,0" fill="white" opacity={0.06} />
             <Polygon points="240,130 310,80 390,130" fill="white" opacity={0.05} />
             <Polygon points="80,130 180,90 240,130" fill="white" opacity={0.04} />
-            <Polygon points="0,0 0,60 40,80 0,130 80,130 40,80" fill="white" opacity={0.03} />
-            <Polygon points="0,60 0,0 40,0 80,30 40,80" fill="white" opacity={0.03} />
           </Svg>
           <TouchableOpacity onPress={onBack} style={styles.formBackBtn}>
             <Text style={styles.formBackText}>‹ Back</Text>
@@ -543,51 +563,12 @@ function TournamentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
                   <Text style={styles.manualLocationSwitch}>Use Search Instead</Text>
                 </TouchableOpacity>
               </View>
-              <TextInput
-                style={styles.input}
-                placeholder="Venue name (e.g. Gallup High School Gym)"
-                placeholderTextColor="#a0b8b8"
-                value={manualVenue}
-                onChangeText={setManualVenue}
-                returnKeyType="next"
-              />
-              <TextInput
-                style={styles.input}
-                placeholder="Street address (optional)"
-                placeholderTextColor="#a0b8b8"
-                value={manualAddress}
-                onChangeText={setManualAddress}
-                returnKeyType="next"
-              />
+              <TextInput style={styles.input} placeholder="Venue name (e.g. Gallup High School Gym)" placeholderTextColor="#a0b8b8" value={manualVenue} onChangeText={setManualVenue} returnKeyType="next" />
+              <TextInput style={styles.input} placeholder="Street address (optional)" placeholderTextColor="#a0b8b8" value={manualAddress} onChangeText={setManualAddress} returnKeyType="next" />
               <View style={styles.manualCityRow}>
-                <TextInput
-                  style={[styles.input, { flex: 2 }]}
-                  placeholder="City"
-                  placeholderTextColor="#a0b8b8"
-                  value={manualCity}
-                  onChangeText={setManualCity}
-                  returnKeyType="next"
-                />
-                <TextInput
-                  style={[styles.input, { flex: 1 }]}
-                  placeholder="State"
-                  placeholderTextColor="#a0b8b8"
-                  value={manualState}
-                  onChangeText={t => setManualState(t.toUpperCase().slice(0, 2))}
-                  autoCapitalize="characters"
-                  maxLength={2}
-                  returnKeyType="next"
-                />
-                <TextInput
-                  style={[styles.input, { flex: 1 }]}
-                  placeholder="ZIP"
-                  placeholderTextColor="#a0b8b8"
-                  value={manualZip}
-                  onChangeText={setManualZip}
-                  keyboardType="numeric"
-                  maxLength={5}
-                  returnKeyType="next"
-                />
+                <TextInput style={[styles.input, { flex: 2 }]} placeholder="City" placeholderTextColor="#a0b8b8" value={manualCity} onChangeText={setManualCity} returnKeyType="next" />
+                <TextInput style={[styles.input, { flex: 1 }]} placeholder="State" placeholderTextColor="#a0b8b8" value={manualState} onChangeText={t => setManualState(t.toUpperCase().slice(0, 2))} autoCapitalize="characters" maxLength={2} returnKeyType="next" />
+                <TextInput style={[styles.input, { flex: 1 }]} placeholder="ZIP" placeholderTextColor="#a0b8b8" value={manualZip} onChangeText={setManualZip} keyboardType="numeric" maxLength={5} returnKeyType="next" />
               </View>
             </View>
           )}
@@ -622,25 +603,11 @@ function TournamentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
                   </View>
                   <View style={styles.divisionRowInputs}>
                     <View style={styles.divisionSpotsInputWrapper}>
-                      <TextInput
-                        style={styles.divisionFeeInput}
-                        placeholder="Spots"
-                        placeholderTextColor="#a0b8b8"
-                        value={divisionSpots[d] || ''}
-                        onChangeText={v => setDivisionSpots(prev => ({ ...prev, [d]: v.replace(/[^0-9]/g, '') }))}
-                        keyboardType="numeric"
-                      />
+                      <TextInput style={styles.divisionFeeInput} placeholder="Spots" placeholderTextColor="#a0b8b8" value={divisionSpots[d] || ''} onChangeText={v => setDivisionSpots(prev => ({ ...prev, [d]: v.replace(/[^0-9]/g, '') }))} keyboardType="numeric" />
                     </View>
                     <View style={styles.divisionFeeInputWrapper}>
                       <Text style={styles.prizeInputPrefix}>$</Text>
-                      <TextInput
-                        style={styles.divisionFeeInput}
-                        placeholder="Fee"
-                        placeholderTextColor="#a0b8b8"
-                        value={divisionFees[d] || ''}
-                        onChangeText={v => setDivisionFees(prev => ({ ...prev, [d]: v.replace(/[^0-9]/g, '') }))}
-                        keyboardType="numeric"
-                      />
+                      <TextInput style={styles.divisionFeeInput} placeholder="Fee" placeholderTextColor="#a0b8b8" value={divisionFees[d] || ''} onChangeText={v => setDivisionFees(prev => ({ ...prev, [d]: v.replace(/[^0-9]/g, '') }))} keyboardType="numeric" />
                     </View>
                   </View>
                 </View>
@@ -648,15 +615,59 @@ function TournamentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
             </View>
           )}
 
+          {/* ── Deposit (directly below divisions) ── */}
+          <Text style={styles.label}>Deposit Amount <Text style={styles.optional}>(optional)</Text></Text>
+          <TextInput ref={depositAmountRef} style={styles.input} placeholder="Amount in dollars" placeholderTextColor="#a0b8b8" value={depositAmount} onChangeText={setDepositAmount} keyboardType="numeric" returnKeyType="next" blurOnSubmit={false} onSubmitEditing={() => { Keyboard.dismiss(); setShowDepositDuePicker(true); }} />
+
+          <Text style={styles.label}>Deposit Due Date <Text style={styles.optional}>(optional)</Text></Text>
+          <TouchableOpacity style={styles.dropdown} onPress={() => { Keyboard.dismiss(); setShowDepositDuePicker(true); }}>
+            <Text style={depositDue ? styles.dropdownSelected : styles.dropdownPlaceholder}>{depositDue || 'Select deposit due date...'}</Text>
+          </TouchableOpacity>
+          <DateTimePickerModal isVisible={showDepositDuePicker} mode="date" onConfirm={handleDepositDueConfirm} onCancel={() => setShowDepositDuePicker(false)} />
+
+          {/* ── Prizes / Awards ── */}
+          <Text style={styles.label}>Prizes / Awards</Text>
+          {!useManualPrizes ? (
+            <>
+              <Text style={styles.prizesHint}>Fill in cash, physical prizes, or both per place</Text>
+              {prizeRows.map((row, i) => (
+                <View key={i} style={styles.prizeRowBlock}>
+                  <View style={styles.prizePlaceLabel}>
+                    <Text style={styles.prizeLabelText}>{placeLabels[i]}</Text>
+                  </View>
+                  <View style={styles.prizeInputs}>
+                    <View style={styles.prizeInputWrapper}>
+                      <Text style={styles.prizeInputPrefix}>$</Text>
+                      <TextInput style={styles.prizeInputCash} placeholder="Cash amount" placeholderTextColor="#a0b8b8" value={row.cash} onChangeText={(t) => updatePrizeCash(i, t)} keyboardType="numeric" returnKeyType="next" blurOnSubmit={false} />
+                    </View>
+                    <TextInput style={styles.prizeInputPhysical} placeholder="Trophy, Jacket, etc." placeholderTextColor="#a0b8b8" value={row.physical} onChangeText={(t) => updatePrizePhysical(i, t)} returnKeyType="next" blurOnSubmit={false} />
+                  </View>
+                </View>
+              ))}
+              {prizeRows.length < 8 && (
+                <TouchableOpacity style={styles.addPrizeBtn} onPress={addPrizeRow}>
+                  <Text style={styles.addPrizeBtnText}>+ Add Place</Text>
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity style={styles.manualToggleBtn} onPress={() => setUseManualPrizes(true)}>
+                <Text style={styles.manualToggleText}>Don't see the right format? Enter manually</Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <View style={styles.manualLocationBlock}>
+              <View style={styles.manualLocationHeader}>
+                <Text style={styles.manualLocationTitle}>Manual Prizes Entry</Text>
+                <TouchableOpacity onPress={() => { setUseManualPrizes(false); setManualPrizes(''); }}>
+                  <Text style={styles.manualLocationSwitch}>Use Structured Format Instead</Text>
+                </TouchableOpacity>
+              </View>
+              <TextInput style={[styles.input, styles.textArea]} placeholder={'e.g.\n1st: $500 + Custom Trophy\n2nd: $250\nAll players: Tournament T-Shirt'} placeholderTextColor="#a0b8b8" value={manualPrizes} onChangeText={setManualPrizes} multiline numberOfLines={5} />
+            </View>
+          )}
+
+          {/* ── Spectator Information ── */}
           <Text style={styles.label}>Spectator Entrance Fee <Text style={styles.optional}>(optional)</Text></Text>
-          <TouchableOpacity
-            style={styles.freeSpectatorToggle}
-            onPress={() => {
-              const next = !isFreeSpectator;
-              setIsFreeSpectator(next);
-              if (next) { setSpectatorFee(''); setSpectatorPaymentMethods([]); setSpectatorPaymentOther(''); }
-            }}
-          >
+          <TouchableOpacity style={styles.freeSpectatorToggle} onPress={() => { const next = !isFreeSpectator; setIsFreeSpectator(next); if (next) { setSpectatorFee(''); setSpectatorPaymentMethods([]); setSpectatorPaymentOther(''); } }}>
             <View style={[styles.checkbox, isFreeSpectator && styles.checkboxActive]}>
               {isFreeSpectator ? <CheckIcon size={12} color="#fff" /> : null}
             </View>
@@ -674,32 +685,19 @@ function TournamentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
                 {paymentMethodOptions.map(method => {
                   const selected = spectatorPaymentMethods.includes(method);
                   return (
-                    <TouchableOpacity
-                      key={method}
-                      style={[styles.paymentMethodPill, selected && styles.paymentMethodPillActive]}
-                      onPress={() => togglePaymentMethod(method)}
-                    >
+                    <TouchableOpacity key={method} style={[styles.paymentMethodPill, selected && styles.paymentMethodPillActive]} onPress={() => togglePaymentMethod(method)}>
                       <Text style={[styles.paymentMethodPillText, selected && styles.paymentMethodPillTextActive]}>{method}</Text>
                     </TouchableOpacity>
                   );
                 })}
               </View>
               {spectatorPaymentMethods.includes('Other') && (
-                <TextInput
-                  ref={spectatorPaymentOtherRef}
-                  style={[styles.input, { marginTop: 8 }]}
-                  placeholder="e.g. Venmo, CashApp"
-                  placeholderTextColor="#a0b8b8"
-                  value={spectatorPaymentOther}
-                  onChangeText={setSpectatorPaymentOther}
-                  returnKeyType="next"
-                  blurOnSubmit={false}
-                  onSubmitEditing={() => rosterSizeRef.current?.focus()}
-                />
+                <TextInput ref={spectatorPaymentOtherRef} style={[styles.input, { marginTop: 8 }]} placeholder="e.g. Venmo, CashApp" placeholderTextColor="#a0b8b8" value={spectatorPaymentOther} onChangeText={setSpectatorPaymentOther} returnKeyType="next" blurOnSubmit={false} onSubmitEditing={() => rosterSizeRef.current?.focus()} />
               )}
             </View>
           ) : null}
 
+          {/* ── Roster Size & Available Spots ── */}
           <Text style={styles.label}>Roster Size</Text>
           <TextInput ref={rosterSizeRef} style={styles.input} placeholder="Number of players" placeholderTextColor="#a0b8b8" value={rosterSize} onChangeText={setRosterSize} keyboardType="numeric" returnKeyType="next" blurOnSubmit={false} onSubmitEditing={() => { if (needsAvailableSpots) { spotsRef.current?.focus(); } else { contactNameRef.current?.focus(); } }} />
 
@@ -710,94 +708,9 @@ function TournamentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
             </>
           )}
 
+          {/* ── Contact Info ── */}
           <Text style={styles.label}>Contact Name</Text>
           <TextInput ref={contactNameRef} style={styles.input} placeholder="Contact name" placeholderTextColor="#a0b8b8" value={contactName} onChangeText={setContactName} returnKeyType="next" blurOnSubmit={false} onSubmitEditing={() => contactPhoneRef.current?.focus()} />
-
-          {/* ── Bracket Settings ── */}
-          <Text style={[styles.label, { marginTop: 20 }]}>Bracket Settings</Text>
-          <Text style={styles.bracketSettingsHint}>Used when you generate the bracket after registration closes.</Text>
-
-          <Text style={styles.label}>Number of Courts</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="e.g. 3"
-            placeholderTextColor="#a0b8b8"
-            value={bracketCourts}
-            onChangeText={setBracketCourts}
-            keyboardType="numeric"
-          />
-
-          <Text style={styles.label}>Daily Court Hours</Text>
-          <View style={{ flexDirection: 'row', gap: 10 }}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.bracketSettingsHint}>Start time</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="08:00"
-                placeholderTextColor="#a0b8b8"
-                value={bracketDailyStart}
-                onChangeText={setBracketDailyStart}
-              />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.bracketSettingsHint}>End time</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="20:00"
-                placeholderTextColor="#a0b8b8"
-                value={bracketDailyEnd}
-                onChangeText={setBracketDailyEnd}
-              />
-            </View>
-          </View>
-
-          <Text style={styles.label}>Game Duration (minutes)</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="e.g. 50"
-            placeholderTextColor="#a0b8b8"
-            value={bracketGameDuration}
-            onChangeText={setBracketGameDuration}
-            keyboardType="numeric"
-          />
-
-          <Text style={styles.label}>Buffer Between Games (minutes)</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="e.g. 10"
-            placeholderTextColor="#a0b8b8"
-            value={bracketBuffer}
-            onChangeText={setBracketBuffer}
-            keyboardType="numeric"
-          />
-
-          <Text style={styles.label}>Championship Format</Text>
-          <TouchableOpacity
-            style={styles.input}
-            onPress={() => setShowChampionshipPicker(true)}
-          >
-            <Text style={{ color: '#003333', fontSize: 15 }}>
-              {championshipFormat === 'single' ? 'Single Championship Game (default)' : 'Double Championship Game (bracket reset)'}
-            </Text>
-          </TouchableOpacity>
-
-          {showChampionshipPicker && (
-            <View style={styles.bracketPickerContainer}>
-              {(['single', 'double'] as const).map(fmt => (
-                <TouchableOpacity
-                  key={fmt}
-                  style={[styles.bracketPickerItem, championshipFormat === fmt && styles.bracketPickerItemActive]}
-                  onPress={() => { setChampionshipFormat(fmt); setShowChampionshipPicker(false); }}
-                >
-                  <Text style={[styles.bracketPickerText, championshipFormat === fmt && { color: '#008080', fontWeight: '700' }]}>
-                    {fmt === 'single' ? 'Single Championship Game' : 'Double Championship Game (bracket reset)'}
-                  </Text>
-                  {fmt === 'single' && <Text style={styles.bracketPickerHint}>Most common. One game decides the champion.</Text>}
-                  {fmt === 'double' && <Text style={styles.bracketPickerHint}>A second game is played if the losers-bracket team wins the first.</Text>}
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
 
           <Text style={styles.label}>Contact Phone <Text style={styles.optional}>(optional)</Text></Text>
           <TextInput ref={contactPhoneRef} style={styles.input} placeholder="Phone number" placeholderTextColor="#a0b8b8" value={contactPhone} onChangeText={v => setContactPhone(formatPhone(v))} keyboardType="phone-pad" maxLength={12} returnKeyType="next" blurOnSubmit={false} onSubmitEditing={() => contactEmailRef.current?.focus()} />
@@ -805,65 +718,111 @@ function TournamentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
           <Text style={styles.label}>Contact Email <Text style={styles.optional}>(optional)</Text></Text>
           <TextInput ref={contactEmailRef} style={styles.input} placeholder="Email address" placeholderTextColor="#a0b8b8" value={contactEmail} onChangeText={setContactEmail} keyboardType="email-address" autoCapitalize="none" returnKeyType="next" blurOnSubmit={false} onSubmitEditing={() => Keyboard.dismiss()} />
 
-          <Text style={styles.label}>Prizes / Awards</Text>
+          {/* ── Bracket Options (bottom of form) ── */}
+          <View style={styles.sectionDivider} />
 
-          {!useManualPrizes ? (
+          {/* Tournament Format toggle */}
+          <Text style={[styles.label, { marginTop: 8 }]}>Tournament Format</Text>
+          <Text style={styles.bracketSettingsHint}>Displayed on the tournament card so teams know the structure before registering.</Text>
+          <View style={styles.formatToggleRow}>
+            <TouchableOpacity
+              style={[styles.formatOption, tournamentFormat === 'double' && styles.formatOptionActive]}
+              onPress={() => setTournamentFormat('double')}
+            >
+              <Text style={[styles.formatOptionText, tournamentFormat === 'double' && styles.formatOptionTextActive]}>Double Elimination</Text>
+              <Text style={styles.formatOptionHint}>Teams need 2 losses to be eliminated</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.formatOption, tournamentFormat === 'single' && styles.formatOptionActive]}
+              onPress={() => setTournamentFormat('single')}
+            >
+              <Text style={[styles.formatOptionText, tournamentFormat === 'single' && styles.formatOptionTextActive]}>Single Elimination</Text>
+              <Text style={styles.formatOptionHint}>One loss and you're out</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Bracket System toggle */}
+          <View style={styles.bracketToggleRow}>
+            <View>
+              <Text style={[styles.label, { marginTop: 12, marginBottom: 2 }]}>Bracket System</Text>
+              <Text style={styles.bracketSettingsHint}>Use Zony's built-in bracket & scheduling</Text>
+            </View>
+            <TouchableOpacity
+              style={[styles.togglePill, bracketEnabled && styles.togglePillActive]}
+              onPress={() => setBracketEnabled(!bracketEnabled)}
+            >
+              <View style={[styles.toggleThumb, bracketEnabled && styles.toggleThumbActive]} />
+            </TouchableOpacity>
+          </View>
+
+          {bracketEnabled && (
             <>
-              <Text style={styles.prizesHint}>Fill in cash, physical prizes, or both per place</Text>
+              <Text style={styles.bracketSettingsHint}>Configure courts, hours, and format below. Teams can view the bracket live once generated.</Text>
 
-              {prizeRows.map((row, i) => (
-                <View key={i} style={styles.prizeRowBlock}>
-                  <View style={styles.prizePlaceLabel}>
-                    <Text style={styles.prizeLabelText}>{placeLabels[i]}</Text>
-                  </View>
-                  <View style={styles.prizeInputs}>
-                    <View style={styles.prizeInputWrapper}>
-                      <Text style={styles.prizeInputPrefix}>$</Text>
-                      <TextInput style={styles.prizeInputCash} placeholder="Cash amount" placeholderTextColor="#a0b8b8" value={row.cash} onChangeText={(t) => updatePrizeCash(i, t)} keyboardType="numeric" returnKeyType="next" blurOnSubmit={false} />
-                    </View>
-                    <TextInput style={styles.prizeInputPhysical} placeholder="Trophy, Jacket, etc." placeholderTextColor="#a0b8b8" value={row.physical} onChangeText={(t) => updatePrizePhysical(i, t)} returnKeyType="next" blurOnSubmit={false} onSubmitEditing={i === prizeRows.length - 1 ? focusDeposit : undefined} />
-                  </View>
+              <Text style={styles.label}>Courts</Text>
+              {courtNames.map((courtName, i) => (
+                <View key={i} style={styles.courtNameRow}>
+                  <TextInput
+                    style={[styles.input, { flex: 1, marginBottom: 0 }]}
+                    placeholder="e.g. Main Court, Court A"
+                    placeholderTextColor="#a0b8b8"
+                    value={courtName}
+                    onChangeText={v => updateCourtName(i, v)}
+                  />
+                  {courtNames.length > 1 && (
+                    <TouchableOpacity onPress={() => removeCourtName(i)} style={styles.removeCourtBtn}>
+                      <Text style={styles.removeCourtText}>✕</Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
               ))}
-
-              {prizeRows.length < 8 && (
-                <TouchableOpacity style={styles.addPrizeBtn} onPress={addPrizeRow}>
-                  <Text style={styles.addPrizeBtnText}>+ Add Place</Text>
-                </TouchableOpacity>
-              )}
-
-              <TouchableOpacity style={styles.manualToggleBtn} onPress={() => setUseManualPrizes(true)}>
-                <Text style={styles.manualToggleText}>Don't see the right format? Enter manually</Text>
+              <TouchableOpacity style={styles.addCourtBtn} onPress={addCourtName}>
+                <Text style={styles.addCourtBtnText}>+ Add Court</Text>
               </TouchableOpacity>
-            </>
-          ) : (
-            <View style={styles.manualLocationBlock}>
-              <View style={styles.manualLocationHeader}>
-                <Text style={styles.manualLocationTitle}>Manual Prizes Entry</Text>
-                <TouchableOpacity onPress={() => { setUseManualPrizes(false); setManualPrizes(''); }}>
-                  <Text style={styles.manualLocationSwitch}>Use Structured Format Instead</Text>
-                </TouchableOpacity>
+
+              <Text style={styles.label}>Daily Court Hours</Text>
+              <Text style={styles.bracketSettingsHint}>
+                The hours your courts are available each day. Games will only be scheduled within this window — no games will be placed before the start time or after the end time.
+              </Text>
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.bracketSettingsHint}>Start time</Text>
+                  <TextInput style={styles.input} placeholder="e.g. 8:00 AM" placeholderTextColor="#a0b8b8" value={bracketDailyStartDisplay} onChangeText={setBracketDailyStartDisplay} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.bracketSettingsHint}>End time</Text>
+                  <TextInput style={styles.input} placeholder="e.g. 8:00 PM" placeholderTextColor="#a0b8b8" value={bracketDailyEndDisplay} onChangeText={setBracketDailyEndDisplay} />
+                </View>
               </View>
-              <TextInput
-                style={[styles.input, styles.textArea]}
-                placeholder={'e.g.\n1st: $500 + Custom Trophy\n2nd: $250\nAll players: Tournament T-Shirt'}
-                placeholderTextColor="#a0b8b8"
-                value={manualPrizes}
-                onChangeText={setManualPrizes}
-                multiline
-                numberOfLines={5}
-              />
-            </View>
+
+              <Text style={styles.label}>Game Duration (minutes)</Text>
+              <TextInput style={styles.input} placeholder="e.g. 50" placeholderTextColor="#a0b8b8" value={bracketGameDuration} onChangeText={setBracketGameDuration} keyboardType="numeric" />
+
+              <Text style={styles.label}>Buffer Between Games (minutes)</Text>
+              <TextInput style={styles.input} placeholder="e.g. 10" placeholderTextColor="#a0b8b8" value={bracketBuffer} onChangeText={setBracketBuffer} keyboardType="numeric" />
+
+              <Text style={styles.label}>Championship Format</Text>
+              <TouchableOpacity style={styles.input} onPress={() => setShowChampionshipPicker(true)}>
+                <Text style={{ color: '#003333', fontSize: 15 }}>
+                  {championshipFormat === 'single' ? 'Single Championship Game (default)' : 'Double Championship Game (bracket reset)'}
+                </Text>
+              </TouchableOpacity>
+
+              {showChampionshipPicker && (
+                <View style={styles.bracketPickerContainer}>
+                  {(['single', 'double'] as const).map(fmt => (
+                    <TouchableOpacity key={fmt} style={[styles.bracketPickerItem, championshipFormat === fmt && styles.bracketPickerItemActive]} onPress={() => { setChampionshipFormat(fmt); setShowChampionshipPicker(false); }}>
+                      <Text style={[styles.bracketPickerText, championshipFormat === fmt && { color: '#008080', fontWeight: '700' }]}>
+                        {fmt === 'single' ? 'Single Championship Game' : 'Double Championship Game (bracket reset)'}
+                      </Text>
+                      {fmt === 'single' && <Text style={styles.bracketPickerHint}>Most common. One game decides the champion.</Text>}
+                      {fmt === 'double' && <Text style={styles.bracketPickerHint}>A second game is played if the losers-bracket team wins the first.</Text>}
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+            </>
           )}
-
-          <Text style={styles.label}>Deposit Amount <Text style={styles.optional}>(optional)</Text></Text>
-          <TextInput ref={depositAmountRef} style={styles.input} placeholder="Amount in dollars" placeholderTextColor="#a0b8b8" value={depositAmount} onChangeText={setDepositAmount} keyboardType="numeric" returnKeyType="next" blurOnSubmit={false} onSubmitEditing={() => { Keyboard.dismiss(); setShowDepositDuePicker(true); }} />
-
-          <Text style={styles.label}>Deposit Due Date <Text style={styles.optional}>(optional)</Text></Text>
-          <TouchableOpacity style={styles.dropdown} onPress={() => { Keyboard.dismiss(); setShowDepositDuePicker(true); }}>
-            <Text style={depositDue ? styles.dropdownSelected : styles.dropdownPlaceholder}>{depositDue || 'Select deposit due date...'}</Text>
-          </TouchableOpacity>
-          <DateTimePickerModal isVisible={showDepositDuePicker} mode="date" onConfirm={handleDepositDueConfirm} onCancel={() => setShowDepositDuePicker(false)} />
 
           <TouchableOpacity style={styles.submitBtn} onPress={handleSubmit} disabled={loading}>
             <Text style={[styles.submitText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>
@@ -874,19 +833,14 @@ function TournamentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
         </View>
       </ScrollView>
 
-      <InfoModal
-        visible={infoModal.visible}
-        title={infoModal.title}
-        message={infoModal.message}
-        onClose={() => setInfoModal({ visible: false, title: '', message: '' })}
-      />
+      <InfoModal visible={infoModal.visible} title={infoModal.title} message={infoModal.message} onClose={() => setInfoModal({ visible: false, title: '', message: '' })} />
     </KeyboardAvoidingView>
   );
 }
+
 function BoardForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: () => void }) {
   const [fontsLoaded] = useFonts({ Rajdhani_700Bold });
   const [headerHeight, setHeaderHeight] = useState(120);
-
   const [name, setName] = useState('');
   const [forTournament, setForTournament] = useState('');
   const [forTournamentId, setForTournamentId] = useState('');
@@ -902,10 +856,7 @@ function BoardForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: () =>
   const [contactEmail, setContactEmail] = useState('');
   const [description, setDescription] = useState('');
   const [loading, setLoading] = useState(false);
-
-  const [infoModal, setInfoModal] = useState<{ visible: boolean; title: string; message: string }>({
-    visible: false, title: '', message: '',
-  });
+  const [infoModal, setInfoModal] = useState<{ visible: boolean; title: string; message: string }>({ visible: false, title: '', message: '' });
 
   const availableDivisions = forTournamentDivisions.length > 0 ? forTournamentDivisions : divisionOptions;
   const descPlaceholder = boardDescriptionPlaceholders[Math.floor(Math.random() * boardDescriptionPlaceholders.length)];
@@ -913,21 +864,13 @@ function BoardForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: () =>
   useEffect(() => {
     const user = auth.currentUser;
     if (user?.email) setContactEmail(user.email);
-
     const loadTournaments = async () => {
       try {
         const snap = await getDocs(collection(db, 'tournaments'));
-        const data = snap.docs.map(d => ({
-          id: d.id,
-          name: d.data().name || 'Unnamed',
-          sport: d.data().sport || '',
-          startDate: d.data().date ? d.data().date.split(' - ')[0] : '',
-          divisions: d.data().divisions || [],
-        }));
+        const data = snap.docs.map(d => ({ id: d.id, name: d.data().name || 'Unnamed', sport: d.data().sport || '', startDate: d.data().date ? d.data().date.split(' - ')[0] : '', divisions: d.data().divisions || [] }));
         setTournaments(data);
       } catch (e) { console.error(e); }
     };
-
     const loadName = async () => {
       if (!user) return;
       try {
@@ -935,34 +878,26 @@ function BoardForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: () =>
         if (snap.exists() && snap.data().username) setName(snap.data().username);
       } catch (_) {}
     };
-
-    loadTournaments();
-    loadName();
+    loadTournaments(); loadName();
   }, []);
 
   const resetFields = () => {
-    setName('');
-    setForTournament(''); setForTournamentId(''); setForTournamentStartDate('');
-    setForTournamentDivisions([]);
-    setSport(''); setDivision('');
+    setName(''); setForTournament(''); setForTournamentId(''); setForTournamentStartDate('');
+    setForTournamentDivisions([]); setSport(''); setDivision('');
     setContactPhone(''); setContactEmail(''); setDescription('');
   };
 
-  const closeAll = () => {
-    setShowTournamentPicker(false); setShowSportPicker(false); setShowDivisionPicker(false);
-  };
+  const closeAll = () => { setShowTournamentPicker(false); setShowSportPicker(false); setShowDivisionPicker(false); };
 
   const handleSubmit = async () => {
     const missing: string[] = [];
     if (!name) missing.push('Your Name');
     if (!sport) missing.push('Sport');
     if (!division) missing.push('Division');
-
     if (missing.length > 0) {
       setInfoModal({ visible: true, title: 'MISSING INFORMATION', message: `Please fill in:\n\n${missing.join('\n')}` });
       return;
     }
-
     const user = auth.currentUser;
     if (!user) return;
     setLoading(true);
@@ -974,34 +909,20 @@ function BoardForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: () =>
       } else {
         expiresAt = Timestamp.fromDate(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000));
       }
-
       await addDoc(collection(db, 'board'), {
-        name,
-        forTournament,
-        forTournamentId,
-        sport, division,
+        name, forTournament, forTournamentId, sport, division,
         contactPhone, contactEmail, description,
-        postedBy: user.uid,
-        createdAt: serverTimestamp(),
-        expiresAt,
+        postedBy: user.uid, createdAt: serverTimestamp(), expiresAt,
       });
-      resetFields();
-      onSuccess();
+      resetFields(); onSuccess();
     } catch (e) {
       console.error(e);
-      setInfoModal({
-        visible: true,
-        title: 'POST FAILED',
-        message: 'We couldn\'t post to the board. Check your internet connection and try again.',
-      });
+      setInfoModal({ visible: true, title: 'POST FAILED', message: 'We couldn\'t post to the board. Check your internet connection and try again.' });
     }
     setLoading(false);
   };
 
-  const DropdownField = ({ label, value, placeholder, show, onToggle, options, onSelect, scrollable }: {
-    label: string; value: string; placeholder: string; show: boolean;
-    onToggle: () => void; options: string[]; onSelect: (v: string) => void; scrollable?: boolean;
-  }) => (
+  const DropdownField = ({ label, value, placeholder, show, onToggle, options, onSelect, scrollable }: { label: string; value: string; placeholder: string; show: boolean; onToggle: () => void; options: string[]; onSelect: (v: string) => void; scrollable?: boolean; }) => (
     <View>
       <Text style={styles.label}>{label}</Text>
       <TouchableOpacity style={styles.dropdown} onPress={onToggle} activeOpacity={0.8}>
@@ -1022,7 +943,6 @@ function BoardForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: () =>
 
   return (
     <ScrollView style={styles.container} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-
       <View style={[styles.headerBlock, { backgroundColor: '#7A1E1E' }]} onLayout={e => setHeaderHeight(e.nativeEvent.layout.height)}>
         <Svg style={StyleSheet.absoluteFill} width="100%" height={headerHeight} viewBox="0 0 390 130" preserveAspectRatio="xMidYMid slice">
           <Polygon points="0,0 80,30 40,80" fill="white" opacity={0.04} />
@@ -1040,8 +960,6 @@ function BoardForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: () =>
           <Polygon points="260,0 330,20 390,0" fill="white" opacity={0.06} />
           <Polygon points="240,130 310,80 390,130" fill="white" opacity={0.05} />
           <Polygon points="80,130 180,90 240,130" fill="white" opacity={0.04} />
-          <Polygon points="0,0 0,60 40,80 0,130 80,130 40,80" fill="white" opacity={0.03} />
-          <Polygon points="0,60 0,0 40,0 80,30 40,80" fill="white" opacity={0.03} />
         </Svg>
         <TouchableOpacity onPress={onBack} style={styles.formBackBtn}>
           <Text style={styles.formBackText}>‹ Back</Text>
@@ -1051,7 +969,6 @@ function BoardForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: () =>
       </View>
 
       <View style={styles.form}>
-
         <Text style={styles.label}>Your Name</Text>
         <TextInput style={styles.input} placeholder="e.g. Marcus Webb" placeholderTextColor="#a0b8b8" value={name} onChangeText={setName} />
 
@@ -1067,15 +984,7 @@ function BoardForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: () =>
                 <View style={styles.dropdownItem}><Text style={styles.dropdownItemText}>No tournaments available</Text></View>
               ) : (
                 tournaments.map(t => (
-                  <TouchableOpacity key={t.id} style={styles.dropdownItem} onPress={() => {
-                    setForTournament(t.name);
-                    setForTournamentId(t.id);
-                    setForTournamentStartDate(t.startDate);
-                    setForTournamentDivisions(t.divisions || []);
-                    setDivision('');
-                    if (t.sport) setSport(t.sport);
-                    closeAll();
-                  }}>
+                  <TouchableOpacity key={t.id} style={styles.dropdownItem} onPress={() => { setForTournament(t.name); setForTournamentId(t.id); setForTournamentStartDate(t.startDate); setForTournamentDivisions(t.divisions || []); setDivision(''); if (t.sport) setSport(t.sport); closeAll(); }}>
                     <Text style={[styles.dropdownItemText, forTournament === t.name && styles.dropdownItemActive]}>{t.name}</Text>
                   </TouchableOpacity>
                 ))
@@ -1085,17 +994,7 @@ function BoardForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: () =>
         </View>
 
         <DropdownField label="Sport" value={sport} placeholder="Select a sport..." show={showSportPicker} onToggle={() => { closeAll(); setShowSportPicker(!showSportPicker); }} options={sportOptions} onSelect={setSport} />
-
-        <DropdownField
-          label="Division"
-          value={division}
-          placeholder="Select division..."
-          show={showDivisionPicker}
-          onToggle={() => { closeAll(); setShowDivisionPicker(!showDivisionPicker); }}
-          options={availableDivisions}
-          onSelect={setDivision}
-          scrollable
-        />
+        <DropdownField label="Division" value={division} placeholder="Select division..." show={showDivisionPicker} onToggle={() => { closeAll(); setShowDivisionPicker(!showDivisionPicker); }} options={availableDivisions} onSelect={setDivision} scrollable />
         {forTournament && forTournamentDivisions.length > 0 && (
           <Text style={styles.divisionHint}>Showing divisions offered by {forTournament}</Text>
         )}
@@ -1107,28 +1006,14 @@ function BoardForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: () =>
         <TextInput style={styles.input} placeholder="e.g. john@email.com" placeholderTextColor="#a0b8b8" value={contactEmail} onChangeText={setContactEmail} keyboardType="email-address" autoCapitalize="none" />
 
         <Text style={styles.label}>What are you looking for?</Text>
-        <TextInput
-          style={[styles.input, styles.textArea]}
-          placeholder={descPlaceholder}
-          placeholderTextColor="#a0b8b8"
-          value={description}
-          onChangeText={setDescription}
-          multiline
-          numberOfLines={5}
-        />
+        <TextInput style={[styles.input, styles.textArea]} placeholder={descPlaceholder} placeholderTextColor="#a0b8b8" value={description} onChangeText={setDescription} multiline numberOfLines={5} />
 
         <TouchableOpacity style={[styles.submitBtn, { backgroundColor: '#7A1E1E' }]} onPress={handleSubmit} disabled={loading} activeOpacity={0.85}>
           <Text style={[styles.submitText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>{loading ? 'Posting...' : 'POST TO BOARD'}</Text>
         </TouchableOpacity>
-
       </View>
 
-      <InfoModal
-        visible={infoModal.visible}
-        title={infoModal.title}
-        message={infoModal.message}
-        onClose={() => setInfoModal({ visible: false, title: '', message: '' })}
-      />
+      <InfoModal visible={infoModal.visible} title={infoModal.title} message={infoModal.message} onClose={() => setInfoModal({ visible: false, title: '', message: '' })} />
     </ScrollView>
   );
 }
@@ -1139,22 +1024,14 @@ export default function PostScreen() {
   const [successType, setSuccessType] = useState<'tournament' | 'board' | null>(null);
 
   if (successType) {
-    return (
-      <SuccessModal
-        type={successType}
-        onBack={() => { setSuccessType(null); setView('hub'); router.push('/'); }}
-      />
-    );
+    return <SuccessModal type={successType} onBack={() => { setSuccessType(null); setView('hub'); router.push('/'); }} />;
   }
-
   if (view === 'tournament') {
     return <TournamentForm onBack={() => setView('hub')} onSuccess={() => setSuccessType('tournament')} />;
   }
-
   if (view === 'board') {
     return <BoardForm onBack={() => setView('hub')} onSuccess={() => setSuccessType('board')} />;
   }
-
   return <HubScreen onSelect={setView} />;
 }
 
@@ -1180,6 +1057,22 @@ const styles = StyleSheet.create({
   label: { fontSize: 14, fontWeight: '600', color: '#003333', marginBottom: 6, marginTop: 10 },
   optional: { fontSize: 12, fontWeight: '400', color: '#a0b8b8' },
   bracketSettingsHint: { fontSize: 12, color: '#a0b8b8', marginBottom: 6 },
+  sectionDivider: { height: 1, backgroundColor: '#e0d8c8', marginTop: 20, marginBottom: 8 },
+  formatToggleRow: { gap: 8, marginBottom: 8 },
+  formatOption: { backgroundColor: '#fff', borderRadius: 12, padding: 14, borderWidth: 1.5, borderColor: '#e0d8c8' },
+  formatOptionActive: { borderColor: '#008080', backgroundColor: '#e8f4f4' },
+  formatOptionText: { fontSize: 15, color: '#5a7a7a', fontWeight: '600' },
+  formatOptionTextActive: { color: '#008080' },
+  formatOptionHint: { fontSize: 12, color: '#a0b8b8', marginTop: 2 },
+  togglePill: { width: 50, height: 28, borderRadius: 14, backgroundColor: '#e0d8c8', justifyContent: 'center', paddingHorizontal: 3 },
+  togglePillActive: { backgroundColor: '#008080' },
+  toggleThumb: { width: 22, height: 22, borderRadius: 11, backgroundColor: '#fff', alignSelf: 'flex-start' },
+  toggleThumbActive: { alignSelf: 'flex-end' },
+  courtNameRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
+  removeCourtBtn: { padding: 8 },
+  removeCourtText: { fontSize: 16, color: '#cc4444' },
+  addCourtBtn: { borderWidth: 1, borderColor: '#008080', borderRadius: 10, paddingVertical: 10, alignItems: 'center', marginBottom: 8, backgroundColor: '#e0f5f5' },
+  addCourtBtnText: { color: '#008080', fontWeight: 'bold', fontSize: 14 },
   bracketPickerContainer: { backgroundColor: '#fff', borderRadius: 12, borderWidth: 1, borderColor: '#e0d8c8', marginBottom: 12, overflow: 'hidden' },
   bracketPickerItem: { padding: 14, borderBottomWidth: 1, borderBottomColor: '#f0e8d8' },
   bracketPickerItemActive: { backgroundColor: '#f5ede0' },

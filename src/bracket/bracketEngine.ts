@@ -190,6 +190,11 @@ export function generateBracket(bracketSize: number, seeds: (string | null)[]): 
   if (seeds.length !== bracketSize) {
     throw new Error(`seeds length (${seeds.length}) must equal bracketSize (${bracketSize})`);
   }
+  // Minimum bracket size is 4 — a 2-team double elimination bracket requires
+  // at least a winners game + losers bracket + grand final structure
+  if (bracketSize < 4) {
+    throw new Error(`Minimum bracket size is 4 (minimum 2 real teams). Got bracketSize=${bracketSize}.`);
+  }
 
   const wRounds = log2(bracketSize);
   const allGames: BracketGame[] = [];
@@ -274,21 +279,28 @@ export function generateBracket(bracketSize: number, seeds: (string | null)[]): 
   //   isDropin(lr) = lr <= 2 || lr % 2 === 0
   //   isSurvivors(lr) = lr > 2 && lr % 2 === 1
 
+  // Count real (non-bye) WR1 games — determines L-R1 structure
+  const realWR1Count = wR1Games.filter(g => !g.isBye).length;
+  // L-R1 needs ceil(realWR1Count / 2) games — each LR1 game takes 2 WR1 losers
+  // For power-of-2 team counts this equals bracketSize/4 as before
+  // For non-power-of-2 this is smaller, matching the actual loser count
+  const lR1GameCount = Math.max(1, Math.ceil(realWR1Count / 2));
+
   const lRounds = (wRounds - 1) * 2;
   const losersGames: BracketGame[] = [];
   const losersByRound: BracketGame[][] = [];
 
-  let prevLRoundCount = bracketSize / 4; // LR1 game count
+  let prevLRoundCount = lR1GameCount; // LR1 game count (corrected)
 
   for (let lr = 1; lr <= lRounds; lr++) {
-    // LR1 and LR2 are both full-count dropin rounds
-    // LR3+ alternates: odd = survivors (halves), even = dropin (same count)
     let gamesThisRound: number;
-    if (lr <= 2) {
-      gamesThisRound = bracketSize / 4;
+    if (lr === 1) {
+      gamesThisRound = lR1GameCount; // use corrected count
+    } else if (lr === 2) {
+      gamesThisRound = lR1GameCount; // LR2 matches LR1 count (dropin round)
     } else if (lr % 2 === 1) {
       // survivors round: halves
-      gamesThisRound = Math.max(1, prevLRoundCount / 2);
+      gamesThisRound = Math.max(1, Math.ceil(prevLRoundCount / 2));
     } else {
       // dropin round: same count as previous
       gamesThisRound = prevLRoundCount;
@@ -458,7 +470,7 @@ export function generateBracketFromTeams(teams: string[]): BracketStructure {
     throw new Error(`Automatic bracket generation supports a maximum of ${MAX_AUTO_BRACKET_TEAMS} teams per division. This division has ${teamCount} teams.`);
   }
 
-  const bracketSize = nextPowerOfTwo(teamCount);
+  const bracketSize = Math.max(4, nextPowerOfTwo(teamCount));
   const seedPlacements = generateSeedPlacements(bracketSize, teamCount);
 
   // Map slot positions to actual team names (null = BYE)

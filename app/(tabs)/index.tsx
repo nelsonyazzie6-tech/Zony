@@ -447,6 +447,14 @@ export default function HomeScreen() {
                     </View>
                   )}
 
+                  {t.tournamentFormat && (
+                    <View style={[styles.formatBadge, { backgroundColor: `${sportColor}18` }]}>
+                      <Text style={[styles.formatBadgeText, { color: sportColor }]}>
+                        {t.tournamentFormat === 'double' ? 'DOUBLE ELIMINATION' : 'SINGLE ELIMINATION'}
+                      </Text>
+                    </View>
+                  )}
+
                   {t.organizerName ? (
                     <View style={styles.organizerRow}>
                       {t.organizerPhoto ? (
@@ -623,6 +631,8 @@ const styles = StyleSheet.create({
   cardBody: { paddingHorizontal: 14, paddingTop: 10, paddingBottom: 12 },
   name: { fontSize: 17, fontWeight: 'bold', color: '#f5ede0', flex: 1, marginRight: 8, textTransform: 'uppercase', letterSpacing: 1.2 },
   sportBadge: { fontSize: 11, backgroundColor: '#f5ede0', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, overflow: 'hidden', fontWeight: 'bold' },
+  formatBadge: { alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20, marginBottom: 8 },
+  formatBadgeText: { fontSize: 11, fontWeight: '700', letterSpacing: 0.5 },
   detailRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 },
   detail: { fontSize: 14, color: '#5a5a5a' },
   dateText: { fontSize: 14, fontWeight: '700' },

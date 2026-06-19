@@ -70,9 +70,24 @@ export type ConstraintValidationResult =
 
 // ─── Time Utilities ───────────────────────────────────────────────────────────
 
-/** Parse 'HH:MM' into total minutes since midnight */
+/** Parse 'HH:MM' or 'H:MM AM/PM' into total minutes since midnight */
 function parseTime(time: string): number {
-  const [h, m] = time.split(':').map(Number);
+  if (!time) return 0;
+  const cleaned = time.trim().toUpperCase();
+
+  // Handle AM/PM format as a safety net
+  const ampmMatch = cleaned.match(/^(\d{1,2})(?::(\d{2}))?\s*(AM|PM)$/);
+  if (ampmMatch) {
+    let h = parseInt(ampmMatch[1], 10);
+    const m = parseInt(ampmMatch[2] || '0', 10);
+    if (ampmMatch[3] === 'AM') { if (h === 12) h = 0; }
+    else { if (h !== 12) h += 12; }
+    return h * 60 + m;
+  }
+
+  // Standard HH:MM format
+  const [h, m] = cleaned.split(':').map(Number);
+  if (isNaN(h) || isNaN(m)) return 0;
   return h * 60 + m;
 }
 

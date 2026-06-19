@@ -77,9 +77,13 @@ export default function BracketGenerateScreen() {
     if (!settings) return;
 
     try {
-      // Parse tournament dates from the date string
       const dates = parseTournamentDates(tournament.date);
-      const courts = Array.from({ length: settings.courts || 2 }, (_, i) => `Court ${i + 1}`);
+      // Support both new courtNames array and legacy courts number
+      const courts = resolveCourts(settings);
+      if (courts.length === 0) {
+        setConstraintError('No courts configured. Please edit the tournament and add at least one court.');
+        return;
+      }
       const input: SchedulerInput = {
         dates,
         courts,
@@ -132,7 +136,7 @@ export default function BracketGenerateScreen() {
     try {
       const settings = tournament.bracketSettings || {};
       const dates = parseTournamentDates(tournament.date);
-      const courts = Array.from({ length: settings.courts || 2 }, (_, i) => `Court ${i + 1}`);
+      const courts = resolveCourts(settings);
 
       // Step 1: Random shuffle (the ONLY randomness in the system)
       const shuffled = [...teams].sort(() => Math.random() - 0.5);
@@ -282,7 +286,8 @@ export default function BracketGenerateScreen() {
 
   const settings = tournament.bracketSettings || {};
   const dates = parseTournamentDates(tournament.date);
-  const courts = settings.courts || 2;
+  const resolvedCourts = resolveCourts(settings);
+  const courts = resolvedCourts.length;
   const gameDuration = settings.gameDurationMinutes || 50;
   const buffer = settings.bufferMinutes || 10;
   const format = settings.championshipFormat || 'single';
@@ -304,7 +309,7 @@ export default function BracketGenerateScreen() {
         <Row label="Format" value="Double Elimination" />
         <Row label="Championship" value={format === 'single' ? 'Single Game' : 'Double Game (bracket reset)'} />
         <Row label="Courts" value={`${courts}`} />
-        <Row label="Daily Hours" value={`${settings.dailyStartTime || '08:00'} – ${settings.dailyEndTime || '20:00'}`} />
+        <Row label="Daily Hours" value={`${formatTimeAmPm(settings.dailyStartTime || '08:00')} to ${formatTimeAmPm(settings.dailyEndTime || '20:00')}`} />
         <Row label="Game Duration" value={`${gameDuration} min + ${buffer} min buffer`} />
         <Row label="Tournament Dates" value={dates.join(', ')} />
       </View>
@@ -367,6 +372,29 @@ function nextPow2(n: number): number {
   let p = 1;
   while (p < n) p *= 2;
   return p;
+}
+
+/** Resolves court list from both new courtNames array and legacy courts number */
+function resolveCourts(settings: any): string[] {
+  if (settings.courtNames && Array.isArray(settings.courtNames) && settings.courtNames.length > 0) {
+    return settings.courtNames.filter((c: string) => c?.trim());
+  }
+  if (settings.courts && typeof settings.courts === 'number' && settings.courts > 0) {
+    return Array.from({ length: settings.courts }, (_, i) => `Court ${i + 1}`);
+  }
+  return [];
+}
+
+/** Converts 24h time string to AM/PM display */
+function formatTimeAmPm(time24: string): string {
+  if (!time24 || !time24.includes(':')) return time24;
+  const [hStr, mStr] = time24.split(':');
+  let h = parseInt(hStr, 10);
+  const m = mStr || '00';
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  if (h === 0) h = 12;
+  else if (h > 12) h -= 12;
+  return `${h}:${m} ${ampm}`;
 }
 
 function parseTournamentDates(dateStr: string): string[] {

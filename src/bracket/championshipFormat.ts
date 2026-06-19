@@ -84,7 +84,7 @@ export function resolveReset(winnerId: string): ChampionshipDecision {
  */
 export function getChampionshipExplanation(format: ChampionshipFormat): string {
   if (format === 'single') {
-    return 'This tournament\'s championship is a single game — whoever wins it is champion, regardless of bracket path.';
+    return 'This tournament\'s championship is a single game. Whoever wins it is champion, regardless of bracket path.';
   }
   return 'This tournament\'s championship may require a second game. If the team coming from the losers bracket wins the first championship game, a second game will be played to determine the champion.';
 }

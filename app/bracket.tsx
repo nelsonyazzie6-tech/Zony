@@ -1,39 +1,11 @@
-/**
- * Bracket Screen
- *
- * Displays the live bracket for a tournament division.
- * - All users: read-only view of games, teams, courts, times, and results
- * - Organizer: result entry modal to mark a winner for each game
- *
- * Route: /bracket?tournamentId=...&divisionId=...
- *
- * Mobile-first: team names are primary, seeds are secondary.
- * Organized by bracket section (Winners, Losers, Final) and round.
- */
-
+import { auth, db } from '@/firebaseConfig';
+import { enterResult } from '@/src/bracket/bracketProgression';
+import { BracketPaths } from '@/src/bracket/bracketSchema';
 import { Rajdhani_700Bold, useFonts } from '@expo-google-fonts/rajdhani';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import {
-    collection,
-    doc,
-    getDocs,
-    onSnapshot,
-    writeBatch
-} from 'firebase/firestore';
+import { collection, doc, getDocs, onSnapshot, writeBatch } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
-import {
-    ActivityIndicator,
-    Alert,
-    Modal,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
-} from 'react-native';
-import { auth, db } from '../firebaseConfig';
-import { enterResult } from '../src/bracket/bracketProgression';
-import { BracketPaths } from '../src/bracket/bracketSchema';
+import { ActivityIndicator, Alert, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 type GameDoc = {
   id: string;
@@ -81,8 +53,6 @@ export default function BracketScreen() {
   const [games, setGames] = useState<GameDoc[]>([]);
   const [bracketMeta, setBracketMeta] = useState<BracketMeta | null>(null);
   const [regenerating, setRegenerating] = useState(false);
-
-  // Result entry modal state
   const [selectedGame, setSelectedGame] = useState<GameDoc | null>(null);
   const [topScore, setTopScore] = useState('');
   const [bottomScore, setBottomScore] = useState('');
@@ -90,80 +60,45 @@ export default function BracketScreen() {
 
   useEffect(() => {
     if (!tournamentId || !divisionId) return;
-
-    // Listen to bracket metadata
     const bracketRef = doc(db, BracketPaths.bracket(tournamentId, divisionId));
     const unsubBracket = onSnapshot(bracketRef, (snap) => {
       if (snap.exists()) setBracketMeta(snap.data() as BracketMeta);
     }, (e) => console.log('Bracket meta listener error:', e));
-
-    // Listen to all games
     const gamesRef = collection(db, BracketPaths.games(tournamentId, divisionId));
     const unsubGames = onSnapshot(gamesRef, (snap) => {
-      const docs = snap.docs.map(d => d.data() as GameDoc);
-      setGames(docs);
+      setGames(snap.docs.map(d => d.data() as GameDoc));
       setLoading(false);
-    }, (e) => {
-      console.log('Games listener error:', e);
-      setLoading(false);
-    });
-
-    return () => {
-      unsubBracket();
-      unsubGames();
-    };
+    }, (e) => { console.log('Games listener error:', e); setLoading(false); });
+    return () => { unsubBracket(); unsubGames(); };
   }, [tournamentId, divisionId]);
 
-  // Per spec: regeneration only allowed before any games have results
   const anyGamesPlayed = games.some(g => g.status === 'completed' && !g.isBye);
   const canRegenerate = isOwner && !anyGamesPlayed && bracketMeta?.status !== 'completed';
 
   const handleRegenerateBracket = () => {
     if (!canRegenerate) {
-      Alert.alert(
-        'Cannot Regenerate',
-        'The bracket cannot be regenerated once games have been played. To make changes, the tournament must be in its initial state with no recorded results.'
-      );
+      Alert.alert('Cannot Regenerate', 'The bracket cannot be regenerated once games have been played.');
       return;
     }
-
     Alert.alert(
       'Regenerate Bracket?',
       'This will delete the current bracket and schedule, then regenerate with a new random seeding. No games have been played yet, so no results will be lost.\n\nThis cannot be undone.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Regenerate',
-          style: 'destructive',
+          text: 'Regenerate', style: 'destructive',
           onPress: async () => {
             setRegenerating(true);
             try {
-              // Delete all existing game documents
-              const gamesSnap = await getDocs(
-                collection(db, BracketPaths.games(tournamentId!, divisionId!))
-              );
+              const gamesSnap = await getDocs(collection(db, BracketPaths.games(tournamentId!, divisionId!)));
               const batch = writeBatch(db);
               gamesSnap.docs.forEach(d => batch.delete(d.ref));
-
-              // Reset bracket metadata and tournament bracketStatus
-              const bracketRef = doc(db, BracketPaths.bracket(tournamentId!, divisionId!));
-              batch.delete(bracketRef);
-
-              // Reset tournament so Generate Bracket button reappears
-              batch.update(doc(db, 'tournaments', tournamentId!), {
-                bracketStatus: 'registration_open',
-              });
-
+              batch.delete(doc(db, BracketPaths.bracket(tournamentId!, divisionId!)));
+              batch.update(doc(db, 'tournaments', tournamentId!), { bracketStatus: 'registration_open' });
               await batch.commit();
-
-              // Navigate back to tournament screen so organizer can regenerate
-              Alert.alert(
-                'Bracket Cleared',
-                'The bracket has been removed. Tap "Generate Bracket" on the tournament page to generate a new one.',
-                [{ text: 'OK', onPress: () => router.back() }]
-              );
+              Alert.alert('Bracket Cleared', 'Tap "Generate Bracket" on the tournament page to generate a new one.',
+                [{ text: 'OK', onPress: () => router.back() }]);
             } catch (e: any) {
-              console.error('Regeneration error:', e);
               Alert.alert('Error', 'Failed to clear the bracket. Please try again.');
             } finally {
               setRegenerating(false);
@@ -188,13 +123,9 @@ export default function BracketScreen() {
     setSubmitting(true);
     try {
       await enterResult({
-        tournamentId,
-        divisionId,
+        tournamentId, divisionId,
         gameId: selectedGame.id,
-        winnerId,
-        winnerName,
-        loserId,
-        loserName,
+        winnerId, winnerName, loserId, loserName,
         topScore: topScore ? parseInt(topScore) : null,
         bottomScore: bottomScore ? parseInt(bottomScore) : null,
         enteredByUid: user.uid,
@@ -207,212 +138,90 @@ export default function BracketScreen() {
     }
   };
 
-  if (loading) {
-    return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#008080" />
-      </View>
-    );
-  }
+  if (loading) return <View style={styles.centered}><ActivityIndicator size="large" color="#008080" /></View>;
 
-  // Group games by bracket section and round
-  const winnersGames = games
-    .filter(g => g.bracket === 'winners' && !g.isBye)
-    .sort((a, b) => a.round !== b.round ? a.round - b.round : a.position - b.position);
-
-  const losersGames = games
-    .filter(g => g.bracket === 'losers')
-    .sort((a, b) => a.round !== b.round ? a.round - b.round : a.position - b.position);
-
-  const finalGames = games
-    .filter(g => g.bracket === 'final')
-    .sort((a, b) => a.round - b.round);
-
+  const winnersGames = games.filter(g => g.bracket === 'winners' && !g.isBye).sort((a, b) => a.round !== b.round ? a.round - b.round : a.position - b.position);
+  const losersGames = games.filter(g => g.bracket === 'losers').sort((a, b) => a.round !== b.round ? a.round - b.round : a.position - b.position);
+  const finalGames = games.filter(g => g.bracket === 'final').sort((a, b) => a.round - b.round);
   const byeGames = games.filter(g => g.isBye);
-
   const winnersRounds = [...new Set(winnersGames.map(g => g.round))].sort((a, b) => a - b);
   const losersRounds = [...new Set(losersGames.map(g => g.round))].sort((a, b) => a - b);
 
   return (
     <View style={styles.container}>
-      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
           <Text style={styles.backText}>← Back</Text>
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>
-          BRACKET
-        </Text>
-        {isOwner && (
-          <Text style={styles.organizerBadge}>Organizer</Text>
-        )}
+        <Text style={[styles.headerTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>BRACKET</Text>
+        {isOwner && <Text style={styles.organizerBadge}>Organizer</Text>}
       </View>
 
-      {/* Champion banner */}
       {bracketMeta?.championTeamId && (
         <View style={styles.championBanner}>
-          <Text style={[styles.championLabel, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>
-            🏆 CHAMPION
-          </Text>
-          <Text style={styles.championName}>
-            {games.find(g => g.winnerId === bracketMeta.championTeamId)?.winnerName || ''}
-          </Text>
+          <Text style={[styles.championLabel, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>🏆 CHAMPION</Text>
+          <Text style={styles.championName}>{games.find(g => g.winnerId === bracketMeta.championTeamId)?.winnerName || ''}</Text>
         </View>
       )}
 
-      {/* Info */}
       {isOwner && !bracketMeta?.championTeamId && (
         <View style={styles.organizerHint}>
-          <Text style={styles.organizerHintText}>
-            Tap any ready game to enter the result.
-          </Text>
+          <Text style={styles.organizerHintText}>Tap any ready game to enter the result.</Text>
           {canRegenerate && (
             <TouchableOpacity onPress={handleRegenerateBracket} disabled={regenerating}>
-              <Text style={styles.regenerateLink}>
-                {regenerating ? 'Clearing...' : 'Remove team & regenerate bracket'}
-              </Text>
+              <Text style={styles.regenerateLink}>{regenerating ? 'Clearing...' : 'Remove team & regenerate bracket'}</Text>
             </TouchableOpacity>
           )}
         </View>
       )}
 
       <ScrollView style={styles.scroll} contentContainerStyle={{ padding: 16, paddingBottom: 60 }}>
-
-        {/* Byes */}
         {byeGames.length > 0 && (
           <Section title="BYES (AUTO-ADVANCED)" fontsLoaded={fontsLoaded}>
-            {byeGames.map(game => (
-              <GameCard
-                key={game.id}
-                game={game}
-                isOwner={isOwner}
-                onPress={() => {}}
-                fontsLoaded={fontsLoaded}
-              />
-            ))}
+            {byeGames.map(game => <GameCard key={game.id} game={game} isOwner={isOwner} onPress={() => {}} fontsLoaded={fontsLoaded} />)}
           </Section>
         )}
-
-        {/* Winners Bracket */}
         {winnersRounds.map(round => (
-          <Section
-            key={`w-${round}`}
-            title={round === Math.max(...winnersRounds) ? 'WINNERS FINAL' : `WINNERS BRACKET — ROUND ${round}`}
-            fontsLoaded={fontsLoaded}
-          >
-            {winnersGames.filter(g => g.round === round).map(game => (
-              <GameCard
-                key={game.id}
-                game={game}
-                isOwner={isOwner}
-                onPress={() => handleGamePress(game)}
-                fontsLoaded={fontsLoaded}
-              />
-            ))}
+          <Section key={`w-${round}`} title={round === Math.max(...winnersRounds) ? 'WINNERS FINAL' : `WINNERS BRACKET — ROUND ${round}`} fontsLoaded={fontsLoaded}>
+            {winnersGames.filter(g => g.round === round).map(game => <GameCard key={game.id} game={game} isOwner={isOwner} onPress={() => handleGamePress(game)} fontsLoaded={fontsLoaded} />)}
           </Section>
         ))}
-
-        {/* Losers Bracket */}
         {losersRounds.map(round => (
-          <Section
-            key={`l-${round}`}
-            title={round === Math.max(...losersRounds) ? 'LOSERS FINAL' : `LOSERS BRACKET — ROUND ${round}`}
-            fontsLoaded={fontsLoaded}
-          >
-            {losersGames.filter(g => g.round === round).map(game => (
-              <GameCard
-                key={game.id}
-                game={game}
-                isOwner={isOwner}
-                onPress={() => handleGamePress(game)}
-                fontsLoaded={fontsLoaded}
-              />
-            ))}
+          <Section key={`l-${round}`} title={round === Math.max(...losersRounds) ? 'LOSERS FINAL' : `LOSERS BRACKET — ROUND ${round}`} fontsLoaded={fontsLoaded}>
+            {losersGames.filter(g => g.round === round).map(game => <GameCard key={game.id} game={game} isOwner={isOwner} onPress={() => handleGamePress(game)} fontsLoaded={fontsLoaded} />)}
           </Section>
         ))}
-
-        {/* Grand Final */}
         {finalGames.length > 0 && (
           <Section title="CHAMPIONSHIP" fontsLoaded={fontsLoaded}>
-            {finalGames.map(game => (
-              <GameCard
-                key={game.id}
-                game={game}
-                isOwner={isOwner}
-                onPress={() => handleGamePress(game)}
-                fontsLoaded={fontsLoaded}
-              />
-            ))}
+            {finalGames.map(game => <GameCard key={game.id} game={game} isOwner={isOwner} onPress={() => handleGamePress(game)} fontsLoaded={fontsLoaded} />)}
           </Section>
         )}
-
-        {/* Bracket reset note for double format */}
         {bracketMeta?.championshipFormat === 'double' && !bracketMeta?.championTeamId && (
-          <Text style={styles.formatNote}>
-            Double Championship: if the losers-bracket team wins the first championship game, a second game will be played.
-          </Text>
+          <Text style={styles.formatNote}>Double Championship: if the losers-bracket team wins the first championship game, a second game will be played.</Text>
         )}
-
       </ScrollView>
 
-      {/* Result Entry Modal */}
       <Modal visible={!!selectedGame} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalBox}>
-            <Text style={[styles.modalTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>
-              ENTER RESULT
-            </Text>
+            <Text style={[styles.modalTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>ENTER RESULT</Text>
             <Text style={styles.modalGameId}>{selectedGame?.id}</Text>
-
             {selectedGame && (
               <>
                 <Text style={styles.modalTeamLabel}>Who won?</Text>
-
-                <TouchableOpacity
-                  style={styles.winnerBtn}
-                  onPress={() => {
-                    if (!selectedGame.topTeamId || !selectedGame.topTeamName) return;
-                    if (!selectedGame.bottomTeamId || !selectedGame.bottomTeamName) return;
-                    handleEnterResult(
-                      selectedGame.topTeamId,
-                      selectedGame.topTeamName,
-                      selectedGame.bottomTeamId,
-                      selectedGame.bottomTeamName,
-                    );
-                  }}
-                  disabled={submitting || !selectedGame.topTeamId}
-                >
+                <TouchableOpacity style={styles.winnerBtn}
+                  onPress={() => { if (!selectedGame.topTeamId || !selectedGame.topTeamName || !selectedGame.bottomTeamId || !selectedGame.bottomTeamName) return; handleEnterResult(selectedGame.topTeamId, selectedGame.topTeamName, selectedGame.bottomTeamId, selectedGame.bottomTeamName); }}
+                  disabled={submitting || !selectedGame.topTeamId}>
                   <Text style={styles.winnerBtnText}>{selectedGame.topTeamName || 'TBD'}</Text>
                 </TouchableOpacity>
-
                 <Text style={styles.vsText}>vs</Text>
-
-                <TouchableOpacity
-                  style={styles.winnerBtn}
-                  onPress={() => {
-                    if (!selectedGame.bottomTeamId || !selectedGame.bottomTeamName) return;
-                    if (!selectedGame.topTeamId || !selectedGame.topTeamName) return;
-                    handleEnterResult(
-                      selectedGame.bottomTeamId,
-                      selectedGame.bottomTeamName,
-                      selectedGame.topTeamId,
-                      selectedGame.topTeamName,
-                    );
-                  }}
-                  disabled={submitting || !selectedGame.bottomTeamId}
-                >
+                <TouchableOpacity style={styles.winnerBtn}
+                  onPress={() => { if (!selectedGame.bottomTeamId || !selectedGame.bottomTeamName || !selectedGame.topTeamId || !selectedGame.topTeamName) return; handleEnterResult(selectedGame.bottomTeamId, selectedGame.bottomTeamName, selectedGame.topTeamId, selectedGame.topTeamName); }}
+                  disabled={submitting || !selectedGame.bottomTeamId}>
                   <Text style={styles.winnerBtnText}>{selectedGame.bottomTeamName || 'TBD'}</Text>
                 </TouchableOpacity>
-
-                {submitting && (
-                  <ActivityIndicator color="#008080" style={{ marginTop: 12 }} />
-                )}
-
-                <TouchableOpacity
-                  style={styles.modalCancelBtn}
-                  onPress={() => setSelectedGame(null)}
-                  disabled={submitting}
-                >
+                {submitting && <ActivityIndicator color="#008080" style={{ marginTop: 12 }} />}
+                <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setSelectedGame(null)} disabled={submitting}>
                   <Text style={styles.modalCancelText}>Cancel</Text>
                 </TouchableOpacity>
               </>
@@ -424,22 +233,10 @@ export default function BracketScreen() {
   );
 }
 
-// ─── Sub-components ───────────────────────────────────────────────────────────
-
-function Section({
-  title,
-  children,
-  fontsLoaded,
-}: {
-  title: string;
-  children: React.ReactNode;
-  fontsLoaded: boolean;
-}) {
+function Section({ title, children, fontsLoaded }: { title: string; children: React.ReactNode; fontsLoaded: boolean }) {
   return (
     <View style={sectionStyles.container}>
-      <Text style={[sectionStyles.title, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>
-        {title}
-      </Text>
+      <Text style={[sectionStyles.title, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>{title}</Text>
       {children}
     </View>
   );
@@ -450,61 +247,19 @@ const sectionStyles = StyleSheet.create({
   title: { fontSize: 13, color: '#008080', letterSpacing: 1, marginBottom: 8 },
 });
 
-function GameCard({
-  game,
-  isOwner,
-  onPress,
-  fontsLoaded,
-}: {
-  game: GameDoc;
-  isOwner: boolean;
-  onPress: () => void;
-  fontsLoaded: boolean;
-}) {
+function GameCard({ game, isOwner, onPress, fontsLoaded }: { game: GameDoc; isOwner: boolean; onPress: () => void; fontsLoaded: boolean }) {
   const isCompleted = game.status === 'completed';
   const isReady = game.status === 'ready';
   const isPending = game.status === 'pending';
   const isBye = game.isBye;
-
   const canTap = isOwner && (isReady || isCompleted) && !isBye;
-
   return (
-    <TouchableOpacity
-      style={[
-        cardStyles.card,
-        isCompleted && cardStyles.completed,
-        isReady && isOwner && cardStyles.ready,
-        isPending && cardStyles.pending,
-      ]}
-      onPress={onPress}
-      activeOpacity={canTap ? 0.75 : 1}
-      disabled={!canTap}
-    >
-      {/* Game ID */}
+    <TouchableOpacity style={[cardStyles.card, isCompleted && cardStyles.completed, isReady && isOwner && cardStyles.ready, isPending && cardStyles.pending]}
+      onPress={onPress} activeOpacity={canTap ? 0.75 : 1} disabled={!canTap}>
       <Text style={cardStyles.gameId}>{game.id}</Text>
-
-      {/* Schedule info */}
-      {game.scheduledDate && (
-        <Text style={cardStyles.schedule}>
-          {game.courtName} · {game.scheduledDate} {game.scheduledTime}
-        </Text>
-      )}
-
-      {/* Teams */}
-      <TeamRow
-        teamName={game.topTeamName}
-        score={game.topScore}
-        isWinner={isCompleted && game.winnerId === game.topTeamId}
-        fontsLoaded={fontsLoaded}
-      />
-      <TeamRow
-        teamName={game.bottomTeamName}
-        score={game.bottomScore}
-        isWinner={isCompleted && game.winnerId === game.bottomTeamId}
-        fontsLoaded={fontsLoaded}
-      />
-
-      {/* Status badge */}
+      {game.scheduledDate && <Text style={cardStyles.schedule}>{game.courtName} · {game.scheduledDate} {game.scheduledTime}</Text>}
+      <TeamRow teamName={game.topTeamName} score={game.topScore} isWinner={isCompleted && game.winnerId === game.topTeamId} fontsLoaded={fontsLoaded} />
+      <TeamRow teamName={game.bottomTeamName} score={game.bottomScore} isWinner={isCompleted && game.winnerId === game.bottomTeamId} fontsLoaded={fontsLoaded} />
       <View style={cardStyles.statusRow}>
         {isBye && <Text style={cardStyles.badgeBye}>BYE</Text>}
         {isPending && !isBye && <Text style={cardStyles.badgePending}>WAITING</Text>}
@@ -515,28 +270,10 @@ function GameCard({
   );
 }
 
-function TeamRow({
-  teamName,
-  score,
-  isWinner,
-  fontsLoaded,
-}: {
-  teamName: string | null;
-  score: number | null;
-  isWinner: boolean;
-  fontsLoaded: boolean;
-}) {
+function TeamRow({ teamName, score, isWinner, fontsLoaded }: { teamName: string | null; score: number | null; isWinner: boolean; fontsLoaded: boolean }) {
   return (
     <View style={cardStyles.teamRow}>
-      <Text
-        style={[
-          cardStyles.teamName,
-          fontsLoaded && isWinner && { fontFamily: 'Rajdhani_700Bold' },
-          isWinner && cardStyles.teamNameWinner,
-          !teamName && cardStyles.teamNameTBD,
-        ]}
-        numberOfLines={1}
-      >
+      <Text style={[cardStyles.teamName, fontsLoaded && isWinner && { fontFamily: 'Rajdhani_700Bold' }, isWinner && cardStyles.teamNameWinner, !teamName && cardStyles.teamNameTBD]} numberOfLines={1}>
         {teamName || 'TBD'}
       </Text>
       {score !== null && <Text style={[cardStyles.score, isWinner && cardStyles.scoreWinner]}>{score}</Text>}
@@ -546,14 +283,7 @@ function TeamRow({
 }
 
 const cardStyles = StyleSheet.create({
-  card: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: '#e0d8c8',
-  },
+  card: { backgroundColor: '#fff', borderRadius: 12, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: '#e0d8c8' },
   completed: { borderColor: '#008080', borderWidth: 1.5 },
   ready: { borderColor: '#B8860B', borderWidth: 1.5 },
   pending: { opacity: 0.6 },
@@ -573,20 +303,10 @@ const cardStyles = StyleSheet.create({
   badgeCompleted: { fontSize: 10, color: '#008080', backgroundColor: '#e8f4f4', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
 });
 
-// ─── Main Styles ──────────────────────────────────────────────────────────────
-
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f5ede0' },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f5ede0' },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingTop: 56,
-    paddingBottom: 12,
-    backgroundColor: '#003333',
-  },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingTop: 56, paddingBottom: 12, backgroundColor: '#003333' },
   backBtn: { padding: 4 },
   backText: { color: '#a0c8c8', fontSize: 15 },
   headerTitle: { fontSize: 20, color: '#fff', letterSpacing: 1.5 },
