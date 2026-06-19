@@ -909,10 +909,15 @@ export default function TournamentScreen() {
               <TouchableOpacity
                 style={[styles.tab, activeTab === 'bracket' && { backgroundColor: sportColor }]}
                 onPress={() => {
-                  const firstDivision = tournament?.divisions?.[0] || 'open';
                   router.push({
                     pathname: '/bracket',
-                    params: { tournamentId: id, divisionId: firstDivision, postedBy },
+                    params: {
+                      tournamentId: id,
+                      divisionId: tournament?.divisions?.[0] || 'open',
+                      postedBy,
+                      divisions: (tournament?.divisions || []).join(','),
+                      tournamentName: tournament?.name || '',
+                    },
                   });
                 }}
               >
@@ -1561,7 +1566,7 @@ const styles = StyleSheet.create({
   ownerActions: { gap: 10, marginBottom: 20 },
   editBtn: { backgroundColor: '#008080', borderRadius: 12, paddingVertical: 16, alignItems: 'center' },
   editBtnText: { color: '#fff', fontSize: 18, letterSpacing: 1 },
-  generateBracketBtn: { backgroundColor: '#B8860B', borderRadius: 12, paddingVertical: 16, alignItems: 'center', marginTop: 10 },
+  generateBracketBtn: { backgroundColor: '#B8860B', borderRadius: 12, paddingVertical: 16, alignItems: 'center' },
   generateBracketBtnText: { color: '#fff', fontSize: 18, letterSpacing: 1 },
   deleteBtn: { backgroundColor: '#1a1a2e', borderRadius: 12, paddingVertical: 16, alignItems: 'center' },
   deleteBtnText: { color: '#fff', fontSize: 18, letterSpacing: 1 },

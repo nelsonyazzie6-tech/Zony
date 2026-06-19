@@ -399,6 +399,33 @@ function TournamentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
       const tournamentRef = await addDoc(collection(db, 'tournaments'), {
         name, sport, date: `${startDate} - ${endDate}`,
         startDateValue: startDateObj ? Timestamp.fromDate(startDateObj) : null,
+        tournamentDays: (() => {
+          if (!startDateObj) return [];
+          const days: string[] = [];
+          // Parse end date by trying multiple formats
+          let end = startDateObj;
+          if (endDate) {
+            // Try direct parse, then append year hint
+            let ep = new Date(endDate);
+            if (isNaN(ep.getTime())) ep = new Date(endDate + ', ' + startDateObj.getFullYear());
+            if (!isNaN(ep.getTime())) end = ep;
+          }
+          const cur = new Date(startDateObj.getFullYear(), startDateObj.getMonth(), startDateObj.getDate());
+          const endNorm = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+          while (cur <= endNorm && days.length < 3) {
+            days.push(`${cur.getFullYear()}-${String(cur.getMonth()+1).padStart(2,'0')}-${String(cur.getDate()).padStart(2,'0')}`);
+            cur.setDate(cur.getDate() + 1);
+          }
+          return days;
+        })(),
+        tournamentDuration: (() => {
+          if (!startDateObj || !endDate) return 1;
+          let ep = new Date(endDate);
+          if (isNaN(ep.getTime())) ep = new Date(endDate + ', ' + startDateObj.getFullYear());
+          if (isNaN(ep.getTime())) return 1;
+          const diff = Math.round((ep.getTime() - startDateObj.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+          return Math.min(Math.max(diff, 1), 3);
+        })(),
         address: finalAddress, city: finalCity, state: finalState, zip: finalZip,
         location: `${finalCity}, ${finalState}`, spots: parseInt(spots) || 0,
         divisionFees,

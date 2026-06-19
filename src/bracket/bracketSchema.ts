@@ -131,7 +131,7 @@ type Timestamp = { seconds: number; nanoseconds: number } | { toDate: () => Date
 
 export const BracketPaths = {
   bracket: (tournamentId: string, divisionId: string) =>
-    `tournaments/${tournamentId}/divisions/${divisionId}/bracket`,
+    `tournaments/${tournamentId}/divisions/${divisionId}/bracket/metadata`,
 
   games: (tournamentId: string, divisionId: string) =>
     `tournaments/${tournamentId}/divisions/${divisionId}/games`,

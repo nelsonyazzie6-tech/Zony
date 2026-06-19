@@ -390,9 +390,34 @@ export default function EditTournamentScreen() {
       const newDate = `${startDate} - ${endDate}`;
       const newLocation = `${city}, ${state}`;
 
+      // Compute tournamentDays for bracket system
+      const parseDisplayDate = (s: string): Date | null => {
+        let d = new Date(s);
+        if (!isNaN(d.getTime())) return d;
+        // Try appending year from other field
+        const yearMatch = (startDate + ' ' + endDate).match(/\d{4}/);
+        if (yearMatch) { d = new Date(s + ', ' + yearMatch[0]); if (!isNaN(d.getTime())) return d; }
+        return null;
+      };
+      const startParsed = parseDisplayDate(startDate);
+      const endParsed = parseDisplayDate(endDate);
+      const tournamentDays: string[] = [];
+      if (startParsed) {
+        const endD = endParsed || startParsed;
+        const cur = new Date(startParsed.getFullYear(), startParsed.getMonth(), startParsed.getDate());
+        const endNorm = new Date(endD.getFullYear(), endD.getMonth(), endD.getDate());
+        while (cur <= endNorm && tournamentDays.length < 3) {
+          tournamentDays.push(`${cur.getFullYear()}-${String(cur.getMonth()+1).padStart(2,'0')}-${String(cur.getDate()).padStart(2,'0')}`);
+          cur.setDate(cur.getDate() + 1);
+        }
+      }
+      const tournamentDuration = Math.min(Math.max(tournamentDays.length, 1), 3);
+
       await updateDoc(doc(db, 'tournaments', id as string), {
         name, sport,
         date: newDate,
+        tournamentDays,
+        tournamentDuration,
         address, city, state, zip,
         location: newLocation,
         spots: parseInt(spots) || 0,
