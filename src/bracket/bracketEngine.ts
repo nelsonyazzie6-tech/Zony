@@ -98,78 +98,12 @@ export function generateSeedPlacements(bracketSize: number, teamCount: number): 
 }
 
 // ─── Losers Bracket Mapping ───────────────────────────────────────────────────
-
-/**
- * Canonical double-elimination losers-bracket drop mapping.
- *
- * For a bracket of size N, returns a map from winners-bracket game id
- * to the losers-bracket game id that loser drops into.
- *
- * Cross-pairing rule for WR1 → LR1:
- *   Each LR1 game receives TWO losers from WR1.
- *   Standard pairing: game at position i pairs with game at position (gamesPerR1 - 1 - i)
- *   This ensures teams that could have met in WR1 are separated in the losers bracket.
- *   e.g. for 8-team: W-R1-G1 loser + W-R1-G4 loser → L-R1-G1
- *                     W-R1-G2 loser + W-R1-G3 loser → L-R1-G2
- *   For 4-team:       W-R1-G1 loser + W-R1-G2 loser → L-R1-G1
- *
- * WR2+ → corresponding losers rounds:
- *   Winners round R (R >= 2) losers drop into losers round (2R - 2)
- *   One dropin per losers game at that round.
- */
-function buildLoserDropMap(
-  bracketSize: number,
-  winnersGames: BracketGame[],
-  losersGames: BracketGame[]
-): Map<GameId, GameId> {
-  const map = new Map<GameId, GameId>();
-
-  // ── WR1 → LR1 cross-pairing ──────────────────────────────────────────────
-  const wR1Games = winnersGames
-    .filter(g => g.round === 1 && !g.isBye)  // bye games have no real loser to drop
-    .sort((a, b) => a.position - b.position);
-  const lR1Games = losersGames
-    .filter(g => g.round === 1)
-    .sort((a, b) => a.position - b.position);
-
-  // Each LR1 game receives exactly 2 WR1 losers:
-  // L-R1-G1 ← losers from W-R1-G1 and W-R1-G(last)
-  // L-R1-G2 ← losers from W-R1-G2 and W-R1-G(last-1)
-  // etc.
-  const halfW = wR1Games.length; // e.g. 4 for 8-team, 2 for 4-team
-  for (let i = 0; i < lR1Games.length; i++) {
-    const lGame = lR1Games[i];
-    const wTop = wR1Games[i];                      // top half: G1, G2...
-    const wBottom = wR1Games[halfW - 1 - i];       // bottom half: G4, G3... (reversed)
-    if (wTop) map.set(wTop.id, lGame.id);
-    if (wBottom && wBottom.id !== wTop?.id) map.set(wBottom.id, lGame.id);
-  }
-
-  // ── WR2+ → corresponding losers rounds ───────────────────────────────────
-  // With corrected structure:
-  //   WR2 → LR2 (1 loser per LR2 game, matched with LR1 survivor)
-  //   WR3 → LR4 (1 loser per LR4 game, matched with LR3 survivor)
-  //   WR4 → LR6
-  //   Pattern: WR(r) → LR((r-1)*2) for r >= 2
-  const wRounds = Math.log2(bracketSize);
-  for (let wRound = 2; wRound <= wRounds; wRound++) {
-    const actualTargetLRound = (wRound - 1) * 2;
-    const wRGames = winnersGames
-      .filter(g => g.round === wRound)
-      .sort((a, b) => a.position - b.position);
-    const lTargetGames = losersGames
-      .filter(g => g.round === actualTargetLRound)
-      .sort((a, b) => a.position - b.position);
-
-    // Match 1-to-1: each WR loser goes to one LR game
-    wRGames.forEach((wGame, i) => {
-      const lGame = lTargetGames[i] || lTargetGames[lTargetGames.length - 1];
-      if (lGame) map.set(wGame.id, lGame.id);
-    });
-  }
-
-  return map;
-}
+//
+// NOTE: losers-bracket drop mapping is now computed directly inside
+// generateBracket() by simulating actual loser flow round-by-round, rather
+// than via a precomputed formula. This correctly handles non-power-of-2 team
+// counts where byes compress the winners bracket unevenly. See the
+// "Losers Bracket" section in generateBracket() below for the implementation.
 
 // ─── Main Generator ───────────────────────────────────────────────────────────
 
@@ -263,145 +197,129 @@ export function generateBracket(bracketSize: number, seeds: (string | null)[]): 
 
   // ── Losers Bracket ────────────────────────────────────────────────────────
   //
-  // Correct canonical structure:
-  //   LR1: bracketSize/4 games — each receives 2 WR1 losers (dropin, special)
-  //   LR2: bracketSize/4 games — each LR1 winner plays a WR2 loser (dropin)
-  //   LR3: bracketSize/8 games — LR2 winners play each other (survivors)
-  //   LR4: bracketSize/8 games — each LR3 winner plays a WR3 loser (dropin)
-  //   LR5: bracketSize/16 games — survivors
-  //   ... alternates dropin/survivors until 1 game remains (losers final)
+  // Built by simulating the actual flow of losers through the bracket, rather
+  // than by a fixed formula based on bracketSize. This matters because byes
+  // remove "losers" from the system unevenly — a heavily-bye winners round
+  // produces fewer real losers than bracketSize/2 would suggest, and the old
+  // formula-based approach silently dropped feeders when counts didn't match.
   //
-  //   Round type:
-  //     LR1 = special dropin (2 WR1 losers per game)
-  //     LR2 = dropin (1 LR1 winner + 1 WR2 loser per game)
-  //     LR3 = survivors (2 LR2 winners per game)
-  //     LR4 = dropin ...
-  //   isDropin(lr) = lr <= 2 || lr % 2 === 0
-  //   isSurvivors(lr) = lr > 2 && lr % 2 === 1
+  // Model: at each stage we carry forward a list of "tokens" — each token is
+  // either a real losers-bracket game (its winner is the token's value) or a
+  // raw winners-bracket game (a team that just lost and is entering the
+  // losers bracket for the first time). Tokens get paired up into games each
+  // round. When an odd token has no partner, it is NOT given a phantom
+  // self-match — it passes through untouched to the next round, exactly like
+  // a bye. This naturally handles every shape: heavy-bye brackets, brackets
+  // where dropins outnumber survivors (bye-path teams losing in WR2+), and
+  // anything in between.
 
-  // Count real (non-bye) WR1 games — determines L-R1 structure
-  const realWR1Count = wR1Games.filter(g => !g.isBye).length;
-  // L-R1 needs ceil(realWR1Count / 2) games — each LR1 game takes 2 WR1 losers
-  // For power-of-2 team counts this equals bracketSize/4 as before
-  // For non-power-of-2 this is smaller, matching the actual loser count
-  const lR1GameCount = Math.max(1, Math.ceil(realWR1Count / 2));
+  type LToken = { feedId: GameId; sourceGame: BracketGame };
 
-  const lRounds = (wRounds - 1) * 2;
+  const realWR1Games = wR1Games.filter(g => !g.isBye).sort((a, b) => a.position - b.position);
+
   const losersGames: BracketGame[] = [];
-  const losersByRound: BracketGame[][] = [];
+  let lr = 0;
 
-  let prevLRoundCount = lR1GameCount; // LR1 game count (corrected)
-
-  for (let lr = 1; lr <= lRounds; lr++) {
-    let gamesThisRound: number;
-    if (lr === 1) {
-      gamesThisRound = lR1GameCount; // use corrected count
-    } else if (lr === 2) {
-      gamesThisRound = lR1GameCount; // LR2 matches LR1 count (dropin round)
-    } else if (lr % 2 === 1) {
-      // survivors round: halves
-      gamesThisRound = Math.max(1, Math.ceil(prevLRoundCount / 2));
-    } else {
-      // dropin round: same count as previous
-      gamesThisRound = prevLRoundCount;
-    }
-
+  /** Pairs up a list of tokens into one losers-bracket round. Any leftover
+   *  unpaired token passes through as-is (no game created for it). */
+  function pairTokens(tokens: LToken[]): LToken[] {
+    if (tokens.length === 0) return [];
+    if (tokens.length === 1) return tokens; // pass through untouched
+    lr++;
     const roundGames: BracketGame[] = [];
-    for (let p = 0; p < gamesThisRound; p++) {
-      const id: GameId = `L-R${lr}-G${p + 1}`;
-      roundGames.push({
-        id,
-        bracket: 'losers',
-        round: lr,
-        position: p + 1,
-        topSeed: null,
-        bottomSeed: null,
-        isBye: false,
-        fedByWinner: null,
-        winnerAdvancesTo: null,
-        loserDropsTo: null,
-      });
+    const nextTokens: LToken[] = [];
+    let i = 0, j = tokens.length - 1, pos = 1;
+    while (i < j) {
+      const t1 = tokens[i];
+      const t2 = tokens[j];
+      const id: GameId = `L-R${lr}-G${pos}`;
+      const game: BracketGame = {
+        id, bracket: 'losers', round: lr, position: pos,
+        topSeed: null, bottomSeed: null, isBye: false,
+        fedByWinner: [t1.feedId, t2.feedId],
+        winnerAdvancesTo: null, loserDropsTo: null,
+      };
+      // Only losers-bracket source games advance their WINNER here — a
+      // winners-bracket source game's winnerAdvancesTo belongs to its own
+      // winners-bracket progression (already wired earlier) and must never
+      // be touched; its LOSER's destination is wired separately via the
+      // loserDropsTo cross-map step below, driven by fedByWinner.
+      if (t1.sourceGame.bracket === 'losers') t1.sourceGame.winnerAdvancesTo = id;
+      if (t2.sourceGame.bracket === 'losers') t2.sourceGame.winnerAdvancesTo = id;
+      roundGames.push(game);
+      nextTokens.push({ feedId: id, sourceGame: game });
+      i++; j--; pos++;
     }
-
+    if (i === j) {
+      // Odd one out — passes through to next round untouched.
+      nextTokens.push(tokens[i]);
+    }
     losersGames.push(...roundGames);
-    losersByRound.push(roundGames);
-    prevLRoundCount = gamesThisRound;
+    return nextTokens;
   }
+
+  // LR1: every real WR1 loser becomes a token entering the losers bracket.
+  let survivorTokens: LToken[] = realWR1Games.map(g => ({ feedId: g.id, sourceGame: g }));
+  survivorTokens = pairTokens(survivorTokens);
+
+  // Pre-compute, for each winners round >= 2, the ordered list of games that
+  // produce a real loser (WR games are never byes past round 1).
+  const wRoundLosers: BracketGame[][] = [];
+  for (let r = 2; r <= wRounds; r++) {
+    wRoundLosers[r] = allGames.filter(g => g.bracket === 'winners' && g.round === r).sort((a, b) => a.position - b.position);
+  }
+
+  for (let wRound = 2; wRound <= wRounds; wRound++) {
+    // Dropin stage: merge current survivor tokens with this WR round's fresh
+    // losers, then pair. Survivors and fresh dropins are equally valid
+    // tokens — there's no structural difference between "a team that won a
+    // losers-bracket game" and "a team that just lost in the winners
+    // bracket" at this point, they're just tokens waiting for an opponent.
+    const dropinTokens: LToken[] = wRoundLosers[wRound].map(g => ({ feedId: g.id, sourceGame: g }));
+    survivorTokens = pairTokens([...survivorTokens, ...dropinTokens]);
+
+    // Survivors-only stage: pair remaining survivors among themselves before
+    // the next winners round's losers arrive. (Skipped automatically by
+    // pairTokens when there's 0 or 1 token — no-op pass-through.)
+    if (wRound < wRounds) {
+      survivorTokens = pairTokens(survivorTokens);
+    }
+  }
+
+  // Collapse any remaining survivor tokens down to a single losers finalist.
+  while (survivorTokens.length > 1) {
+    survivorTokens = pairTokens(survivorTokens);
+  }
+
+  if (survivorTokens.length !== 1) {
+    throw new Error('Losers bracket failed to resolve to a single finalist — this indicates a bug in bracket generation.');
+  }
+  const losersFinalGame = survivorTokens[0].sourceGame;
+
   allGames.push(...losersGames);
 
-  // Last losers game winner goes to grand final (wired below)
-  const losersFinalGame = losersByRound[lRounds - 1][0];
-
   // ── Cross-map: winners losers → losers bracket drop slots ─────────────────
+  // Built directly from the fedByWinner wiring above (each losers game's
+  // feeders that are winners-bracket games define where that WR game's
+  // loser drops to) — this guarantees loserDropsTo and fedByWinner can
+  // never disagree, unlike the old approach which computed them separately.
 
   const winnersGames = allGames.filter(g => g.bracket === 'winners');
-  const dropMap = buildLoserDropMap(bracketSize, winnersGames, losersGames);
-
-  // Apply drop map to winners games
-  winnersGames.forEach(wGame => {
-    const lDest = dropMap.get(wGame.id);
-    if (lDest) wGame.loserDropsTo = lDest;
+  losersGames.forEach(lGame => {
+    if (!lGame.fedByWinner) return;
+    lGame.fedByWinner.forEach(feederId => {
+      const wGame = winnersGames.find(wg => wg.id === feederId);
+      if (wGame && !wGame.isBye) wGame.loserDropsTo = lGame.id;
+    });
   });
 
-  // ── Wire losers bracket internal structure ─────────────────────────────────
-  //
-  // LR1: fed by WR1 losers (2 per game, handled via dropMap)
-  // LR2: fed by (LR1 winner + WR2 loser) per game — dropin round
-  // LR3: fed by (2 LR2 winners) per game — survivors round
-  // LR4: fed by (LR3 winner + WR3 loser) per game — dropin round
-  // ... alternating survivors/dropin from LR3 onwards
-
-  // Wire LR1 fedByWinner from drop map
-  losersByRound[0].forEach(lGame => {
-    const feeders = winnersGames
-      .filter(wGame => wGame.round === 1 && dropMap.get(wGame.id) === lGame.id)
-      .sort((a, b) => a.position - b.position);
-    if (feeders.length >= 2) {
-      lGame.fedByWinner = [feeders[0].id, feeders[1].id];
-    } else if (feeders.length === 1) {
-      lGame.fedByWinner = [feeders[0].id, feeders[0].id];
-    }
-  });
-
-  // Wire LR2+: alternate between dropin and survivors rounds
-  for (let lr = 2; lr <= lRounds; lr++) {
-    const isDropin = lr === 2 || lr % 2 === 0; // LR2, LR4, LR6... are dropin
-    const isSurvivors = lr > 2 && lr % 2 === 1; // LR3, LR5, LR7... are survivors
-
-    const thisRound = losersByRound[lr - 1];
-    const prevRound = losersByRound[lr - 2];
-
-    if (isDropin) {
-      // Each game in this round: 1 survivor from prev round + 1 WR dropin
-      thisRound.forEach((lGame, i) => {
-        const survivor = prevRound[i];
-        const wDropin = winnersGames.find(wg => dropMap.get(wg.id) === lGame.id) || null;
-
-        if (survivor) survivor.winnerAdvancesTo = lGame.id;
-
-        if (survivor && wDropin) {
-          lGame.fedByWinner = [survivor.id, wDropin.id];
-        } else if (survivor) {
-          // No WR dropin found — shouldn't happen in valid brackets but handle gracefully
-          lGame.fedByWinner = [survivor.id, survivor.id];
-        }
-      });
-    } else if (isSurvivors) {
-      // Each game in this round: 2 survivors from prev round play each other
-      thisRound.forEach((lGame, i) => {
-        const feeder1 = prevRound[i * 2];
-        const feeder2 = prevRound[i * 2 + 1];
-
-        if (feeder1) feeder1.winnerAdvancesTo = lGame.id;
-        if (feeder2) feeder2.winnerAdvancesTo = lGame.id;
-
-        if (feeder1 && feeder2) {
-          lGame.fedByWinner = [feeder1.id, feeder2.id];
-        } else if (feeder1) {
-          lGame.fedByWinner = [feeder1.id, feeder1.id];
-        }
-      });
-    }
+  // Degenerate case: with only 2 real teams, there are no losers-bracket
+  // games at all — the single winners-bracket game's WINNER feeds GF-1's
+  // top slot, and that same game's LOSER must feed GF-1's bottom slot
+  // directly (the standard "loser gets one more chance" minimum case).
+  const isDegenerateTwoTeam = losersFinalGame.id === winnersFinalGame.id;
+  if (isDegenerateTwoTeam) {
+    winnersFinalGame.loserDropsTo = 'GF-1';
   }
 
   // ── Grand Final ───────────────────────────────────────────────────────────
@@ -415,14 +333,14 @@ export function generateBracket(bracketSize: number, seeds: (string | null)[]): 
     topSeed: null,
     bottomSeed: null,
     isBye: false,
-    fedByWinner: [winnersFinalGame.id, losersFinalGame.id],
+    fedByWinner: isDegenerateTwoTeam ? [winnersFinalGame.id, winnersFinalGame.id] : [winnersFinalGame.id, losersFinalGame.id],
     winnerAdvancesTo: null, // champion
     loserDropsTo: null,
   };
   allGames.push(grandFinal);
 
   winnersFinalGame.winnerAdvancesTo = gfId;
-  losersFinalGame.winnerAdvancesTo = gfId;
+  if (!isDegenerateTwoTeam) losersFinalGame.winnerAdvancesTo = gfId;
 
   // Bracket reset game (only instantiated if Double Championship Game mode is selected at runtime)
   // We define its structure here but it's conditional — the bracket engine doesn't decide,

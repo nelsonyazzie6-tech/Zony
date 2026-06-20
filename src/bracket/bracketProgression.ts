@@ -277,13 +277,22 @@ async function isTopSlot(
   sourceGameId: string,
   role: 'winner' | 'loser'
 ): Promise<boolean> {
-  if (role === 'winner' && targetGame.fedByWinnerOf) {
-    // Position 0 in fedByWinnerOf feeds the top slot
-    return targetGame.fedByWinnerOf[0] === sourceGameId;
+  if (!targetGame.fedByWinnerOf) return false;
+
+  // Degenerate case: a single game feeds BOTH slots of the downstream game
+  // (its winner takes one slot, its loser takes the other) — this only
+  // happens in the 2-team bracket, where there's no separate losers-bracket
+  // game and the winners-final game's loser drops straight into the grand
+  // final. Here, position alone can't disambiguate since both array entries
+  // are the same game id, so the role (winner vs loser) decides: winner → top.
+  if (targetGame.fedByWinnerOf[0] === sourceGameId && targetGame.fedByWinnerOf[1] === sourceGameId) {
+    return role === 'winner';
   }
-  // For loser dropins, the loser always fills the bottom slot
-  // (top slot is filled by the survivor from the previous losers round)
-  return false;
+
+  // Position 0 in fedByWinnerOf always feeds the top slot, position 1 feeds bottom —
+  // this holds for both winner-advance and loser-drop feeders, since bracketEngine
+  // wires fedByWinner the same way for both ([survivor, dropin] or [wTop, wBottom]).
+  return targetGame.fedByWinnerOf[0] === sourceGameId;
 }
 
 // ─── Bye Auto-Resolution ──────────────────────────────────────────────────────
