@@ -56,6 +56,29 @@ function CheckIcon({ size = 13, color = '#008080' }: { size?: number; color?: st
   );
 }
 
+function formatTimeAmPm(time24: string): string {
+  if (!time24 || !time24.includes(':')) return time24;
+  const [hStr, mStr] = time24.split(':');
+  let h = parseInt(hStr, 10);
+  const m = mStr || '00';
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  if (h === 0) h = 12; else if (h > 12) h -= 12;
+  return `${h}:${m} ${ampm}`;
+}
+
+function parseAmPmToTime24(input: string): string {
+  const cleaned = input.trim().toUpperCase();
+  const m = cleaned.match(/^(\d{1,2})(?::(\d{2}))?\s*(AM|PM)$/);
+  if (m) {
+    let h = parseInt(m[1], 10);
+    const min = m[2] || '00';
+    if (m[3] === 'AM') { if (h === 12) h = 0; } else { if (h !== 12) h += 12; }
+    return `${String(h).padStart(2,'0')}:${min}`;
+  }
+  if (/^\d{1,2}:\d{2}$/.test(cleaned)) return cleaned.padStart(5, '0');
+  return input;
+}
+
 function formatPhone(val: string) {
   const digits = val.replace(/\D/g, '').slice(0, 10);
   if (digits.length <= 3) return digits;
@@ -137,6 +160,17 @@ export default function EditTournamentScreen() {
   const [showDepositDuePicker, setShowDepositDuePicker] = useState(false);
   const [loading, setLoading] = useState(false);
   const [dataLoaded, setDataLoaded] = useState(false);
+
+  // Bracket settings
+  const [bracketEnabled, setBracketEnabled] = useState(true);
+  const [tournamentFormat, setTournamentFormat] = useState<'double' | 'single'>('double');
+  const [courtNames, setCourtNames] = useState<string[]>(['Court 1']);
+  const [bracketGameDuration, setBracketGameDuration] = useState('50');
+  const [bracketBuffer, setBracketBuffer] = useState('10');
+  const [bracketDailyStartDisplay, setBracketDailyStartDisplay] = useState('8:00 AM');
+  const [bracketDailyEndDisplay, setBracketDailyEndDisplay] = useState('8:00 PM');
+  const [championshipFormat, setChampionshipFormat] = useState<'single' | 'double'>('single');
+  const [showChampionshipPicker, setShowChampionshipPicker] = useState(false);
 
   // Styled info/error modal state
   const [infoModal, setInfoModal] = useState<{ visible: boolean; title: string; message: string }>({
@@ -267,6 +301,20 @@ export default function EditTournamentScreen() {
           setManualPrizes(d.prizes);
           setUseManualPrizes(true);
         }
+      }
+
+      // Load bracket settings
+      setBracketEnabled(d.bracketEnabled !== false);
+      setTournamentFormat(d.tournamentFormat || 'double');
+      if (d.bracketSettings) {
+        const bs = d.bracketSettings;
+        if (bs.courtNames?.length) setCourtNames(bs.courtNames);
+        else if (bs.courts) setCourtNames(Array.from({ length: bs.courts }, (_: any, i: number) => `Court ${i + 1}`));
+        setBracketGameDuration(String(bs.gameDurationMinutes || 50));
+        setBracketBuffer(String(bs.bufferMinutes || 10));
+        setBracketDailyStartDisplay(formatTimeAmPm(bs.dailyStartTime || '08:00'));
+        setBracketDailyEndDisplay(formatTimeAmPm(bs.dailyEndTime || '20:00'));
+        setChampionshipFormat(bs.championshipFormat || 'single');
       }
 
       setDataLoaded(true);
@@ -433,6 +481,16 @@ export default function EditTournamentScreen() {
         depositDue,
         organizerName,
         organizerPhoto,
+        bracketEnabled,
+        tournamentFormat,
+        bracketSettings: bracketEnabled ? {
+          courtNames: courtNames.filter(c => c.trim()),
+          gameDurationMinutes: parseInt(bracketGameDuration) || 50,
+          bufferMinutes: parseInt(bracketBuffer) || 10,
+          dailyStartTime: parseAmPmToTime24(bracketDailyStartDisplay),
+          dailyEndTime: parseAmPmToTime24(bracketDailyEndDisplay),
+          championshipFormat,
+        } : null,
       });
 
       // Notify registered users if schedule, location, or divisions changed
@@ -761,6 +819,84 @@ export default function EditTournamentScreen() {
             </TouchableOpacity>
             <DateTimePickerModal isVisible={showDepositDuePicker} mode="date" onConfirm={handleDepositDueConfirm} onCancel={() => setShowDepositDuePicker(false)} />
 
+            {/* ── Bracket Settings ── */}
+            <View style={styles.sectionDivider} />
+
+            <Text style={styles.label}>Tournament Format</Text>
+            <View style={styles.formatToggleRow}>
+              <TouchableOpacity style={[styles.formatOption, tournamentFormat === 'double' && styles.formatOptionActive]} onPress={() => setTournamentFormat('double')}>
+                <Text style={[styles.formatOptionText, tournamentFormat === 'double' && styles.formatOptionTextActive]}>Double Elimination</Text>
+                <Text style={styles.bracketHint}>Teams need 2 losses to be eliminated</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.formatOption, tournamentFormat === 'single' && styles.formatOptionActive]} onPress={() => setTournamentFormat('single')}>
+                <Text style={[styles.formatOptionText, tournamentFormat === 'single' && styles.formatOptionTextActive]}>Single Elimination</Text>
+                <Text style={styles.bracketHint}>One loss and you're out</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.bracketToggleRow}>
+              <View>
+                <Text style={[styles.label, { marginTop: 4, marginBottom: 2 }]}>Bracket System</Text>
+                <Text style={styles.bracketHint}>Use Zony's built-in bracket & scheduling</Text>
+              </View>
+              <TouchableOpacity style={[styles.togglePill, bracketEnabled && styles.togglePillActive]} onPress={() => setBracketEnabled(!bracketEnabled)}>
+                <View style={[styles.toggleThumb, bracketEnabled && styles.toggleThumbActive]} />
+              </TouchableOpacity>
+            </View>
+
+            {bracketEnabled && (
+              <>
+                <Text style={styles.label}>Courts</Text>
+                {courtNames.map((courtName, i) => (
+                  <View key={i} style={styles.courtNameRow}>
+                    <TextInput style={[styles.input, { flex: 1, marginBottom: 0 }]} placeholder="e.g. Main Court, Court A" placeholderTextColor="#a0b8b8" value={courtName} onChangeText={v => setCourtNames(prev => prev.map((c, idx) => idx === i ? v : c))} />
+                    {courtNames.length > 1 && (
+                      <TouchableOpacity onPress={() => setCourtNames(prev => prev.filter((_, idx) => idx !== i))} style={styles.removeCourtBtn}>
+                        <Text style={styles.removeCourtText}>✕</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                ))}
+                <TouchableOpacity style={styles.addCourtBtn} onPress={() => setCourtNames(prev => [...prev, `Court ${prev.length + 1}`])}>
+                  <Text style={styles.addCourtBtnText}>+ Add Court</Text>
+                </TouchableOpacity>
+
+                <Text style={styles.label}>Daily Court Hours</Text>
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.bracketHint}>Start time</Text>
+                    <TextInput style={styles.input} placeholder="e.g. 8:00 AM" placeholderTextColor="#a0b8b8" value={bracketDailyStartDisplay} onChangeText={setBracketDailyStartDisplay} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.bracketHint}>End time</Text>
+                    <TextInput style={styles.input} placeholder="e.g. 8:00 PM" placeholderTextColor="#a0b8b8" value={bracketDailyEndDisplay} onChangeText={setBracketDailyEndDisplay} />
+                  </View>
+                </View>
+
+                <Text style={styles.label}>Game Duration (minutes)</Text>
+                <TextInput style={styles.input} placeholder="e.g. 50" placeholderTextColor="#a0b8b8" value={bracketGameDuration} onChangeText={setBracketGameDuration} keyboardType="numeric" />
+
+                <Text style={styles.label}>Buffer Between Games (minutes)</Text>
+                <TextInput style={styles.input} placeholder="e.g. 10" placeholderTextColor="#a0b8b8" value={bracketBuffer} onChangeText={setBracketBuffer} keyboardType="numeric" />
+
+                <Text style={styles.label}>Championship Format</Text>
+                <TouchableOpacity style={styles.input} onPress={() => setShowChampionshipPicker(!showChampionshipPicker)}>
+                  <Text style={{ color: '#003333', fontSize: 15 }}>{championshipFormat === 'single' ? 'Single Championship Game (default)' : 'Double Championship Game (bracket reset)'}</Text>
+                </TouchableOpacity>
+                {showChampionshipPicker && (
+                  <View style={styles.bracketPickerContainer}>
+                    {(['single', 'double'] as const).map(fmt => (
+                      <TouchableOpacity key={fmt} style={[styles.bracketPickerItem, championshipFormat === fmt && styles.bracketPickerItemActive]} onPress={() => { setChampionshipFormat(fmt); setShowChampionshipPicker(false); }}>
+                        <Text style={[styles.bracketPickerText, championshipFormat === fmt && { color: '#008080', fontWeight: '700' }]}>{fmt === 'single' ? 'Single Championship Game' : 'Double Championship Game (bracket reset)'}</Text>
+                        {fmt === 'single' && <Text style={styles.bracketHint}>Most common. One game decides the champion.</Text>}
+                        {fmt === 'double' && <Text style={styles.bracketHint}>A second game is played if the losers-bracket team wins the first.</Text>}
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+              </>
+            )}
+
             <TouchableOpacity style={styles.submitBtn} onPress={handleSave} disabled={loading}>
               <Text style={[styles.submitText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>{loading ? 'Saving...' : 'SAVE CHANGES'}</Text>
             </TouchableOpacity>
@@ -852,4 +988,25 @@ const styles = StyleSheet.create({
   modalMsg: { fontSize: 14, color: '#555', textAlign: 'center', marginBottom: 20, lineHeight: 22 },
   modalOkBtn: { backgroundColor: '#008080', borderRadius: 14, paddingVertical: 13, alignItems: 'center' },
   modalOkText: { fontSize: 15, color: '#fff', letterSpacing: 1 },
+  sectionDivider: { height: 1, backgroundColor: '#e0d8c8', marginTop: 20, marginBottom: 8 },
+  formatToggleRow: { gap: 8, marginBottom: 8 },
+  formatOption: { backgroundColor: '#fff', borderRadius: 12, padding: 14, borderWidth: 1.5, borderColor: '#e0d8c8' },
+  formatOptionActive: { borderColor: '#008080', backgroundColor: '#e8f4f4' },
+  formatOptionText: { fontSize: 15, color: '#5a7a7a', fontWeight: '600' },
+  formatOptionTextActive: { color: '#008080' },
+  bracketHint: { fontSize: 12, color: '#a0b8b8', marginBottom: 6, marginTop: 2 },
+  bracketToggleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, marginTop: 8 },
+  togglePill: { width: 50, height: 28, borderRadius: 14, backgroundColor: '#e0d8c8', justifyContent: 'center', paddingHorizontal: 3 },
+  togglePillActive: { backgroundColor: '#008080' },
+  toggleThumb: { width: 22, height: 22, borderRadius: 11, backgroundColor: '#fff', alignSelf: 'flex-start' },
+  toggleThumbActive: { alignSelf: 'flex-end' },
+  courtNameRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
+  removeCourtBtn: { padding: 8 },
+  removeCourtText: { fontSize: 16, color: '#cc4444' },
+  addCourtBtn: { borderWidth: 1, borderColor: '#008080', borderRadius: 10, paddingVertical: 10, alignItems: 'center', marginBottom: 8, backgroundColor: '#e0f5f5' },
+  addCourtBtnText: { color: '#008080', fontWeight: 'bold', fontSize: 14 },
+  bracketPickerContainer: { backgroundColor: '#fff', borderRadius: 12, borderWidth: 1, borderColor: '#e0d8c8', marginBottom: 12, overflow: 'hidden' },
+  bracketPickerItem: { padding: 14, borderBottomWidth: 1, borderBottomColor: '#f0e8d8' },
+  bracketPickerItemActive: { backgroundColor: '#f5ede0' },
+  bracketPickerText: { fontSize: 15, color: '#003333' },
 });
