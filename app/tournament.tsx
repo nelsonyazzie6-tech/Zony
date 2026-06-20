@@ -247,7 +247,7 @@ export default function TournamentScreen() {
   });
 
   const user = auth.currentUser;
-  const isOwner = user?.uid === postedBy;
+  const isOwner = user?.uid === (tournament?.postedBy || postedBy);
 
   const hasDivisionSpots = (data: any) => data?.divisionSpots && Object.keys(data.divisionSpots).length > 0;
 
@@ -918,7 +918,7 @@ export default function TournamentScreen() {
                     params: {
                       tournamentId: id,
                       divisionId: tournament?.divisions?.[0] || 'open',
-                      postedBy,
+                      postedBy: tournament?.postedBy || postedBy,
                       divisions: (tournament?.divisions || []).join(','),
                       tournamentName: tournament?.name || '',
                     },

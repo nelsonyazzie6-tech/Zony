@@ -3,7 +3,7 @@ import { enterResult } from '@/src/bracket/bracketProgression';
 import { BracketPaths } from '@/src/bracket/bracketSchema';
 import { Rajdhani_700Bold, useFonts } from '@expo-google-fonts/rajdhani';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { collection, doc, getDocs, onSnapshot, writeBatch } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, onSnapshot, writeBatch } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
@@ -76,7 +76,15 @@ export default function BracketScreen() {
   const [fontsLoaded] = useFonts({ Rajdhani_700Bold });
 
   const user = auth.currentUser;
-  const isOwner = user?.uid === postedBy;
+  const [tournamentPostedBy, setTournamentPostedBy] = useState<string | null>(null);
+  const isOwner = user?.uid === (tournamentPostedBy || postedBy);
+
+  useEffect(() => {
+    if (!tournamentId) return;
+    getDoc(doc(db, 'tournaments', tournamentId)).then(snap => {
+      if (snap.exists()) setTournamentPostedBy(snap.data().postedBy || null);
+    }).catch(e => console.log('Tournament fetch error:', e));
+  }, [tournamentId]);
 
   // Parse divisions list for tabs
   const divisionsList = divisionsParam ? divisionsParam.split(',').map(d => d.trim()).filter(Boolean) : (initialDivisionId ? [initialDivisionId] : []);

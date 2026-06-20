@@ -24,7 +24,7 @@ import {
 } from 'react-native';
 import { auth, db } from '../firebaseConfig';
 import DateTimePickerModal from 'react-native-modal-datetime-picker';
-import { generateBracketFromTeams, MAX_AUTO_BRACKET_TEAMS } from '../src/bracket/bracketEngine';
+import { generateBracketFromTeams, generateSeedPlacements, MAX_AUTO_BRACKET_TEAMS, nextPowerOfTwo } from '../src/bracket/bracketEngine';
 import { BracketDoc, BracketPaths, GameDoc } from '../src/bracket/bracketSchema';
 import { getChampionshipExplanation } from '../src/bracket/championshipFormat';
 import { generateSchedule, generateSlots, SchedulerInput, validateConstraints } from '../src/bracket/schedulingEngine';
@@ -53,6 +53,36 @@ export default function BracketGenerateScreen() {
   const [editStartDate, setEditStartDate] = useState('');
   const [editDuration, setEditDuration] = useState<1 | 2 | 3>(1);
   const [showDatePicker, setShowDatePicker] = useState(false);
+
+  const [showTestTeamsModal, setShowTestTeamsModal] = useState(false);
+  const [generatingTestTeams, setGeneratingTestTeams] = useState(false);
+
+  const generateTestTeams = async (count: number) => {
+    if (!tournamentId || !divisionId) return;
+    setGeneratingTestTeams(true);
+    try {
+      const batch = writeBatch(db);
+      for (let i = 1; i <= count; i++) {
+        const teamRef = doc(collection(db, 'tournaments', tournamentId, 'teams'));
+        batch.set(teamRef, {
+          teamName: `Test Team ${i}`,
+          contactName: 'Dev Test',
+          contactInfo: '',
+          division: divisionId,
+          registeredBy: `dev-test-${i}-${Date.now()}`,
+          isDevTestTeam: true,
+          createdAt: serverTimestamp(),
+        });
+      }
+      await batch.commit();
+      await loadTournament();
+      setShowTestTeamsModal(false);
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'Could not generate test teams.');
+    } finally {
+      setGeneratingTestTeams(false);
+    }
+  };
 
   const loadTournament = async () => {
     if (!tournamentId || !divisionId) return;
@@ -199,6 +229,14 @@ export default function BracketGenerateScreen() {
       const courts = resolveCourts(settings);
       const shuffled = [...teams].sort(() => Math.random() - 0.5);
       const bracket = generateBracketFromTeams(shuffled.map(t => t.teamName));
+
+      // Build the same seed-slot → team mapping the engine used internally,
+      // so topSeed/bottomSeed (which are bracket slot numbers) resolve to the
+      // correct team instead of being misread as an index into `shuffled`.
+      const bracketSlotSize = bracket.bracketSize;
+      const seedPlacements = generateSeedPlacements(bracketSlotSize, shuffled.length);
+      const slotTeams = seedPlacements.map(slotSeed => (slotSeed === -1 ? null : shuffled[slotSeed - 1] || null));
+
       const scheduleInput: SchedulerInput = {
         dates, courts,
         dailyStartTime: settings.dailyStartTime || '08:00',
@@ -230,8 +268,8 @@ export default function BracketGenerateScreen() {
       for (const game of bracket.games) {
         const gameRef = doc(db, BracketPaths.game(tournamentId, divisionId, game.id));
         const scheduledGame = scheduleLookup.get(game.id);
-        const topTeam = game.topSeed && game.topSeed > 0 ? shuffled[game.topSeed - 1] : null;
-        const bottomTeam = game.bottomSeed && game.bottomSeed > 0 ? shuffled[game.bottomSeed - 1] : null;
+        const topTeam = game.topSeed && game.topSeed > 0 ? slotTeams[game.topSeed - 1] : null;
+        const bottomTeam = game.bottomSeed && game.bottomSeed > 0 ? slotTeams[game.bottomSeed - 1] : null;
         let gameStatus: GameDoc['status'] = 'pending';
         if (game.isBye) gameStatus = 'bye';
         else if (topTeam && bottomTeam) gameStatus = 'ready';
@@ -354,6 +392,13 @@ export default function BracketGenerateScreen() {
 
       {/* Team list */}
       <Text style={[styles.sectionTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>REGISTERED TEAMS ({teams.length})</Text>
+
+      {__DEV__ && (
+        <TouchableOpacity style={styles.devTestBtn} onPress={() => setShowTestTeamsModal(true)}>
+          <Text style={styles.devTestBtnText}>🧪 DEV: Generate Test Teams</Text>
+        </TouchableOpacity>
+      )}
+
       {teams.map((team, i) => (
         <View key={team.id} style={styles.teamRow}>
           <Text style={styles.teamIndex}>{i + 1}</Text>
@@ -471,6 +516,33 @@ export default function BracketGenerateScreen() {
           </View>
         </View>
       </Modal>
+      {/* Dev-only: Generate Test Teams Modal */}
+      {__DEV__ && (
+        <Modal visible={showTestTeamsModal} animationType="slide" transparent>
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalBox}>
+              <View style={styles.modalHeader}>
+                <Text style={[styles.modalTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>🧪 GENERATE TEST TEAMS</Text>
+                <TouchableOpacity onPress={() => setShowTestTeamsModal(false)}>
+                  <Text style={styles.modalClose}>✕</Text>
+                </TouchableOpacity>
+              </View>
+              <Text style={styles.devTestHint}>Dev-only tool. Adds fake teams (Test Team 1, Test Team 2, ...) to this division so you can test bracket generation without creating real accounts.</Text>
+              <View style={styles.testTeamCountGrid}>
+                {[4, 5, 6, 7, 8, 9, 10, 12, 16].map(count => (
+                  <TouchableOpacity key={count} style={styles.testTeamCountBtn} onPress={() => generateTestTeams(count)} disabled={generatingTestTeams}>
+                    <Text style={styles.testTeamCountText}>{count}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              {generatingTestTeams && <ActivityIndicator color="#008080" style={{ marginTop: 16 }} />}
+              <TouchableOpacity style={styles.cancelBtn} onPress={() => setShowTestTeamsModal(false)} disabled={generatingTestTeams}>
+                <Text style={styles.cancelBtnText}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+      )}
     </ScrollView>
   );
 }
@@ -598,4 +670,10 @@ const styles = StyleSheet.create({
   durationOptionActive: { borderColor: '#008080', backgroundColor: '#e8f4f4' },
   durationText: { fontSize: 14, color: '#5a7a7a', fontWeight: '600' },
   durationTextActive: { color: '#008080' },
+  devTestBtn: { backgroundColor: '#1a1a2e', borderRadius: 10, paddingVertical: 10, alignItems: 'center', marginBottom: 12 },
+  devTestBtnText: { color: '#fff', fontSize: 13, fontWeight: '700' },
+  devTestHint: { fontSize: 13, color: '#5a7a7a', lineHeight: 19, marginBottom: 16 },
+  testTeamCountGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  testTeamCountBtn: { width: '28%', backgroundColor: '#e8f4f4', borderRadius: 12, paddingVertical: 16, alignItems: 'center', borderWidth: 1.5, borderColor: '#008080' },
+  testTeamCountText: { fontSize: 18, color: '#008080', fontWeight: '700' },
 });

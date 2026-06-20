@@ -451,7 +451,7 @@ function TournamentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
                 toUserId: d.id,
                 message: `New ${sport} tournament: ${name}`,
                 body: `${finalCity}, ${finalState} • ${startDate}`,
-                link: `/tournament?id=${tournamentRef.id}`,
+                link: `/tournament?id=${tournamentRef.id}&postedBy=${user.uid}`,
                 createdAt: serverTimestamp(),
                 read: false,
               });

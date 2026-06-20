@@ -517,7 +517,7 @@ export default function EditTournamentScreen() {
                   toUserId: uid,
                   message: `${message}: ${name}`,
                   body,
-                  link: `/tournament?id=${id}`,
+                  link: `/tournament?id=${id}&postedBy=${user?.uid}`,
                   createdAt: serverTimestamp(),
                   read: false,
                 });
