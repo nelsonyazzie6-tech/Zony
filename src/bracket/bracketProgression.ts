@@ -3,32 +3,37 @@
  *
  * Handles result entry and automatic bracket advancement.
  *
- * When an organizer marks a winner for a game:
- *   1. Write result to that game document
- *   2. Populate winner's slot in winnerAdvancesTo game
- *   3. Populate loser's slot in loserDropsTo game (or mark eliminated)
- *   4. Flip downstream games from 'pending' → 'ready' if both teams now known
- *   5. Handle championship special case (GF-1 → champion or GF-2)
+ * This now shares its core advancement logic with bye resolution
+ * (bracketAdvancement.ts's applyGameResult) instead of reimplementing slot
+ * inference separately — that duplication was the source of a real bug:
+ * the old positional inference (fedByWinnerOf[0] === sourceGameId) broke
+ * for any 2-team tournament's grand final, where the lone winners-bracket
+ * game feeds GF-1 as both winner AND loser. applyGameResult uses the
+ * explicit winnerAdvancesToSlot/loserDropsToSlot fields instead, which
+ * disambiguates that case correctly.
  *
- * All writes happen in a single Firestore batch — no partial state visible
- * to live listeners on other devices.
+ * Read-then-write now happens inside a Firestore transaction rather than
+ * getDoc() + writeBatch(), closing a race condition where two feeders
+ * writing into the same downstream game's two slots could each read a
+ * stale "other slot is still empty" state and leave that game stuck at
+ * 'pending' even after both slots were actually filled.
  *
  * Module separation (per spec):
  *   - This module knows about Firestore and bracket structure
  *   - It does NOT know about courts, times, or scheduling
- *   - It imports from bracketSchema (paths/types) and championshipFormat (GF logic)
+ *   - It imports from bracketSchema (paths/types), bracketAdvancement (the
+ *     shared advancement function), and championshipFormat (GF logic)
  *   - It does NOT import from bracketEngine (generation is complete by this point)
  */
 
 import {
-    collection,
     doc,
-    getDoc,
-    getDocs,
+    runTransaction,
     serverTimestamp,
-    writeBatch
+    Transaction,
 } from 'firebase/firestore';
 import { db } from '../../firebaseConfig';
+import { applyGameResult, AdvancementGame } from './bracketAdvancement';
 import { BracketDoc, BracketPaths, GameDoc } from './bracketSchema';
 import {
     BracketPath,
@@ -56,41 +61,163 @@ export type ProgressionResult =
   | { outcome: 'champion'; championId: string; championName: string }
   | { outcome: 'reset_required' };
 
+// ─── Conversion helper ────────────────────────────────────────────────────────
+
+function toAdvancementGame(g: GameDoc): AdvancementGame {
+  return {
+    id: g.id,
+    isBye: g.isBye,
+    status: g.status,
+    topTeamId: g.topTeamId,
+    topTeamName: g.topTeamName,
+    bottomTeamId: g.bottomTeamId,
+    bottomTeamName: g.bottomTeamName,
+    winnerId: g.winnerId,
+    winnerName: g.winnerName,
+    loserId: g.loserId,
+    loserName: g.loserName,
+    winnerAdvancesTo: g.winnerAdvancesTo,
+    winnerAdvancesToSlot: g.winnerAdvancesToSlot,
+    loserDropsTo: g.loserDropsTo,
+    loserDropsToSlot: g.loserDropsToSlot,
+  };
+}
+
 // ─── Main Entry Point ─────────────────────────────────────────────────────────
 
 /**
  * enterResult — organizer marks a winner for a game.
  *
- * Reads current game and bracket state, then writes all changes
- * in a single batch. Returns what happened as a result.
+ * Runs entirely inside a single Firestore transaction: reads the source
+ * game, the bracket metadata, and whatever destination games it feeds
+ * into, builds the same in-memory shape bracketAdvancement.ts uses for
+ * byes, runs the one shared applyGameResult function, then writes back
+ * exactly what it touched. No partial state is ever visible to live
+ * listeners on other devices, and no destination game can be left
+ * half-updated by a concurrent write.
  */
 export async function enterResult(input: EnterResultInput): Promise<ProgressionResult> {
   const { tournamentId, divisionId, gameId, winnerId, winnerName, loserId, loserName } = input;
 
-  // Read the game being resolved
   const gameRef = doc(db, BracketPaths.game(tournamentId, divisionId, gameId));
-  const gameSnap = await getDoc(gameRef);
-  if (!gameSnap.exists()) throw new Error(`Game ${gameId} not found`);
-  const game = gameSnap.data() as GameDoc;
-
-  if (game.status === 'completed') {
-    // Allow re-entry: organizer correcting a mistake
-    // Treat as a fresh entry — downstream slots will be overwritten
-    console.log(`Re-entering result for completed game ${gameId}`);
-  }
-
-  // Read bracket metadata for championship format
   const bracketRef = doc(db, BracketPaths.bracket(tournamentId, divisionId));
-  const bracketSnap = await getDoc(bracketRef);
-  if (!bracketSnap.exists()) throw new Error('Bracket document not found');
-  const bracket = bracketSnap.data() as BracketDoc;
 
-  const batch = writeBatch(db);
-  const gamesUpdated: string[] = [gameId];
+  return await runTransaction(db, async (tx): Promise<ProgressionResult> => {
+    const gameSnap = await tx.get(gameRef);
+    if (!gameSnap.exists()) throw new Error(`Game ${gameId} not found`);
+    const game = gameSnap.data() as GameDoc;
 
-  // ── 1. Write result to this game ──────────────────────────────────────────
+    const bracketSnap = await tx.get(bracketRef);
+    if (!bracketSnap.exists()) throw new Error('Bracket document not found');
+    const bracket = bracketSnap.data() as BracketDoc;
 
-  batch.update(gameRef, {
+    // ── Championship special cases (GF-1 and GF-2) ───────────────────────
+    // These don't flow through normal winnerAdvancesTo/loserDropsTo — the
+    // champion-vs-reset decision is championship-format logic, not generic
+    // bracket topology, so it stays separate from applyGameResult by design.
+
+    if (gameId === 'GF-1') {
+      return handleGrandFinal(tx, { input, game, bracket, bracketRef, winnerId, winnerName, loserId, loserName });
+    }
+
+    if (gameId === 'GF-2') {
+      tx.update(bracketRef, {
+        status: 'completed',
+        championTeamId: winnerId,
+        completedAt: serverTimestamp(),
+      });
+      return { outcome: 'champion', championId: winnerId, championName: winnerName };
+    }
+
+    // ── Normal game: read whatever it feeds into, all before any writes ──
+    // (Firestore transactions require every read to happen before any write.)
+
+    const destIds = new Set<string>();
+    if (game.winnerAdvancesTo) destIds.add(game.winnerAdvancesTo);
+    if (game.loserDropsTo) destIds.add(game.loserDropsTo);
+    // Note: in the 2-team degenerate bracket, winnerAdvancesTo and
+    // loserDropsTo are BOTH 'GF-1' — the Set above naturally dedupes that
+    // to a single read, and applyGameResult below correctly applies both
+    // the winner-advance and loser-drop writes to that one in-memory game
+    // object using its distinct winnerAdvancesToSlot/loserDropsToSlot,
+    // instead of two separate stale reads racing each other.
+
+    const destSnaps = new Map<string, GameDoc>();
+    for (const id of destIds) {
+      const snap = await tx.get(doc(db, BracketPaths.game(tournamentId, divisionId, id)));
+      if (snap.exists()) destSnaps.set(id, snap.data() as GameDoc);
+    }
+
+    // ── Build the in-memory map and run the one shared advancement function ──
+
+    const games = new Map<string, AdvancementGame>();
+    games.set(game.id, toAdvancementGame(game));
+    destSnaps.forEach((d, id) => games.set(id, toAdvancementGame(d)));
+
+    const touched = applyGameResult(
+      games,
+      gameId,
+      { id: winnerId, name: winnerName },
+      { id: loserId, name: loserName }
+    );
+
+    // ── Write back exactly what changed ───────────────────────────────────
+
+    for (const id of touched) {
+      const g = games.get(id)!;
+      const ref = doc(db, BracketPaths.game(tournamentId, divisionId, id));
+
+      if (id === gameId) {
+        tx.update(ref, {
+          status: g.status,
+          winnerId: g.winnerId,
+          winnerName: g.winnerName,
+          loserId: g.loserId,
+          loserName: g.loserName,
+          topScore: input.topScore ?? null,
+          bottomScore: input.bottomScore ?? null,
+          resultEnteredAt: serverTimestamp(),
+          resultEnteredBy: input.enteredByUid,
+        });
+      } else {
+        tx.update(ref, {
+          topTeamId: g.topTeamId,
+          topTeamName: g.topTeamName,
+          bottomTeamId: g.bottomTeamId,
+          bottomTeamName: g.bottomTeamName,
+          status: g.status,
+        });
+      }
+    }
+
+    if (bracket.status === 'generated') {
+      tx.update(bracketRef, { status: 'in_progress' });
+    }
+
+    return { outcome: 'advanced', gamesUpdated: touched };
+  });
+}
+
+// ─── Grand Final Handler ──────────────────────────────────────────────────────
+
+async function handleGrandFinal(
+  tx: Transaction,
+  {
+    input, game, bracket, bracketRef, winnerId, winnerName, loserId, loserName,
+  }: {
+    input: EnterResultInput;
+    game: GameDoc;
+    bracket: BracketDoc;
+    bracketRef: ReturnType<typeof doc>;
+    winnerId: string;
+    winnerName: string;
+    loserId: string;
+    loserName: string;
+  }
+): Promise<ProgressionResult> {
+  const { tournamentId, divisionId } = input;
+
+  tx.update(doc(db, BracketPaths.game(tournamentId, divisionId, 'GF-1')), {
     status: 'completed',
     winnerId,
     winnerName,
@@ -102,129 +229,8 @@ export async function enterResult(input: EnterResultInput): Promise<ProgressionR
     resultEnteredBy: input.enteredByUid,
   });
 
-  // ── 2. Handle championship special cases (GF-1 and GF-2) ─────────────────
-
-  if (gameId === 'GF-1') {
-    return await handleGrandFinal({
-      input,
-      game,
-      bracket,
-      batch,
-      gamesUpdated,
-      winnerId,
-      winnerName,
-      loserId,
-      loserName,
-    });
-  }
-
-  if (gameId === 'GF-2') {
-    // GF-2 winner is always champion, no further progression
-    batch.update(bracketRef, {
-      status: 'completed',
-      championTeamId: winnerId,
-      completedAt: serverTimestamp(),
-    });
-    await batch.commit();
-    const championName = winnerName;
-    return { outcome: 'champion', championId: winnerId, championName };
-  }
-
-  // ── 3. Advance winner to next game ────────────────────────────────────────
-
-  if (game.winnerAdvancesTo) {
-    const winnerNextRef = doc(db, BracketPaths.game(tournamentId, divisionId, game.winnerAdvancesTo));
-    const winnerNextSnap = await getDoc(winnerNextRef);
-
-    if (winnerNextSnap.exists()) {
-      const winnerNextGame = winnerNextSnap.data() as GameDoc;
-      const isTop = await isTopSlot(winnerNextGame, gameId, 'winner');
-
-      const winnerUpdate: Partial<GameDoc> = isTop
-        ? { topTeamId: winnerId, topTeamName: winnerName }
-        : { bottomTeamId: winnerId, bottomTeamName: winnerName };
-
-      // Check if this fills the last empty slot → game becomes 'ready'
-      const otherSlotFilled = isTop
-        ? winnerNextGame.bottomTeamId !== null
-        : winnerNextGame.topTeamId !== null;
-
-      if (otherSlotFilled) {
-        (winnerUpdate as any).status = 'ready';
-      }
-
-      batch.update(winnerNextRef, winnerUpdate);
-      gamesUpdated.push(game.winnerAdvancesTo);
-    }
-  }
-
-  // ── 4. Drop loser to losers bracket (or mark eliminated) ─────────────────
-
-  if (game.loserDropsTo) {
-    const loserNextRef = doc(db, BracketPaths.game(tournamentId, divisionId, game.loserDropsTo));
-    const loserNextSnap = await getDoc(loserNextRef);
-
-    if (loserNextSnap.exists()) {
-      const loserNextGame = loserNextSnap.data() as GameDoc;
-      const isTop = await isTopSlot(loserNextGame, gameId, 'loser');
-
-      const loserUpdate: Partial<GameDoc> = isTop
-        ? { topTeamId: loserId, topTeamName: loserName }
-        : { bottomTeamId: loserId, bottomTeamName: loserName };
-
-      const otherSlotFilled = isTop
-        ? loserNextGame.bottomTeamId !== null
-        : loserNextGame.topTeamId !== null;
-
-      if (otherSlotFilled) {
-        (loserUpdate as any).status = 'ready';
-      }
-
-      batch.update(loserNextRef, loserUpdate);
-      gamesUpdated.push(game.loserDropsTo);
-    }
-  }
-  // If loserDropsTo is null, this team is eliminated (normal losers bracket loss)
-
-  // ── 5. Update bracket status to in_progress if not already ───────────────
-
-  if (bracket.status === 'generated') {
-    batch.update(bracketRef, { status: 'in_progress' });
-  }
-
-  await batch.commit();
-  return { outcome: 'advanced', gamesUpdated };
-}
-
-// ─── Grand Final Handler ──────────────────────────────────────────────────────
-
-async function handleGrandFinal({
-  input,
-  game,
-  bracket,
-  batch,
-  gamesUpdated,
-  winnerId,
-  winnerName,
-  loserId,
-  loserName,
-}: {
-  input: EnterResultInput;
-  game: GameDoc;
-  bracket: BracketDoc;
-  batch: ReturnType<typeof writeBatch>;
-  gamesUpdated: string[];
-  winnerId: string;
-  winnerName: string;
-  loserId: string;
-  loserName: string;
-}): Promise<ProgressionResult> {
-  const { tournamentId, divisionId } = input;
-  const bracketRef = doc(db, BracketPaths.bracket(tournamentId, divisionId));
-
-  // Determine which bracket path the winner came from
-  // Winner came from winners bracket if their team was the 'top' team
-  // (top slot in GF-1 is always the winners-bracket finalist per our bracket structure)
+  // Determine which bracket path the winner came from — top slot in GF-1
+  // is always the winners-bracket finalist per bracket structure.
   const winnerPath: BracketPath = game.topTeamId === winnerId ? 'winners' : 'losers';
 
   const decision = resolveGrandFinal(
@@ -233,133 +239,28 @@ async function handleGrandFinal({
   );
 
   if (decision.outcome === 'champion') {
-    batch.update(bracketRef, {
+    tx.update(bracketRef, {
       status: 'completed',
       championTeamId: winnerId,
       completedAt: serverTimestamp(),
     });
-    await batch.commit();
     return { outcome: 'champion', championId: winnerId, championName: winnerName };
   }
 
-  // Reset required: populate GF-2 with the same two teams, flipped
-  // (the team that lost GF-1 now gets the "top" slot in GF-2 as the
-  // previously-undefeated team deserves top billing in the reset)
-  const gf2Ref = doc(db, BracketPaths.game(tournamentId, divisionId, 'GF-2'));
-  batch.update(gf2Ref, {
-    topTeamId: loserId,         // the winners-bracket team (lost GF-1)
+  // Reset required: populate GF-2 with the same two teams, flipped — the
+  // team that lost GF-1 (the previously-undefeated winners-bracket team)
+  // gets the top slot in GF-2.
+  tx.update(doc(db, BracketPaths.game(tournamentId, divisionId, 'GF-2')), {
+    topTeamId: loserId,
     topTeamName: loserName,
-    bottomTeamId: winnerId,     // the losers-bracket team (won GF-1)
+    bottomTeamId: winnerId,
     bottomTeamName: winnerName,
     status: 'ready',
   });
-  batch.update(bracketRef, {
+  tx.update(bracketRef, {
     bracketResetRequired: true,
     status: 'in_progress',
   });
 
-  gamesUpdated.push('GF-2');
-  await batch.commit();
   return { outcome: 'reset_required' };
-}
-
-// ─── Slot Resolution ──────────────────────────────────────────────────────────
-
-/**
- * isTopSlot — determines whether the result of a given source game
- * should populate the 'top' or 'bottom' slot in a downstream game.
- *
- * Uses the fedByWinnerOf array: position 0 = top slot feeder, position 1 = bottom slot feeder.
- * For loser drops, we look at which game's loserDropsTo points here and match position.
- */
-async function isTopSlot(
-  targetGame: GameDoc,
-  sourceGameId: string,
-  role: 'winner' | 'loser'
-): Promise<boolean> {
-  if (!targetGame.fedByWinnerOf) return false;
-
-  // Degenerate case: a single game feeds BOTH slots of the downstream game
-  // (its winner takes one slot, its loser takes the other) — this only
-  // happens in the 2-team bracket, where there's no separate losers-bracket
-  // game and the winners-final game's loser drops straight into the grand
-  // final. Here, position alone can't disambiguate since both array entries
-  // are the same game id, so the role (winner vs loser) decides: winner → top.
-  if (targetGame.fedByWinnerOf[0] === sourceGameId && targetGame.fedByWinnerOf[1] === sourceGameId) {
-    return role === 'winner';
-  }
-
-  // Position 0 in fedByWinnerOf always feeds the top slot, position 1 feeds bottom —
-  // this holds for both winner-advance and loser-drop feeders, since bracketEngine
-  // wires fedByWinner the same way for both ([survivor, dropin] or [wTop, wBottom]).
-  return targetGame.fedByWinnerOf[0] === sourceGameId;
-}
-
-// ─── Bye Auto-Resolution ──────────────────────────────────────────────────────
-
-/**
- * autoResolveByes — called once at bracket generation time.
- *
- * Finds all bye games and immediately resolves them, advancing the real
- * team to round 2 without requiring organizer input.
- *
- * This is separate from enterResult since it runs at generation time,
- * not in response to an organizer action.
- */
-export async function autoResolveByes(
-  tournamentId: string,
-  divisionId: string
-): Promise<void> {
-  const gamesRef = collection(db, BracketPaths.games(tournamentId, divisionId));
-  const gamesSnap = await getDocs(gamesRef);
-  const byeGames = gamesSnap.docs
-    .map(d => d.data() as GameDoc)
-    .filter(g => g.isBye && g.status !== 'completed');
-
-  if (byeGames.length === 0) return;
-
-  const batch = writeBatch(db);
-
-  for (const game of byeGames) {
-    const gameRef = doc(db, BracketPaths.game(tournamentId, divisionId, game.id));
-
-    // Determine which team is real (not null) and which slot is bye (-1)
-    const realTeamId = game.topTeamId ?? game.bottomTeamId;
-    const realTeamName = game.topTeamName ?? game.bottomTeamName;
-    if (!realTeamId || !realTeamName) continue;
-
-    // Mark bye game as completed
-    batch.update(gameRef, {
-      status: 'completed',
-      winnerId: realTeamId,
-      winnerName: realTeamName,
-      loserId: null,
-      loserName: null,
-      resultEnteredAt: serverTimestamp(),
-      resultEnteredBy: 'system',
-    });
-
-    // Advance real team to next game
-    if (game.winnerAdvancesTo) {
-      const nextRef = doc(db, BracketPaths.game(tournamentId, divisionId, game.winnerAdvancesTo));
-      const nextSnap = await getDoc(nextRef);
-      if (nextSnap.exists()) {
-        const nextGame = nextSnap.data() as GameDoc;
-        // Bye games always feed the top slot of their downstream game
-        const isTop = nextGame.fedByWinnerOf?.[0] === game.id;
-        const update: Partial<GameDoc> = isTop
-          ? { topTeamId: realTeamId, topTeamName: realTeamName }
-          : { bottomTeamId: realTeamId, bottomTeamName: realTeamName };
-
-        const otherFilled = isTop
-          ? nextGame.bottomTeamId !== null
-          : nextGame.topTeamId !== null;
-        if (otherFilled) (update as any).status = 'ready';
-
-        batch.update(nextRef, update);
-      }
-    }
-  }
-
-  await batch.commit();
 }

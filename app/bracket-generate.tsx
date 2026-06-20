@@ -25,6 +25,7 @@ import {
 import { auth, db } from '../firebaseConfig';
 import DateTimePickerModal from 'react-native-modal-datetime-picker';
 import { generateBracketFromTeams, generateSeedPlacements, MAX_AUTO_BRACKET_TEAMS, nextPowerOfTwo } from '../src/bracket/bracketEngine';
+import { cascadeByeAdvancements, AdvancementGame } from '../src/bracket/bracketAdvancement';
 import { BracketDoc, BracketPaths, GameDoc } from '../src/bracket/bracketSchema';
 import { getChampionshipExplanation } from '../src/bracket/championshipFormat';
 import { generateSchedule, generateSlots, SchedulerInput, validateConstraints } from '../src/bracket/schedulingEngine';
@@ -245,6 +246,43 @@ export default function BracketGenerateScreen() {
         bufferMinutes: settings.bufferMinutes || 10,
       };
       const schedule = generateSchedule(bracket, scheduleInput);
+      const scheduleLookup = new Map(schedule.scheduledGames.map(sg => [sg.gameId, sg]));
+
+      // ── Build in-memory advancement state for every game ──────────────────
+      // Team slots are resolved from topSeed/bottomSeed where the engine
+      // seeded them directly (round 1); everything else starts empty and is
+      // filled by the bye cascade below — the same applyGameResult function
+      // that organizer result entry uses, so byes and real results are
+      // resolved through one shared code path.
+      const gameMap = new Map<string, AdvancementGame>();
+      for (const game of bracket.games) {
+        const topTeam = game.topSeed && game.topSeed > 0 ? slotTeams[game.topSeed - 1] : null;
+        const bottomTeam = game.bottomSeed && game.bottomSeed > 0 ? slotTeams[game.bottomSeed - 1] : null;
+
+        let status: AdvancementGame['status'] = 'pending';
+        if (!game.isBye && topTeam && bottomTeam) status = 'ready';
+
+        gameMap.set(game.id, {
+          id: game.id,
+          isBye: game.isBye,
+          status,
+          topTeamId: topTeam?.id || null,
+          topTeamName: topTeam?.teamName || null,
+          bottomTeamId: bottomTeam?.id || null,
+          bottomTeamName: bottomTeam?.teamName || null,
+          winnerId: null, winnerName: null,
+          loserId: null, loserName: null,
+          winnerAdvancesTo: game.winnerAdvancesTo,
+          winnerAdvancesToSlot: game.winnerAdvancesToSlot,
+          loserDropsTo: game.loserDropsTo,
+          loserDropsToSlot: game.loserDropsToSlot,
+        });
+      }
+
+      // Resolve every bye and propagate winners into downstream matches —
+      // this is what prevents the bracket from stalling after round 1.
+      cascadeByeAdvancements(gameMap);
+
       const batch = writeBatch(db);
       const bracketRef = doc(db, BracketPaths.bracket(tournamentId, divisionId));
       const bracketDoc: Partial<BracketDoc> = {
@@ -264,28 +302,29 @@ export default function BracketGenerateScreen() {
         explanation: getChampionshipExplanation(settings.championshipFormat || 'single'),
       };
       batch.set(bracketRef, bracketDoc);
-      const scheduleLookup = new Map(schedule.scheduledGames.map(sg => [sg.gameId, sg]));
+
       for (const game of bracket.games) {
+        const state = gameMap.get(game.id)!;
         const gameRef = doc(db, BracketPaths.game(tournamentId, divisionId, game.id));
         const scheduledGame = scheduleLookup.get(game.id);
-        const topTeam = game.topSeed && game.topSeed > 0 ? slotTeams[game.topSeed - 1] : null;
-        const bottomTeam = game.bottomSeed && game.bottomSeed > 0 ? slotTeams[game.bottomSeed - 1] : null;
-        let gameStatus: GameDoc['status'] = 'pending';
-        if (game.isBye) gameStatus = 'bye';
-        else if (topTeam && bottomTeam) gameStatus = 'ready';
+
         const gameDoc: Partial<GameDoc> = {
           id: game.id, divisionId, tournamentId,
           bracket: game.bracket, round: game.round, position: game.position,
-          topTeamId: topTeam?.id || null, topTeamName: topTeam?.teamName || null,
-          bottomTeamId: bottomTeam?.id || null, bottomTeamName: bottomTeam?.teamName || null,
+          topTeamId: state.topTeamId, topTeamName: state.topTeamName,
+          bottomTeamId: state.bottomTeamId, bottomTeamName: state.bottomTeamName,
           isBye: game.isBye,
           fedByWinnerOf: game.fedByWinner || null,
-          winnerAdvancesTo: game.winnerAdvancesTo || null,
-          loserDropsTo: game.loserDropsTo || null,
-          status: gameStatus,
-          winnerId: null, winnerName: null, loserId: null, loserName: null,
+          winnerAdvancesTo: state.winnerAdvancesTo,
+          winnerAdvancesToSlot: state.winnerAdvancesToSlot,
+          loserDropsTo: state.loserDropsTo,
+          loserDropsToSlot: state.loserDropsToSlot,
+          status: state.status,
+          winnerId: state.winnerId, winnerName: state.winnerName,
+          loserId: state.loserId, loserName: state.loserName,
           topScore: null, bottomScore: null,
-          resultEnteredAt: null, resultEnteredBy: null,
+          resultEnteredAt: state.status === 'bye' ? (serverTimestamp() as any) : null,
+          resultEnteredBy: state.status === 'bye' ? 'system' : null,
           courtId: scheduledGame?.courtId || null,
           courtName: scheduledGame?.courtId || null,
           scheduledDate: scheduledGame?.date || null,
@@ -293,12 +332,9 @@ export default function BracketGenerateScreen() {
           scheduledSlotIndex: scheduledGame?.slotIndex ?? null,
           createdAt: serverTimestamp() as any,
         };
-        if (game.isBye) {
-          const realTeam = topTeam || bottomTeam;
-          if (realTeam) { gameDoc.winnerId = realTeam.id; gameDoc.winnerName = realTeam.teamName; gameDoc.resultEnteredBy = 'system'; gameDoc.resultEnteredAt = serverTimestamp() as any; }
-        }
         batch.set(gameRef, gameDoc);
       }
+
       batch.update(doc(db, 'tournaments', tournamentId), { bracketStatus: 'bracket_generated', [`bracketGenerated_${divisionId}`]: true });
       await batch.commit();
 
@@ -529,7 +565,7 @@ export default function BracketGenerateScreen() {
               </View>
               <Text style={styles.devTestHint}>Dev-only tool. Adds fake teams (Test Team 1, Test Team 2, ...) to this division so you can test bracket generation without creating real accounts.</Text>
               <View style={styles.testTeamCountGrid}>
-                {[4, 5, 6, 7, 8, 9, 10, 12, 16].map(count => (
+                {[4, 5, 6, 7, 8, 9, 10, 12, 16,20,24].map(count => (
                   <TouchableOpacity key={count} style={styles.testTeamCountBtn} onPress={() => generateTestTeams(count)} disabled={generatingTestTeams}>
                     <Text style={styles.testTeamCountText}>{count}</Text>
                   </TouchableOpacity>

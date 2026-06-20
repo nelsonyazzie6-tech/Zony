@@ -1,5 +1,6 @@
 import { auth, db } from '@/firebaseConfig';
 import { enterResult } from '@/src/bracket/bracketProgression';
+import BracketTree, { TreeGame } from '@/src/bracket/BracketTree';
 import { BracketPaths } from '@/src/bracket/bracketSchema';
 import { Rajdhani_700Bold, useFonts } from '@expo-google-fonts/rajdhani';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -17,6 +18,7 @@ type GameDoc = {
   bottomTeamId: string | null;
   bottomTeamName: string | null;
   isBye: boolean;
+  fedByWinnerOf: [string, string] | null;
   status: 'pending' | 'ready' | 'bye' | 'completed';
   winnerId: string | null;
   winnerName: string | null;
@@ -37,30 +39,7 @@ type BracketMeta = {
   bracketSize: number;
 };
 
-// ── Formatting helpers ──────────────────────────────────────────────────────
-
-function formatSchedule(date: string | null, time: string | null, court: string | null): string {
-  if (!date && !time) return '';
-  const parts: string[] = [];
-  if (court) parts.push(court);
-  if (date) {
-    // Convert "2026-06-19" → "Friday 6/19"
-    const d = new Date(date + 'T00:00:00');
-    const dayName = d.toLocaleDateString('en-US', { weekday: 'long' });
-    const monthDay = `${d.getMonth() + 1}/${d.getDate()}`;
-    parts.push(`${dayName} ${monthDay}`);
-  }
-  if (time) {
-    // Convert "20:15" → "8:15 PM"
-    const [hStr, mStr] = time.split(':');
-    let h = parseInt(hStr, 10);
-    const m = mStr || '00';
-    const ampm = h >= 12 ? 'PM' : 'AM';
-    if (h === 0) h = 12; else if (h > 12) h -= 12;
-    parts.push(`${h}:${m} ${ampm}`);
-  }
-  return parts.join(' · ');
-}
+type BracketView = 'winners' | 'losers';
 
 // ── Main Screen ─────────────────────────────────────────────────────────────
 
@@ -97,11 +76,16 @@ export default function BracketScreen() {
   const [selectedGame, setSelectedGame] = useState<GameDoc | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
+  // Winners/Losers toggle — keeps the winners bracket on one page by default,
+  // with a switch to view the losers bracket instead of one long combined scroll.
+  const [view, setView] = useState<BracketView>('winners');
+
   useEffect(() => {
     if (!tournamentId || !activeDivision) return;
     setLoading(true);
     setGames([]);
     setBracketMeta(null);
+    setView('winners'); // reset to winners view whenever the division changes
 
     const bracketRef = doc(db, BracketPaths.bracket(tournamentId, activeDivision));
     const unsubBracket = onSnapshot(bracketRef, (snap) => {
@@ -149,11 +133,11 @@ export default function BracketScreen() {
     );
   };
 
-  const handleGamePress = (game: GameDoc) => {
+  const handleGamePress = (game: GameDoc | TreeGame) => {
     if (!isOwner) return;
     if (game.status !== 'ready' && game.status !== 'completed') return;
     if (game.isBye) return;
-    setSelectedGame(game);
+    setSelectedGame(game as GameDoc);
   };
 
   const handleEnterResult = async (winnerId: string, winnerName: string, loserId: string, loserName: string) => {
@@ -173,12 +157,24 @@ export default function BracketScreen() {
     } finally { setSubmitting(false); }
   };
 
-  const winnersGames = games.filter(g => g.bracket === 'winners' && !g.isBye).sort((a, b) => a.round !== b.round ? a.round - b.round : a.position - b.position);
-  const losersGames = games.filter(g => g.bracket === 'losers').sort((a, b) => a.round !== b.round ? a.round - b.round : a.position - b.position);
+  // All winners-bracket games INCLUDING byes — byes need to appear in the
+  // tree as round-1 cards (with a single team + auto-advance tag) so the
+  // connector-line math for round 2 always has both feeders to resolve.
+  // Hiding byes the way the old card-list view did would break the layout
+  // for any non-power-of-two team count.
+  const allWinnersGames = games.filter(g => g.bracket === 'winners');
+  const allLosersGames = games.filter(g => g.bracket === 'losers');
   const finalGames = games.filter(g => g.bracket === 'final').sort((a, b) => a.round - b.round);
-  const byeGames = games.filter(g => g.isBye);
-  const winnersRounds = [...new Set(winnersGames.map(g => g.round))].sort((a, b) => a - b);
-  const losersRounds = [...new Set(losersGames.map(g => g.round))].sort((a, b) => a - b);
+
+  const winnersRoundNumbers = [...new Set(allWinnersGames.map(g => g.round))].sort((a, b) => a - b);
+  const losersRoundNumbers = [...new Set(allLosersGames.map(g => g.round))].sort((a, b) => a - b);
+
+  const winnersRounds: GameDoc[][] = winnersRoundNumbers.map(r =>
+    allWinnersGames.filter(g => g.round === r).sort((a, b) => a.position - b.position)
+  );
+  const losersRounds: GameDoc[][] = losersRoundNumbers.map(r =>
+    allLosersGames.filter(g => g.round === r).sort((a, b) => a.position - b.position)
+  );
 
   return (
     <View style={styles.container}>
@@ -225,29 +221,51 @@ export default function BracketScreen() {
         </View>
       )}
 
+      {/* Winners / Losers toggle */}
+      {!loading && games.length > 0 && (
+        <View style={styles.viewToggleRow}>
+          <TouchableOpacity
+            style={[styles.viewToggleBtn, view === 'winners' && styles.viewToggleBtnActive]}
+            onPress={() => setView('winners')}
+          >
+            <Text style={[styles.viewToggleText, view === 'winners' && styles.viewToggleTextActive]}>WINNERS BRACKET</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.viewToggleBtn, view === 'losers' && styles.viewToggleBtnActive]}
+            onPress={() => setView('losers')}
+          >
+            <Text style={[styles.viewToggleText, view === 'losers' && styles.viewToggleTextActive]}>LOSERS BRACKET</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       {loading ? (
         <View style={styles.centered}><ActivityIndicator size="large" color="#008080" /></View>
       ) : (
-        <ScrollView style={styles.scroll} contentContainerStyle={{ padding: 16, paddingBottom: 60 }}>
-          {byeGames.length > 0 && (
-            <Section title="BYES (AUTO-ADVANCED)" fontsLoaded={fontsLoaded}>
-              {byeGames.map(game => <GameCard key={game.id} game={game} isOwner={isOwner} onPress={() => {}} fontsLoaded={fontsLoaded} />)}
-            </Section>
+        <ScrollView style={styles.scroll} contentContainerStyle={{ paddingBottom: 60 }}>
+          {view === 'winners' && (
+            <BracketTree
+              rounds={winnersRounds}
+              finalColumn={finalGames}
+              roundLabel={(i, isLast) => isLast ? 'WINNERS FINAL' : `ROUND ${i + 1}`}
+              finalColumnLabel="CHAMPIONSHIP"
+              accentColor="#008080"
+              isOwner={isOwner}
+              onGamePress={handleGamePress}
+              emptyMessage="No winners-bracket games for this division."
+            />
           )}
-          {winnersRounds.map(round => (
-            <Section key={`w-${round}`} title={round === Math.max(...winnersRounds) ? 'WINNERS FINAL' : `WINNERS BRACKET — ROUND ${round}`} fontsLoaded={fontsLoaded}>
-              {winnersGames.filter(g => g.round === round).map(game => <GameCard key={game.id} game={game} isOwner={isOwner} onPress={() => handleGamePress(game)} fontsLoaded={fontsLoaded} />)}
-            </Section>
-          ))}
-          {losersRounds.map(round => (
-            <Section key={`l-${round}`} title={round === Math.max(...losersRounds) ? 'LOSERS FINAL' : `LOSERS BRACKET — ROUND ${round}`} fontsLoaded={fontsLoaded}>
-              {losersGames.filter(g => g.round === round).map(game => <GameCard key={game.id} game={game} isOwner={isOwner} onPress={() => handleGamePress(game)} fontsLoaded={fontsLoaded} />)}
-            </Section>
-          ))}
-          {finalGames.length > 0 && (
-            <Section title="CHAMPIONSHIP" fontsLoaded={fontsLoaded}>
-              {finalGames.map(game => <GameCard key={game.id} game={game} isOwner={isOwner} onPress={() => handleGamePress(game)} fontsLoaded={fontsLoaded} />)}
-            </Section>
+          {view === 'losers' && (
+            <BracketTree
+              rounds={losersRounds}
+              finalColumn={finalGames}
+              roundLabel={(i, isLast) => isLast ? 'LOSERS FINAL' : `ROUND ${i + 1}`}
+              finalColumnLabel="CHAMPIONSHIP"
+              accentColor="#7A1818"
+              isOwner={isOwner}
+              onGamePress={handleGamePress}
+              emptyMessage="This is a 2-team bracket — there's no losers bracket, since a single loss is already elimination. Check the championship game in the winners tab."
+            />
           )}
           {bracketMeta?.championshipFormat === 'double' && !bracketMeta?.championTeamId && (
             <Text style={styles.formatNote}>Double Championship: if the losers-bracket team wins the first championship game, a second game will be played.</Text>
@@ -294,73 +312,6 @@ export default function BracketScreen() {
   );
 }
 
-function Section({ title, children, fontsLoaded }: { title: string; children: React.ReactNode; fontsLoaded: boolean }) {
-  return (
-    <View style={sectionStyles.container}>
-      <Text style={[sectionStyles.title, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>{title}</Text>
-      {children}
-    </View>
-  );
-}
-
-const sectionStyles = StyleSheet.create({
-  container: { marginBottom: 20 },
-  title: { fontSize: 13, color: '#008080', letterSpacing: 1, marginBottom: 8 },
-});
-
-function GameCard({ game, isOwner, onPress, fontsLoaded }: { game: GameDoc; isOwner: boolean; onPress: () => void; fontsLoaded: boolean }) {
-  const isCompleted = game.status === 'completed';
-  const isReady = game.status === 'ready';
-  const isPending = game.status === 'pending';
-  const isBye = game.isBye;
-  const canTap = isOwner && (isReady || isCompleted) && !isBye;
-  const scheduleStr = formatSchedule(game.scheduledDate, game.scheduledTime, game.courtName);
-
-  return (
-    <TouchableOpacity style={[cardStyles.card, isCompleted && cardStyles.completed, isReady && isOwner && cardStyles.ready, isPending && cardStyles.pending]}
-      onPress={onPress} activeOpacity={canTap ? 0.75 : 1} disabled={!canTap}>
-      {scheduleStr ? <Text style={cardStyles.schedule}>{scheduleStr}</Text> : null}
-      <TeamRow teamName={game.topTeamName} isWinner={isCompleted && game.winnerId === game.topTeamId} fontsLoaded={fontsLoaded} />
-      <TeamRow teamName={game.bottomTeamName} isWinner={isCompleted && game.winnerId === game.bottomTeamId} fontsLoaded={fontsLoaded} />
-      <View style={cardStyles.statusRow}>
-        {isBye && <Text style={cardStyles.badgeBye}>BYE — AUTO ADVANCED</Text>}
-        {isPending && !isBye && <Text style={cardStyles.badgePending}>WAITING ON PREVIOUS RESULTS</Text>}
-        {isReady && !isBye && <Text style={cardStyles.badgeReady}>{isOwner ? '▶ TAP TO SELECT WINNER' : 'IN PROGRESS'}</Text>}
-        {isCompleted && !isBye && <Text style={cardStyles.badgeCompleted}>✓ COMPLETED</Text>}
-      </View>
-    </TouchableOpacity>
-  );
-}
-
-function TeamRow({ teamName, isWinner, fontsLoaded }: { teamName: string | null; isWinner: boolean; fontsLoaded: boolean }) {
-  return (
-    <View style={cardStyles.teamRow}>
-      {isWinner && <Text style={cardStyles.winnerIcon}>🏆</Text>}
-      <Text style={[cardStyles.teamName, fontsLoaded && isWinner && { fontFamily: 'Rajdhani_700Bold' }, isWinner && cardStyles.teamNameWinner, !teamName && cardStyles.teamNameTBD]} numberOfLines={1}>
-        {teamName || 'TBD'}
-      </Text>
-    </View>
-  );
-}
-
-const cardStyles = StyleSheet.create({
-  card: { backgroundColor: '#fff', borderRadius: 12, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: '#e0d8c8' },
-  completed: { borderColor: '#008080', borderWidth: 1.5 },
-  ready: { borderColor: '#B8860B', borderWidth: 2 },
-  pending: { opacity: 0.55 },
-  schedule: { fontSize: 12, color: '#5a7a7a', marginBottom: 10 },
-  teamRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 7, borderBottomWidth: 1, borderBottomColor: '#f5ede0' },
-  teamName: { flex: 1, fontSize: 16, color: '#003333' },
-  teamNameWinner: { color: '#008080' },
-  teamNameTBD: { color: '#a0b8b8', fontStyle: 'italic' },
-  winnerIcon: { fontSize: 14, marginRight: 6 },
-  statusRow: { flexDirection: 'row', marginTop: 10 },
-  badgeBye: { fontSize: 10, color: '#a0b8b8', backgroundColor: '#f0e8d8', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
-  badgePending: { fontSize: 10, color: '#a0b8b8', backgroundColor: '#f0e8d8', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
-  badgeReady: { fontSize: 10, color: '#B8860B', backgroundColor: '#fffbeb', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, fontWeight: '700' },
-  badgeCompleted: { fontSize: 10, color: '#008080', backgroundColor: '#e8f4f4', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
-});
-
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f5ede0' },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
@@ -382,8 +333,13 @@ const styles = StyleSheet.create({
   organizerHint: { backgroundColor: '#fffbeb', paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#fde68a' },
   organizerHintText: { fontSize: 13, color: '#92400e' },
   regenerateLink: { fontSize: 12, color: '#7A1E1E', marginTop: 6, textDecorationLine: 'underline' },
+  viewToggleRow: { flexDirection: 'row', backgroundColor: '#fff', marginHorizontal: 16, marginTop: 12, borderRadius: 12, padding: 4, borderWidth: 1, borderColor: '#e0d8c8' },
+  viewToggleBtn: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 9 },
+  viewToggleBtnActive: { backgroundColor: '#008080' },
+  viewToggleText: { fontSize: 12, color: '#5a7a7a', fontWeight: '700', letterSpacing: 0.5 },
+  viewToggleTextActive: { color: '#fff' },
   scroll: { flex: 1 },
-  formatNote: { fontSize: 12, color: '#a0b8b8', textAlign: 'center', marginTop: 8, paddingHorizontal: 8 },
+  formatNote: { fontSize: 12, color: '#a0b8b8', textAlign: 'center', marginTop: 8, paddingHorizontal: 16 },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' },
   modalBox: { backgroundColor: '#f5ede0', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 44 },
   modalTitle: { fontSize: 22, color: '#003333', letterSpacing: 1, marginBottom: 2 },
