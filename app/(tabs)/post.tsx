@@ -190,8 +190,8 @@ function TournamentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
   const [startDate, setStartDate] = useState('');
   const [startDateObj, setStartDateObj] = useState<Date | null>(null);
   const [endDate, setEndDate] = useState('');
+  const [tournamentDuration, setTournamentDuration] = useState<1 | 2 | 3>(1);
   const [showStartPicker, setShowStartPicker] = useState(false);
-  const [showEndPicker, setShowEndPicker] = useState(false);
   const [address, setAddress] = useState('');
   const [city, setCity] = useState('');
   const [state, setState] = useState('');
@@ -274,7 +274,7 @@ function TournamentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
   };
 
   const resetFields = () => {
-    setName(''); setSport(''); setStartDate(''); setStartDateObj(null); setEndDate('');
+    setName(''); setSport(''); setStartDate(''); setStartDateObj(null); setEndDate(''); setTournamentDuration(1);
     setAddress(''); setCity(''); setState(''); setZip('');
     setSpots(''); setDivisionFees({}); setDivisionSpots({}); setSpectatorFee('');
     setIsFreeSpectator(false); setSpectatorPaymentMethods([]); setSpectatorPaymentOther('');
@@ -357,8 +357,15 @@ function TournamentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
     setStartDate(date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }));
     setStartDateObj(date); setShowStartPicker(false);
   };
-  const handleEndConfirm = (date: Date) => { setEndDate(date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })); setShowEndPicker(false); };
   const handleDepositDueConfirm = (date: Date) => { setDepositDue(date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })); setShowDepositDuePicker(false); };
+
+  // Auto-compute end date whenever start date or duration changes
+  useEffect(() => {
+    if (!startDateObj) { setEndDate(''); return; }
+    const end = new Date(startDateObj);
+    end.setDate(end.getDate() + tournamentDuration - 1);
+    setEndDate(end.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }));
+  }, [startDateObj, tournamentDuration]);
 
   const handleSubmit = async () => {
     const finalCity = useManualLocation ? manualCity : city;
@@ -370,7 +377,6 @@ function TournamentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
     if (!name) missing.push('Tournament Name');
     if (!sport) missing.push('Sport');
     if (!startDate) missing.push('Start Date');
-    if (!endDate) missing.push('End Date');
     if (!finalCity || !finalState) missing.push('Venue / Address (city & state)');
     if (needsAvailableSpots && !spots) missing.push('Available Spots');
 
@@ -402,30 +408,14 @@ function TournamentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
         tournamentDays: (() => {
           if (!startDateObj) return [];
           const days: string[] = [];
-          // Parse end date by trying multiple formats
-          let end = startDateObj;
-          if (endDate) {
-            // Try direct parse, then append year hint
-            let ep = new Date(endDate);
-            if (isNaN(ep.getTime())) ep = new Date(endDate + ', ' + startDateObj.getFullYear());
-            if (!isNaN(ep.getTime())) end = ep;
-          }
           const cur = new Date(startDateObj.getFullYear(), startDateObj.getMonth(), startDateObj.getDate());
-          const endNorm = new Date(end.getFullYear(), end.getMonth(), end.getDate());
-          while (cur <= endNorm && days.length < 3) {
+          for (let i = 0; i < tournamentDuration; i++) {
             days.push(`${cur.getFullYear()}-${String(cur.getMonth()+1).padStart(2,'0')}-${String(cur.getDate()).padStart(2,'0')}`);
             cur.setDate(cur.getDate() + 1);
           }
           return days;
         })(),
-        tournamentDuration: (() => {
-          if (!startDateObj || !endDate) return 1;
-          let ep = new Date(endDate);
-          if (isNaN(ep.getTime())) ep = new Date(endDate + ', ' + startDateObj.getFullYear());
-          if (isNaN(ep.getTime())) return 1;
-          const diff = Math.round((ep.getTime() - startDateObj.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-          return Math.min(Math.max(diff, 1), 3);
-        })(),
+        tournamentDuration,
         address: finalAddress, city: finalCity, state: finalState, zip: finalZip,
         location: `${finalCity}, ${finalState}`, spots: parseInt(spots) || 0,
         divisionFees,
@@ -530,17 +520,23 @@ function TournamentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
             </View>
           )}
 
+          <Text style={styles.label}>Tournament Duration</Text>
+          <View style={styles.durationRow}>
+            {([1, 2, 3] as const).map(d => (
+              <TouchableOpacity key={d} style={[styles.durationOption, tournamentDuration === d && styles.durationOptionActive]} onPress={() => setTournamentDuration(d)}>
+                <Text style={[styles.durationOptionText, tournamentDuration === d && styles.durationOptionTextActive]}>{d} Day{d > 1 ? 's' : ''}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
           <Text style={styles.label}>Start Date</Text>
           <TouchableOpacity style={styles.dropdown} onPress={() => { Keyboard.dismiss(); setShowStartPicker(true); }}>
             <Text style={startDate ? styles.dropdownSelected : styles.dropdownPlaceholder}>{startDate || 'Select start date...'}</Text>
           </TouchableOpacity>
-          <DateTimePickerModal isVisible={showStartPicker} mode="date" onConfirm={(date) => { handleStartConfirm(date); setTimeout(() => setShowEndPicker(true), 500); }} onCancel={() => setShowStartPicker(false)} />
-
-          <Text style={styles.label}>End Date</Text>
-          <TouchableOpacity style={styles.dropdown} onPress={() => { Keyboard.dismiss(); setShowEndPicker(true); }}>
-            <Text style={endDate ? styles.dropdownSelected : styles.dropdownPlaceholder}>{endDate || 'Select end date...'}</Text>
-          </TouchableOpacity>
-          <DateTimePickerModal isVisible={showEndPicker} mode="date" onConfirm={(date) => { handleEndConfirm(date); setTimeout(() => scrollRef.current?.scrollTo({ y: 420, animated: true }), 300); }} onCancel={() => setShowEndPicker(false)} />
+          <DateTimePickerModal isVisible={showStartPicker} mode="date" onConfirm={(date) => { handleStartConfirm(date); setTimeout(() => scrollRef.current?.scrollTo({ y: 420, animated: true }), 300); }} onCancel={() => setShowStartPicker(false)} />
+          {startDate && tournamentDuration > 1 ? (
+            <Text style={styles.durationHint}>{startDate} – {endDate}</Text>
+          ) : null}
 
           <Text style={styles.label}>Venue / Address</Text>
 
@@ -1084,6 +1080,12 @@ const styles = StyleSheet.create({
   label: { fontSize: 14, fontWeight: '600', color: '#003333', marginBottom: 6, marginTop: 10 },
   optional: { fontSize: 12, fontWeight: '400', color: '#a0b8b8' },
   bracketSettingsHint: { fontSize: 12, color: '#a0b8b8', marginBottom: 6 },
+  durationRow: { flexDirection: 'row', gap: 8, marginBottom: 8 },
+  durationOption: { flex: 1, backgroundColor: '#fff', borderRadius: 12, padding: 12, alignItems: 'center', borderWidth: 1.5, borderColor: '#e0d8c8' },
+  durationOptionActive: { borderColor: '#008080', backgroundColor: '#e8f4f4' },
+  durationOptionText: { fontSize: 14, color: '#5a7a7a', fontWeight: '600' },
+  durationOptionTextActive: { color: '#008080' },
+  durationHint: { fontSize: 12, color: '#008080', marginBottom: 6, marginTop: 2 },
   sectionDivider: { height: 1, backgroundColor: '#e0d8c8', marginTop: 20, marginBottom: 8 },
   formatToggleRow: { gap: 8, marginBottom: 8 },
   formatOption: { backgroundColor: '#fff', borderRadius: 12, padding: 14, borderWidth: 1.5, borderColor: '#e0d8c8' },

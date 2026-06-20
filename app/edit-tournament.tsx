@@ -124,9 +124,10 @@ export default function EditTournamentScreen() {
   const [sport, setSport] = useState('');
   const [showSportPicker, setShowSportPicker] = useState(false);
   const [startDate, setStartDate] = useState('');
+  const [startDateObj, setStartDateObj] = useState<Date | null>(null);
   const [endDate, setEndDate] = useState('');
+  const [tournamentDuration, setTournamentDuration] = useState<1 | 2 | 3>(1);
   const [showStartPicker, setShowStartPicker] = useState(false);
-  const [showEndPicker, setShowEndPicker] = useState(false);
   const [address, setAddress] = useState('');
   const [city, setCity] = useState('');
   const [state, setState] = useState('');
@@ -220,6 +221,15 @@ export default function EditTournamentScreen() {
       const dates = d.date?.split(' - ') || [];
       setStartDate(dates[0] || '');
       setEndDate(dates[1] || '');
+      const loadedDuration = d.tournamentDuration && d.tournamentDuration >= 1 && d.tournamentDuration <= 3 ? d.tournamentDuration : 1;
+      setTournamentDuration(loadedDuration);
+      if (d.tournamentDays?.length > 0) {
+        const sd = new Date(d.tournamentDays[0] + 'T00:00:00');
+        if (!isNaN(sd.getTime())) setStartDateObj(sd);
+      } else if (dates[0]) {
+        const sd = new Date(dates[0]);
+        if (!isNaN(sd.getTime())) setStartDateObj(sd);
+      }
       setAddress(d.address || '');
       setCity(d.city || '');
       setState(d.state || '');
@@ -384,12 +394,8 @@ export default function EditTournamentScreen() {
 
   const handleStartConfirm = (date: Date) => {
     setStartDate(date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }));
+    setStartDateObj(date);
     setShowStartPicker(false);
-  };
-
-  const handleEndConfirm = (date: Date) => {
-    setEndDate(date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }));
-    setShowEndPicker(false);
   };
 
   const handleDepositDueConfirm = (date: Date) => {
@@ -397,12 +403,18 @@ export default function EditTournamentScreen() {
     setShowDepositDuePicker(false);
   };
 
+  useEffect(() => {
+    if (!startDateObj) return;
+    const end = new Date(startDateObj);
+    end.setDate(end.getDate() + tournamentDuration - 1);
+    setEndDate(end.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }));
+  }, [startDateObj, tournamentDuration]);
+
   const handleSave = async () => {
     const missing: string[] = [];
     if (!name) missing.push('Tournament Name');
     if (!sport) missing.push('Sport');
     if (!startDate) missing.push('Start Date');
-    if (!endDate) missing.push('End Date');
     if (!city || !state) missing.push('Venue / Address (city & state)');
     if (needsAvailableSpots && !spots) missing.push('Available Spots');
 
@@ -438,28 +450,14 @@ export default function EditTournamentScreen() {
       const newDate = `${startDate} - ${endDate}`;
       const newLocation = `${city}, ${state}`;
 
-      // Compute tournamentDays for bracket system
-      const parseDisplayDate = (s: string): Date | null => {
-        let d = new Date(s);
-        if (!isNaN(d.getTime())) return d;
-        // Try appending year from other field
-        const yearMatch = (startDate + ' ' + endDate).match(/\d{4}/);
-        if (yearMatch) { d = new Date(s + ', ' + yearMatch[0]); if (!isNaN(d.getTime())) return d; }
-        return null;
-      };
-      const startParsed = parseDisplayDate(startDate);
-      const endParsed = parseDisplayDate(endDate);
       const tournamentDays: string[] = [];
-      if (startParsed) {
-        const endD = endParsed || startParsed;
-        const cur = new Date(startParsed.getFullYear(), startParsed.getMonth(), startParsed.getDate());
-        const endNorm = new Date(endD.getFullYear(), endD.getMonth(), endD.getDate());
-        while (cur <= endNorm && tournamentDays.length < 3) {
+      if (startDateObj) {
+        const cur = new Date(startDateObj.getFullYear(), startDateObj.getMonth(), startDateObj.getDate());
+        for (let i = 0; i < tournamentDuration; i++) {
           tournamentDays.push(`${cur.getFullYear()}-${String(cur.getMonth()+1).padStart(2,'0')}-${String(cur.getDate()).padStart(2,'0')}`);
           cur.setDate(cur.getDate() + 1);
         }
       }
-      const tournamentDuration = Math.min(Math.max(tournamentDays.length, 1), 3);
 
       await updateDoc(doc(db, 'tournaments', id as string), {
         name, sport,
@@ -576,19 +574,24 @@ export default function EditTournamentScreen() {
               </View>
             )}
 
+            <Text style={styles.label}>Tournament Duration</Text>
+            <View style={styles.durationRow}>
+              {([1, 2, 3] as const).map(d => (
+                <TouchableOpacity key={d} style={[styles.durationOption, tournamentDuration === d && styles.durationOptionActive]} onPress={() => setTournamentDuration(d)}>
+                  <Text style={[styles.durationOptionText, tournamentDuration === d && styles.durationOptionTextActive]}>{d} Day{d > 1 ? 's' : ''}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
             <Text style={styles.label}>Start Date</Text>
             <TouchableOpacity style={styles.dropdown} onPress={() => { Keyboard.dismiss(); setShowStartPicker(true); }}>
               <Text style={startDate ? styles.dropdownSelected : styles.dropdownPlaceholder}>{startDate || 'Select start date...'}</Text>
               <CalendarIcon size={16} color="#008080" />
             </TouchableOpacity>
             <DateTimePickerModal isVisible={showStartPicker} mode="date" onConfirm={handleStartConfirm} onCancel={() => setShowStartPicker(false)} />
-
-            <Text style={styles.label}>End Date</Text>
-            <TouchableOpacity style={styles.dropdown} onPress={() => { Keyboard.dismiss(); setShowEndPicker(true); }}>
-              <Text style={endDate ? styles.dropdownSelected : styles.dropdownPlaceholder}>{endDate || 'Select end date...'}</Text>
-              <CalendarIcon size={16} color="#008080" />
-            </TouchableOpacity>
-            <DateTimePickerModal isVisible={showEndPicker} mode="date" onConfirm={handleEndConfirm} onCancel={() => setShowEndPicker(false)} />
+            {startDate && tournamentDuration > 1 ? (
+              <Text style={styles.durationHint}>{startDate} – {endDate}</Text>
+            ) : null}
 
             <Text style={styles.label}>Venue / Address</Text>
             <View style={styles.placesWrapper}>
@@ -989,6 +992,12 @@ const styles = StyleSheet.create({
   modalOkBtn: { backgroundColor: '#008080', borderRadius: 14, paddingVertical: 13, alignItems: 'center' },
   modalOkText: { fontSize: 15, color: '#fff', letterSpacing: 1 },
   sectionDivider: { height: 1, backgroundColor: '#e0d8c8', marginTop: 20, marginBottom: 8 },
+  durationRow: { flexDirection: 'row', gap: 8, marginBottom: 8 },
+  durationOption: { flex: 1, backgroundColor: '#fff', borderRadius: 12, padding: 12, alignItems: 'center', borderWidth: 1.5, borderColor: '#e0d8c8' },
+  durationOptionActive: { borderColor: '#008080', backgroundColor: '#e8f4f4' },
+  durationOptionText: { fontSize: 14, color: '#5a7a7a', fontWeight: '600' },
+  durationOptionTextActive: { color: '#008080' },
+  durationHint: { fontSize: 12, color: '#008080', marginBottom: 6, marginTop: 2 },
   formatToggleRow: { gap: 8, marginBottom: 8 },
   formatOption: { backgroundColor: '#fff', borderRadius: 12, padding: 14, borderWidth: 1.5, borderColor: '#e0d8c8' },
   formatOptionActive: { borderColor: '#008080', backgroundColor: '#e8f4f4' },

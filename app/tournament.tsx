@@ -894,17 +894,21 @@ export default function TournamentScreen() {
           </View>
         )}
 
-        {isOwner && (
+        {(isOwner || tournament?.bracketStatus === 'bracket_generated') && (
           <View style={styles.tabRow}>
-            <TouchableOpacity style={[styles.tab, activeTab === 'details' && { backgroundColor: sportColor }]} onPress={() => setActiveTab('details')}>
-              <Text style={[styles.tabText, activeTab === 'details' && styles.tabTextActive]}>Details</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.tab, activeTab === 'teams' && { backgroundColor: sportColor }]} onPress={() => setActiveTab('teams')}>
-              <Text style={[styles.tabText, activeTab === 'teams' && styles.tabTextActive]}>Teams {teams.length > 0 ? `(${teams.length})` : ''}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.tab, activeTab === 'waitlist' && { backgroundColor: sportColor }]} onPress={() => setActiveTab('waitlist')}>
-              <Text style={[styles.tabText, activeTab === 'waitlist' && styles.tabTextActive]}>Waitlist {waitlistEntries.length > 0 ? `(${waitlistEntries.length})` : ''}</Text>
-            </TouchableOpacity>
+            {isOwner && (
+              <>
+                <TouchableOpacity style={[styles.tab, activeTab === 'details' && { backgroundColor: sportColor }]} onPress={() => setActiveTab('details')}>
+                  <Text style={[styles.tabText, activeTab === 'details' && styles.tabTextActive]}>Details</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.tab, activeTab === 'teams' && { backgroundColor: sportColor }]} onPress={() => setActiveTab('teams')}>
+                  <Text style={[styles.tabText, activeTab === 'teams' && styles.tabTextActive]}>Teams {teams.length > 0 ? `(${teams.length})` : ''}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.tab, activeTab === 'waitlist' && { backgroundColor: sportColor }]} onPress={() => setActiveTab('waitlist')}>
+                  <Text style={[styles.tabText, activeTab === 'waitlist' && styles.tabTextActive]}>Waitlist {waitlistEntries.length > 0 ? `(${waitlistEntries.length})` : ''}</Text>
+                </TouchableOpacity>
+              </>
+            )}
             {tournament?.bracketStatus === 'bracket_generated' && (
               <TouchableOpacity
                 style={[styles.tab, activeTab === 'bracket' && { backgroundColor: sportColor }]}
