@@ -1,34 +1,30 @@
 import { Rajdhani_700Bold, useFonts } from '@expo-google-fonts/rajdhani';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
-    addDoc,
-    collection,
-    doc,
-    getDoc,
-    getDocs,
-    serverTimestamp,
-    updateDoc,
-    writeBatch,
+  addDoc, collection, doc, getDoc, getDocs,
+  serverTimestamp, updateDoc, writeBatch,
 } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    Modal,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator, Alert, Modal, ScrollView, StyleSheet,
+  Text, TextInput, TouchableOpacity, View,
 } from 'react-native';
 import { auth, db } from '../firebaseConfig';
 import DateTimePickerModal from 'react-native-modal-datetime-picker';
-import { generateBracketFromTeams, generateSeedPlacements, MAX_AUTO_BRACKET_TEAMS, nextPowerOfTwo } from '../src/bracket/bracketEngine';
+import { generateBracketFromTeams, generateSeedPlacements, MAX_AUTO_BRACKET_TEAMS } from '../src/bracket/bracketEngine';
 import { cascadeByeAdvancements, AdvancementGame } from '../src/bracket/bracketAdvancement';
 import { BracketDoc, BracketPaths, GameDoc } from '../src/bracket/bracketSchema';
 import { getChampionshipExplanation } from '../src/bracket/championshipFormat';
 import { generateSchedule, generateSlots, SchedulerInput, validateConstraints } from '../src/bracket/schedulingEngine';
+
+type DivisionSummary = {
+  name: string;
+  teamCount: number;
+  teams: { id: string; teamName: string; registeredBy: string }[];
+  bracketSize: number;
+  byeCount: number;
+  alreadyGenerated: boolean;
+};
 
 export default function BracketGenerateScreen() {
   const router = useRouter();
@@ -39,8 +35,10 @@ export default function BracketGenerateScreen() {
   const [generating, setGenerating] = useState(false);
   const [saving, setSaving] = useState(false);
   const [tournament, setTournament] = useState<any>(null);
+  const [divisionSummaries, setDivisionSummaries] = useState<DivisionSummary[]>([]);
   const [teams, setTeams] = useState<{ id: string; teamName: string; registeredBy: string }[]>([]);
   const [constraintError, setConstraintError] = useState<string | null>(null);
+  const [generateProgress, setGenerateProgress] = useState<string | null>(null);
 
   // Edit modal state
   const [showEditModal, setShowEditModal] = useState(false);
@@ -92,11 +90,32 @@ export default function BracketGenerateScreen() {
       if (!tSnap.exists()) return;
       const data = { id: tSnap.id, ...tSnap.data() };
       setTournament(data);
+
+      // Load ALL teams across all divisions
       const teamsSnap = await getDocs(collection(db, 'tournaments', tournamentId, 'teams'));
-      const divTeams = teamsSnap.docs
-        .map(d => ({ id: d.id, ...d.data() } as any))
-        .filter((t: any) => t.division === divisionId);
-      setTeams(divTeams);
+      const allTeams = teamsSnap.docs.map(d => ({ id: d.id, ...d.data() } as any));
+
+      // Teams for the primary divisionId (for constraint validation)
+      const primaryTeams = allTeams.filter((t: any) => t.division === divisionId);
+      setTeams(primaryTeams);
+
+      // Build per-division summaries
+      const divisions: string[] = (data as any).divisions || [divisionId];
+      const summaries: DivisionSummary[] = divisions.map(div => {
+        const divTeams = allTeams.filter((t: any) => t.division === div);
+        const count = divTeams.length;
+        const bSize = count > 0 ? nextPow2(count) : 0;
+        const alreadyGenerated = !!(data as any)[`bracketGenerated_${div}`];
+        return {
+          name: div,
+          teamCount: count,
+          teams: divTeams,
+          bracketSize: bSize,
+          byeCount: count > 0 ? bSize - count : 0,
+          alreadyGenerated,
+        };
+      });
+      setDivisionSummaries(summaries);
     } catch (e) {
       console.log('Error loading bracket data:', e);
     } finally {
@@ -106,7 +125,7 @@ export default function BracketGenerateScreen() {
 
   useEffect(() => { loadTournament(); }, [tournamentId, divisionId]);
 
-  // Validate constraints whenever tournament or teams change
+  // Validate constraints against primary division
   useEffect(() => {
     if (!tournament || teams.length === 0) return;
     const settings = tournament.bracketSettings;
@@ -148,10 +167,8 @@ export default function BracketGenerateScreen() {
     setEditBuffer(String(s.bufferMinutes || 10));
     setEditChampFormat(s.championshipFormat || 'single');
     setShowChampPicker(false);
-    // Populate dates from tournament
     const days = getTournamentDays(tournament);
     setEditDuration((days.length as 1 | 2 | 3) || 1);
-    // Display start date from stored tournamentDays[0] or startDate field
     if (days.length > 0) {
       const d = new Date(days[0] + 'T00:00:00');
       setEditStartDate(d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }));
@@ -173,8 +190,6 @@ export default function BracketGenerateScreen() {
         bufferMinutes: parseInt(editBuffer) || 10,
         championshipFormat: editChampFormat,
       };
-
-      // Compute tournamentDays from editStartDate + editDuration
       const tournamentDays: string[] = [];
       const startParsed = new Date(editStartDate);
       if (!isNaN(startParsed.getTime())) {
@@ -184,14 +199,11 @@ export default function BracketGenerateScreen() {
           tournamentDays.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`);
         }
       }
-
-      // Compute human-readable end date for the date string field
       const endDateDisplay = (() => {
         if (tournamentDays.length === 0) return editStartDate;
         const last = new Date(tournamentDays[tournamentDays.length - 1] + 'T00:00:00');
         return last.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
       })();
-
       await updateDoc(doc(db, 'tournaments', tournamentId!), {
         bracketSettings: newSettings,
         ...(tournamentDays.length > 0 && {
@@ -200,7 +212,6 @@ export default function BracketGenerateScreen() {
           date: `${editStartDate} - ${endDateDisplay}`,
         }),
       });
-
       await loadTournament();
       setShowEditModal(false);
     } catch (e: any) {
@@ -210,165 +221,197 @@ export default function BracketGenerateScreen() {
     }
   };
 
-  const handleGenerate = async () => {
-    if (!tournament || !tournamentId || !divisionId) return;
+  // Generate bracket for a single division — reusable by both single and bulk generate
+  const generateForDivision = async (
+    div: string,
+    divTeams: { id: string; teamName: string; registeredBy: string }[],
+  ) => {
+    const settings = tournament.bracketSettings || {};
+    const dates = getTournamentDays(tournament);
+    const courts = resolveCourts(settings);
+    const shuffled = [...divTeams].sort(() => Math.random() - 0.5);
+    const bracket = generateBracketFromTeams(shuffled.map(t => t.teamName));
+    const bracketSlotSize = bracket.bracketSize;
+    const seedPlacements = generateSeedPlacements(bracketSlotSize, shuffled.length);
+    const slotTeams = seedPlacements.map(slotSeed => (slotSeed === -1 ? null : shuffled[slotSeed - 1] || null));
+
+    const scheduleInput: SchedulerInput = {
+      dates, courts,
+      dailyStartTime: settings.dailyStartTime || '08:00',
+      dailyEndTime: settings.dailyEndTime || '20:00',
+      gameDurationMinutes: settings.gameDurationMinutes || 50,
+      bufferMinutes: settings.bufferMinutes || 10,
+    };
+    const schedule = generateSchedule(bracket, scheduleInput);
+    const scheduleLookup = new Map(schedule.scheduledGames.map(sg => [sg.gameId, sg]));
+
+    const gameMap = new Map<string, AdvancementGame>();
+    for (const game of bracket.games) {
+      const topTeam = game.topSeed && game.topSeed > 0 ? slotTeams[game.topSeed - 1] : null;
+      const bottomTeam = game.bottomSeed && game.bottomSeed > 0 ? slotTeams[game.bottomSeed - 1] : null;
+      let status: AdvancementGame['status'] = 'pending';
+      if (!game.isBye && topTeam && bottomTeam) status = 'ready';
+      gameMap.set(game.id, {
+        id: game.id, isBye: game.isBye, status,
+        topTeamId: topTeam?.id || null, topTeamName: topTeam?.teamName || null,
+        bottomTeamId: bottomTeam?.id || null, bottomTeamName: bottomTeam?.teamName || null,
+        winnerId: null, winnerName: null, loserId: null, loserName: null,
+        winnerAdvancesTo: game.winnerAdvancesTo, winnerAdvancesToSlot: game.winnerAdvancesToSlot,
+        loserDropsTo: game.loserDropsTo, loserDropsToSlot: game.loserDropsToSlot,
+      });
+    }
+    cascadeByeAdvancements(gameMap);
+
+    const batch = writeBatch(db);
+    const bracketRef = doc(db, BracketPaths.bracket(tournamentId!, div));
+    const bracketDoc: Partial<BracketDoc> = {
+      divisionId: div, tournamentId: tournamentId!,
+      championshipFormat: settings.championshipFormat || 'single',
+      bracketSize: bracket.bracketSize,
+      teamCount: divTeams.length,
+      status: 'generated',
+      generatedAt: serverTimestamp() as any,
+      completedAt: null,
+      seededTeams: shuffled.map((team, i) => ({ seed: i + 1, teamId: team.id, teamName: team.teamName, isBye: false })),
+      championTeamId: null,
+      grandFinalId: 'GF-1',
+      bracketResetId: settings.championshipFormat === 'double' ? 'GF-2' : null,
+      bracketResetRequired: false,
+      scheduleGeneratedAt: serverTimestamp() as any,
+      explanation: getChampionshipExplanation(settings.championshipFormat || 'single'),
+    };
+    batch.set(bracketRef, bracketDoc);
+
+    for (const game of bracket.games) {
+      const state = gameMap.get(game.id)!;
+      const gameRef = doc(db, BracketPaths.game(tournamentId!, div, game.id));
+      const scheduledGame = scheduleLookup.get(game.id);
+      const gameDoc: Partial<GameDoc> = {
+        id: game.id, divisionId: div, tournamentId: tournamentId!,
+        bracket: game.bracket, round: game.round, position: game.position,
+        topTeamId: state.topTeamId, topTeamName: state.topTeamName,
+        bottomTeamId: state.bottomTeamId, bottomTeamName: state.bottomTeamName,
+        isBye: game.isBye,
+        fedByWinnerOf: game.fedByWinner || null,
+        winnerAdvancesTo: state.winnerAdvancesTo, winnerAdvancesToSlot: state.winnerAdvancesToSlot,
+        loserDropsTo: state.loserDropsTo, loserDropsToSlot: state.loserDropsToSlot,
+        status: state.status,
+        winnerId: state.winnerId, winnerName: state.winnerName,
+        loserId: state.loserId, loserName: state.loserName,
+        topScore: null, bottomScore: null,
+        resultEnteredAt: state.status === 'bye' ? (serverTimestamp() as any) : null,
+        resultEnteredBy: state.status === 'bye' ? 'system' : null,
+        courtId: scheduledGame?.courtId || null,
+        courtName: scheduledGame?.courtId || null,
+        scheduledDate: scheduledGame?.date || null,
+        scheduledTime: scheduledGame?.startTime || null,
+        scheduledSlotIndex: scheduledGame?.slotIndex ?? null,
+        createdAt: serverTimestamp() as any,
+      };
+      batch.set(gameRef, gameDoc);
+    }
+
+    batch.update(doc(db, 'tournaments', tournamentId!), {
+      bracketStatus: 'bracket_generated',
+      [`bracketGenerated_${div}`]: true,
+    });
+    await batch.commit();
+
+    // Notify registered teams
+    try {
+      const notified = new Set<string>();
+      await Promise.all(divTeams.map(async (td) => {
+        const uid = td.registeredBy;
+        if (!uid || notified.has(uid)) return;
+        notified.add(uid);
+        await addDoc(collection(db, 'notifications'), {
+          toUserId: uid,
+          message: `Bracket is now live for ${tournament.name}`,
+          body: `The ${div} bracket is ready. Tap to view matchups.`,
+          link: `/bracket?tournamentId=${tournamentId}&divisionId=${div}&postedBy=${tournament.postedBy}`,
+          createdAt: serverTimestamp(), read: false,
+        });
+        const userSnap = await getDoc(doc(db, 'users', uid));
+        if (userSnap.exists() && userSnap.data().pushToken && userSnap.data().notificationsEnabled !== false) {
+          await fetch('https://exp.host/--/api/v2/push/send', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ to: userSnap.data().pushToken, title: '🏆 Bracket is Live!', body: `${tournament.name} — ${div} bracket is ready.`, sound: 'default' }),
+          });
+        }
+      }));
+    } catch (e) { console.log('Notification error:', e); }
+  };
+
+  // Generate all divisions at once
+  const handleGenerateAll = async () => {
+    if (!tournament || !tournamentId) return;
     const user = auth.currentUser;
     if (!user || user.uid !== tournament.postedBy) {
-      Alert.alert('Error', 'Only the tournament organizer can generate the bracket.');
+      Alert.alert('Error', 'Only the tournament organizer can generate brackets.');
       return;
     }
     if (constraintError) { Alert.alert('Cannot Generate', constraintError); return; }
-    if (teams.length < 2) { Alert.alert('Not Enough Teams', 'You need at least 2 registered teams to generate a bracket.'); return; }
-    if (teams.length > MAX_AUTO_BRACKET_TEAMS) {
-      Alert.alert('Too Many Teams', `Maximum ${MAX_AUTO_BRACKET_TEAMS} teams per division. This division has ${teams.length}.`);
+
+    const eligible = divisionSummaries.filter(d => !d.alreadyGenerated && d.teamCount >= 2);
+    const skipped = divisionSummaries.filter(d => !d.alreadyGenerated && d.teamCount < 2);
+    const alreadyDone = divisionSummaries.filter(d => d.alreadyGenerated);
+
+    if (eligible.length === 0) {
+      Alert.alert(
+        'Nothing to Generate',
+        alreadyDone.length > 0
+          ? 'All divisions already have brackets generated.'
+          : 'No divisions have enough teams (minimum 2) to generate a bracket.',
+      );
       return;
     }
-    setGenerating(true);
-    try {
-      const settings = tournament.bracketSettings || {};
-      const dates = getTournamentDays(tournament);
-      const courts = resolveCourts(settings);
-      const shuffled = [...teams].sort(() => Math.random() - 0.5);
-      const bracket = generateBracketFromTeams(shuffled.map(t => t.teamName));
 
-      // Build the same seed-slot → team mapping the engine used internally,
-      // so topSeed/bottomSeed (which are bracket slot numbers) resolve to the
-      // correct team instead of being misread as an index into `shuffled`.
-      const bracketSlotSize = bracket.bracketSize;
-      const seedPlacements = generateSeedPlacements(bracketSlotSize, shuffled.length);
-      const slotTeams = seedPlacements.map(slotSeed => (slotSeed === -1 ? null : shuffled[slotSeed - 1] || null));
+    const skipMsg = skipped.length > 0
+      ? `\n\nSkipping: ${skipped.map(d => `${d.name} (${d.teamCount} team${d.teamCount === 1 ? '' : 's'})`).join(', ')} — need at least 2.`
+      : '';
+    const alreadyMsg = alreadyDone.length > 0
+      ? `\n\nAlready generated: ${alreadyDone.map(d => d.name).join(', ')} — will not be overwritten.`
+      : '';
 
-      const scheduleInput: SchedulerInput = {
-        dates, courts,
-        dailyStartTime: settings.dailyStartTime || '08:00',
-        dailyEndTime: settings.dailyEndTime || '20:00',
-        gameDurationMinutes: settings.gameDurationMinutes || 50,
-        bufferMinutes: settings.bufferMinutes || 10,
-      };
-      const schedule = generateSchedule(bracket, scheduleInput);
-      const scheduleLookup = new Map(schedule.scheduledGames.map(sg => [sg.gameId, sg]));
-
-      // ── Build in-memory advancement state for every game ──────────────────
-      // Team slots are resolved from topSeed/bottomSeed where the engine
-      // seeded them directly (round 1); everything else starts empty and is
-      // filled by the bye cascade below — the same applyGameResult function
-      // that organizer result entry uses, so byes and real results are
-      // resolved through one shared code path.
-      const gameMap = new Map<string, AdvancementGame>();
-      for (const game of bracket.games) {
-        const topTeam = game.topSeed && game.topSeed > 0 ? slotTeams[game.topSeed - 1] : null;
-        const bottomTeam = game.bottomSeed && game.bottomSeed > 0 ? slotTeams[game.bottomSeed - 1] : null;
-
-        let status: AdvancementGame['status'] = 'pending';
-        if (!game.isBye && topTeam && bottomTeam) status = 'ready';
-
-        gameMap.set(game.id, {
-          id: game.id,
-          isBye: game.isBye,
-          status,
-          topTeamId: topTeam?.id || null,
-          topTeamName: topTeam?.teamName || null,
-          bottomTeamId: bottomTeam?.id || null,
-          bottomTeamName: bottomTeam?.teamName || null,
-          winnerId: null, winnerName: null,
-          loserId: null, loserName: null,
-          winnerAdvancesTo: game.winnerAdvancesTo,
-          winnerAdvancesToSlot: game.winnerAdvancesToSlot,
-          loserDropsTo: game.loserDropsTo,
-          loserDropsToSlot: game.loserDropsToSlot,
-        });
-      }
-
-      // Resolve every bye and propagate winners into downstream matches —
-      // this is what prevents the bracket from stalling after round 1.
-      cascadeByeAdvancements(gameMap);
-
-      const batch = writeBatch(db);
-      const bracketRef = doc(db, BracketPaths.bracket(tournamentId, divisionId));
-      const bracketDoc: Partial<BracketDoc> = {
-        divisionId, tournamentId,
-        championshipFormat: settings.championshipFormat || 'single',
-        bracketSize: bracket.bracketSize,
-        teamCount: teams.length,
-        status: 'generated',
-        generatedAt: serverTimestamp() as any,
-        completedAt: null,
-        seededTeams: shuffled.map((team, i) => ({ seed: i + 1, teamId: team.id, teamName: team.teamName, isBye: false })),
-        championTeamId: null,
-        grandFinalId: 'GF-1',
-        bracketResetId: settings.championshipFormat === 'double' ? 'GF-2' : null,
-        bracketResetRequired: false,
-        scheduleGeneratedAt: serverTimestamp() as any,
-        explanation: getChampionshipExplanation(settings.championshipFormat || 'single'),
-      };
-      batch.set(bracketRef, bracketDoc);
-
-      for (const game of bracket.games) {
-        const state = gameMap.get(game.id)!;
-        const gameRef = doc(db, BracketPaths.game(tournamentId, divisionId, game.id));
-        const scheduledGame = scheduleLookup.get(game.id);
-
-        const gameDoc: Partial<GameDoc> = {
-          id: game.id, divisionId, tournamentId,
-          bracket: game.bracket, round: game.round, position: game.position,
-          topTeamId: state.topTeamId, topTeamName: state.topTeamName,
-          bottomTeamId: state.bottomTeamId, bottomTeamName: state.bottomTeamName,
-          isBye: game.isBye,
-          fedByWinnerOf: game.fedByWinner || null,
-          winnerAdvancesTo: state.winnerAdvancesTo,
-          winnerAdvancesToSlot: state.winnerAdvancesToSlot,
-          loserDropsTo: state.loserDropsTo,
-          loserDropsToSlot: state.loserDropsToSlot,
-          status: state.status,
-          winnerId: state.winnerId, winnerName: state.winnerName,
-          loserId: state.loserId, loserName: state.loserName,
-          topScore: null, bottomScore: null,
-          resultEnteredAt: state.status === 'bye' ? (serverTimestamp() as any) : null,
-          resultEnteredBy: state.status === 'bye' ? 'system' : null,
-          courtId: scheduledGame?.courtId || null,
-          courtName: scheduledGame?.courtId || null,
-          scheduledDate: scheduledGame?.date || null,
-          scheduledTime: scheduledGame?.startTime || null,
-          scheduledSlotIndex: scheduledGame?.slotIndex ?? null,
-          createdAt: serverTimestamp() as any,
-        };
-        batch.set(gameRef, gameDoc);
-      }
-
-      batch.update(doc(db, 'tournaments', tournamentId), { bracketStatus: 'bracket_generated', [`bracketGenerated_${divisionId}`]: true });
-      await batch.commit();
-
-      try {
-        const teamsSnap = await getDocs(collection(db, 'tournaments', tournamentId, 'teams'));
-        const notified = new Set<string>();
-        await Promise.all(teamsSnap.docs.map(async (td) => {
-          const uid = td.data().registeredBy;
-          if (!uid || notified.has(uid)) return;
-          notified.add(uid);
-          await addDoc(collection(db, 'notifications'), {
-            toUserId: uid,
-            message: `Bracket is now live for ${tournament.name}`,
-            body: `The ${divisionId} bracket is ready. Tap to view matchups.`,
-            link: `/bracket?tournamentId=${tournamentId}&divisionId=${divisionId}&postedBy=${tournament.postedBy}`,
-            createdAt: serverTimestamp(), read: false,
-          });
-          const userSnap = await getDoc(doc(db, 'users', uid));
-          if (userSnap.exists() && userSnap.data().pushToken && userSnap.data().notificationsEnabled !== false) {
-            await fetch('https://exp.host/--/api/v2/push/send', {
-              method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ to: userSnap.data().pushToken, title: '🏆 Bracket is Live!', body: `${tournament.name} — ${divisionId} bracket is ready.`, sound: 'default' }),
-            });
-          }
-        }));
-      } catch (e) { console.log('Notification error:', e); }
-
-      Alert.alert('Bracket Generated', `${teams.length} teams seeded into a ${bracket.bracketSize}-team bracket. Registration is now locked.`, [{ text: 'View Bracket', onPress: () => router.back() }]);
-    } catch (e: any) {
-      console.error('Bracket generation error:', e);
-      Alert.alert('Generation Failed', e.message || 'Something went wrong. Please try again.');
-    } finally {
-      setGenerating(false);
-    }
+    Alert.alert(
+      'Generate All Brackets?',
+      `This will generate brackets for ${eligible.length} division${eligible.length === 1 ? '' : 's'}:\n${eligible.map(d => `• ${d.name} (${d.teamCount} teams)`).join('\n')}${skipMsg}${alreadyMsg}\n\nRegistration will be locked for all generated divisions. This cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Generate All', style: 'default',
+          onPress: async () => {
+            setGenerating(true);
+            const failed: string[] = [];
+            for (const div of eligible) {
+              setGenerateProgress(`Generating ${div.name}...`);
+              try {
+                await generateForDivision(div.name, div.teams);
+              } catch (e: any) {
+                console.error(`Failed to generate ${div.name}:`, e);
+                failed.push(div.name);
+              }
+            }
+            setGenerating(false);
+            setGenerateProgress(null);
+            await loadTournament();
+            if (failed.length > 0) {
+              Alert.alert(
+                'Partial Success',
+                `Generated ${eligible.length - failed.length} of ${eligible.length} divisions.\n\nFailed: ${failed.join(', ')}\n\nPlease try again for the failed divisions.`,
+                [{ text: 'OK', onPress: () => router.back() }],
+              );
+            } else {
+              Alert.alert(
+                'All Brackets Generated!',
+                `${eligible.length} division${eligible.length === 1 ? '' : 's'} successfully generated. Registration is now locked.`,
+                [{ text: 'View Bracket', onPress: () => router.back() }],
+              );
+            }
+          },
+        },
+      ],
+    );
   };
 
   if (loading) return <View style={styles.centered}><ActivityIndicator size="large" color="#008080" /></View>;
@@ -381,34 +424,35 @@ export default function BracketGenerateScreen() {
   const gameDuration = settings.gameDurationMinutes || 50;
   const buffer = settings.bufferMinutes || 10;
   const format = settings.championshipFormat || 'single';
-  const byeCount = teams.length > 0 ? nextPow2(teams.length) - teams.length : 0;
+
+  const allGenerated = divisionSummaries.length > 0 && divisionSummaries.every(d => d.alreadyGenerated);
+  const anyEligible = divisionSummaries.some(d => !d.alreadyGenerated && d.teamCount >= 2);
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={{ padding: 20, paddingBottom: 60 }}>
+      <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+        <Text style={styles.backText}>← Back</Text>
+      </TouchableOpacity>
       <Text style={[styles.title, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>GENERATE BRACKET</Text>
-      <Text style={styles.subtitle}>{tournament.name} — {divisionId}</Text>
+      <Text style={styles.subtitle}>{tournament.name}</Text>
 
-      {/* Summary */}
+      {/* Bracket Settings Summary */}
       <View style={styles.summaryCard}>
         <View style={styles.summaryHeader}>
-          <Text style={[styles.summaryTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>SUMMARY</Text>
+          <Text style={[styles.summaryTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>BRACKET SETTINGS</Text>
           <TouchableOpacity style={styles.editSettingsBtn} onPress={openEditModal}>
             <Text style={styles.editSettingsBtnText}>Edit Settings</Text>
           </TouchableOpacity>
         </View>
-        <Row label="Registered Teams" value={`${teams.length}`} />
-        <Row label="Bracket Size" value={teams.length > 0 ? `${nextPow2(teams.length)}-team` : '—'} />
-        {byeCount > 0 && <Row label="Byes" value={`${byeCount} (auto-assigned to top seeds)`} />}
         <Row label="Format" value="Double Elimination" />
         <Row label="Championship" value={format === 'single' ? 'Single Game' : 'Double Game (bracket reset)'} />
         <Row label="Courts" value={courts > 0 ? resolvedCourts.join(', ') : '—'} />
-        <Row label="Daily Hours" value={`${formatTimeAmPm(settings.dailyStartTime || '08:00')} to ${formatTimeAmPm(settings.dailyEndTime || '20:00')}`} />
+        <Row label="Daily Hours" value={`${formatTimeAmPm(settings.dailyStartTime || '08:00')} – ${formatTimeAmPm(settings.dailyEndTime || '20:00')}`} />
         <Row label="Game Duration" value={`${gameDuration} min + ${buffer} min buffer`} />
         <Row label="Tournament Dates" value={dates.length > 0 ? dates.map(d => {
           const dt = new Date(d + 'T00:00:00');
           return dt.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-        }).join(', ') : 'Not set — edit tournament to add dates'} />
-        <Row label="Tournament Length" value={dates.length > 0 ? `${dates.length} day${dates.length > 1 ? 's' : ''}` : '—'} />
+        }).join(', ') : 'Not set'} />
       </View>
 
       {/* Explanation */}
@@ -426,8 +470,49 @@ export default function BracketGenerateScreen() {
         </View>
       )}
 
-      {/* Team list */}
-      <Text style={[styles.sectionTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>REGISTERED TEAMS ({teams.length})</Text>
+      {/* Division summaries */}
+      <Text style={[styles.sectionTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>
+        DIVISIONS ({divisionSummaries.length})
+      </Text>
+
+      {divisionSummaries.map(div => (
+        <View key={div.name} style={[styles.divisionCard, div.alreadyGenerated && styles.divisionCardDone]}>
+          <View style={styles.divisionCardTop}>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.divisionCardName, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>
+                {div.name}
+              </Text>
+              {div.alreadyGenerated && (
+                <Text style={styles.divisionCardDoneLabel}>✓ Bracket already generated</Text>
+              )}
+              {!div.alreadyGenerated && div.teamCount < 2 && (
+                <Text style={styles.divisionCardWarning}>⚠ Need at least 2 teams</Text>
+              )}
+            </View>
+            <View style={styles.divisionCardRight}>
+              <Text style={styles.divisionCardCount}>{div.teamCount}</Text>
+              <Text style={styles.divisionCardCountLabel}>teams</Text>
+            </View>
+          </View>
+          {div.teamCount > 0 && !div.alreadyGenerated && (
+            <View style={styles.divisionCardMeta}>
+              <Text style={styles.divisionCardMetaText}>
+                {div.bracketSize}-team bracket{div.byeCount > 0 ? ` · ${div.byeCount} bye${div.byeCount === 1 ? '' : 's'}` : ''}
+              </Text>
+            </View>
+          )}
+          {/* Team list per division */}
+          {div.teams.map((t, i) => (
+            <View key={t.id} style={styles.teamRow}>
+              <Text style={styles.teamIndex}>{i + 1}</Text>
+              <Text style={styles.teamName}>{t.teamName}</Text>
+            </View>
+          ))}
+          {div.teamCount === 0 && (
+            <Text style={styles.divisionCardEmpty}>No teams registered yet</Text>
+          )}
+        </View>
+      ))}
 
       {__DEV__ && (
         <TouchableOpacity style={styles.devTestBtn} onPress={() => setShowTestTeamsModal(true)}>
@@ -435,23 +520,34 @@ export default function BracketGenerateScreen() {
         </TouchableOpacity>
       )}
 
-      {teams.map((team, i) => (
-        <View key={team.id} style={styles.teamRow}>
-          <Text style={styles.teamIndex}>{i + 1}</Text>
-          <Text style={styles.teamName}>{team.teamName}</Text>
-        </View>
-      ))}
-
       <View style={styles.warningCard}>
-        <Text style={styles.warningText}>Once you generate the bracket, registration will be locked and no new teams can be added to this division. Teams are randomly seeded.</Text>
+        <Text style={styles.warningText}>
+          Once you generate brackets, registration will be locked and no new teams can be added. Teams are randomly seeded. Divisions with fewer than 2 teams will be skipped.
+        </Text>
       </View>
 
+      {/* Generate progress indicator */}
+      {generating && generateProgress && (
+        <View style={styles.progressCard}>
+          <ActivityIndicator size="small" color="#008080" style={{ marginRight: 10 }} />
+          <Text style={styles.progressText}>{generateProgress}</Text>
+        </View>
+      )}
+
       <TouchableOpacity
-        style={[styles.generateBtn, (!!constraintError || generating || teams.length < 2) && styles.generateBtnDisabled]}
-        onPress={handleGenerate}
-        disabled={!!constraintError || generating || teams.length < 2}
+        style={[
+          styles.generateBtn,
+          (!!constraintError || generating || !anyEligible) && styles.generateBtnDisabled,
+        ]}
+        onPress={handleGenerateAll}
+        disabled={!!constraintError || generating || !anyEligible}
       >
-        {generating ? <ActivityIndicator color="#fff" /> : <Text style={[styles.generateBtnText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>GENERATE BRACKET & SCHEDULE</Text>}
+        {generating
+          ? <ActivityIndicator color="#fff" />
+          : <Text style={[styles.generateBtnText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>
+              {allGenerated ? 'ALL BRACKETS GENERATED' : 'GENERATE ALL BRACKETS & SCHEDULES'}
+            </Text>
+        }
       </TouchableOpacity>
 
       <TouchableOpacity style={styles.cancelBtn} onPress={() => router.back()}>
@@ -552,6 +648,7 @@ export default function BracketGenerateScreen() {
           </View>
         </View>
       </Modal>
+
       {/* Dev-only: Generate Test Teams Modal */}
       {__DEV__ && (
         <Modal visible={showTestTeamsModal} animationType="slide" transparent>
@@ -563,9 +660,9 @@ export default function BracketGenerateScreen() {
                   <Text style={styles.modalClose}>✕</Text>
                 </TouchableOpacity>
               </View>
-              <Text style={styles.devTestHint}>Dev-only tool. Adds fake teams (Test Team 1, Test Team 2, ...) to this division so you can test bracket generation without creating real accounts.</Text>
+              <Text style={styles.devTestHint}>Dev-only tool. Adds fake teams to the current division ({divisionId}) for bracket testing.</Text>
               <View style={styles.testTeamCountGrid}>
-                {[4, 5, 6, 7, 8, 9, 10, 12, 16,20,24].map(count => (
+                {[2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24].map(count => (
                   <TouchableOpacity key={count} style={styles.testTeamCountBtn} onPress={() => generateTestTeams(count)} disabled={generatingTestTeams}>
                     <Text style={styles.testTeamCountText}>{count}</Text>
                   </TouchableOpacity>
@@ -656,8 +753,10 @@ function Row({ label, value }: { label: string; value: string }) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f5ede0' },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f5ede0' },
-  title: { fontSize: 26, color: '#003333', letterSpacing: 1.5, marginBottom: 4, paddingTop: 60, paddingHorizontal: 20 },
-  subtitle: { fontSize: 15, color: '#5a7a7a', marginBottom: 20, paddingHorizontal: 20 },
+  backBtn: { paddingTop: 60, paddingBottom: 8 },
+  backText: { fontSize: 16, color: '#008080', fontWeight: '600' },
+  title: { fontSize: 26, color: '#003333', letterSpacing: 1.5, marginBottom: 4 },
+  subtitle: { fontSize: 15, color: '#5a7a7a', marginBottom: 20 },
   sectionTitle: { fontSize: 14, color: '#003333', letterSpacing: 1, marginTop: 24, marginBottom: 8 },
   summaryCard: { backgroundColor: '#fff', borderRadius: 14, padding: 16, marginBottom: 14, borderWidth: 1, borderColor: '#e0d8c8' },
   summaryHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
@@ -673,11 +772,25 @@ const styles = StyleSheet.create({
   errorCardText: { fontSize: 13, color: '#dc2626', lineHeight: 20 },
   errorCardHint: { fontSize: 12, color: '#dc2626', fontWeight: '600', textDecorationLine: 'underline' },
   errorText: { fontSize: 15, color: '#dc2626' },
-  teamRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 10, padding: 12, marginBottom: 6, borderWidth: 1, borderColor: '#e0d8c8' },
-  teamIndex: { fontSize: 13, color: '#a0b8b8', width: 28 },
-  teamName: { fontSize: 15, color: '#003333', fontWeight: '600' },
+  divisionCard: { backgroundColor: '#fff', borderRadius: 14, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: '#e0d8c8' },
+  divisionCardDone: { backgroundColor: '#f0faf8', borderColor: '#a0d8d0' },
+  divisionCardTop: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 8 },
+  divisionCardName: { fontSize: 16, color: '#003333', letterSpacing: 0.5 },
+  divisionCardDoneLabel: { fontSize: 12, color: '#008080', fontWeight: '600', marginTop: 2 },
+  divisionCardWarning: { fontSize: 12, color: '#B8860B', fontWeight: '600', marginTop: 2 },
+  divisionCardRight: { alignItems: 'center', minWidth: 48 },
+  divisionCardCount: { fontSize: 24, color: '#008080', fontWeight: '900' },
+  divisionCardCountLabel: { fontSize: 11, color: '#a0b8b8', fontWeight: '600', textTransform: 'uppercase' },
+  divisionCardMeta: { marginBottom: 10 },
+  divisionCardMetaText: { fontSize: 12, color: '#5a7a7a' },
+  divisionCardEmpty: { fontSize: 13, color: '#a0b8b8', fontStyle: 'italic', marginTop: 4 },
+  teamRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#f9f6f2', borderRadius: 8, padding: 10, marginBottom: 4 },
+  teamIndex: { fontSize: 12, color: '#a0b8b8', width: 24 },
+  teamName: { fontSize: 14, color: '#003333', fontWeight: '600' },
   warningCard: { backgroundColor: '#fffbeb', borderRadius: 12, padding: 14, marginTop: 20, marginBottom: 14, borderWidth: 1, borderColor: '#fde68a' },
   warningText: { fontSize: 13, color: '#92400e', lineHeight: 20 },
+  progressCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#e8f4f4', borderRadius: 12, padding: 14, marginBottom: 12, borderWidth: 1, borderColor: '#b0d8d8' },
+  progressText: { fontSize: 14, color: '#003333', fontWeight: '600' },
   generateBtn: { backgroundColor: '#008080', borderRadius: 14, paddingVertical: 16, alignItems: 'center', marginTop: 8 },
   generateBtnDisabled: { opacity: 0.45 },
   generateBtnText: { color: '#fff', fontSize: 17, letterSpacing: 1 },
