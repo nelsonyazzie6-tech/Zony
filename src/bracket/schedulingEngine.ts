@@ -1,5 +1,5 @@
 /**
- * Zony Scheduling Engine — Step 7
+ * Zony Scheduling Engine — Step 7 (updated: multi-division shared matrix)
  *
  * Pure constraint solver: takes organizer inputs and bracket dependency graph,
  * produces a complete valid schedule or fails entirely.
@@ -11,14 +11,13 @@
  *   - It does NOT import bracketProgression or championshipFormat
  *   - It imports only the types it needs from bracketSchema and bracketEngine
  *
- * Constraints:
- *   - No partial schedules: if all games can't be placed, throw with clear message
- *   - Fixed schedule model: slots are pre-generated, no dynamic reflow
- *   - Dependency rule: a game cannot be scheduled before any of its feeder games
- *     finish — enforced as a hard constraint, not just an ordering convention
- *   - Bye games are excluded: they resolve instantly and don't need court time
- *   - Games are spread as evenly as possible across every configured tournament
- *     day, not just greedily packed into the earliest day that has room
+ * Multi-division scheduling (new):
+ *   - generateScheduleMultiDivision takes multiple brackets and schedules them
+ *     all against a single shared slot matrix so no two divisions ever claim
+ *     the same (court, time) combination.
+ *   - If slots run out, overflow games receive null date/time ("TBD") instead
+ *     of throwing — controlled chaos, not a hard failure.
+ *   - Single-division generateSchedule still works as before for backwards compat.
  */
 
 import { BracketGame, BracketStructure } from './bracketEngine';
@@ -26,43 +25,31 @@ import { BracketGame, BracketStructure } from './bracketEngine';
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type SchedulerInput = {
-  // Tournament dates as ISO date strings, e.g. ['2026-07-12', '2026-07-13']
-  // Must be sorted ascending. 1, 2, or 3 dates (per spec).
   dates: string[];
-
-  // Courts available, e.g. ['Court 1', 'Court 2', 'Court 3']
   courts: string[];
-
-  // Daily operating hours in 24h 'HH:MM' format
-  dailyStartTime: string;   // e.g. '08:00'
-  dailyEndTime: string;     // e.g. '20:00'
-
-  // Game length and buffer in minutes
-  gameDurationMinutes: number;   // e.g. 50
-  bufferMinutes: number;         // e.g. 10
+  dailyStartTime: string;
+  dailyEndTime: string;
+  gameDurationMinutes: number;
+  bufferMinutes: number;
 };
 
 export type TimeSlot = {
-  // The time-COLUMN index within this slot's day — identical across every
-  // court sharing that time (e.g. 9:00am on Court 1 and 9:00am on Court 2
-  // both have slotIndex 0). This is what lets the scheduler compare "did
-  // this feeder finish before this dependent's slot" using simple integer
-  // comparison, instead of re-parsing time strings everywhere.
   slotIndex: number;
-  date: string;           // ISO date string
-  courtId: string;        // matches court label from SchedulerInput.courts
-  startTime: string;      // 'HH:MM'
-  endTime: string;        // 'HH:MM' (startTime + gameDurationMinutes)
-  available: boolean;     // false once assigned to a game
-};
-
-export type ScheduledGame = {
-  gameId: string;
   date: string;
   courtId: string;
   startTime: string;
   endTime: string;
-  slotIndex: number;
+  available: boolean;
+};
+
+export type ScheduledGame = {
+  gameId: string;
+  divisionId?: string; // populated in multi-division output
+  date: string | null; // null = TBD, couldn't fit in schedule
+  courtId: string | null;
+  startTime: string | null;
+  endTime: string | null;
+  slotIndex: number | null;
 };
 
 export type ScheduleOutput = {
@@ -72,17 +59,23 @@ export type ScheduleOutput = {
   remainingSlots: number;
 };
 
+export type MultiDivisionScheduleOutput = {
+  // keyed by divisionId
+  byDivision: Record<string, ScheduledGame[]>;
+  totalSlots: number;
+  usedSlots: number;
+  overflowGames: number; // games that couldn't be placed (TBD)
+};
+
 export type ConstraintValidationResult =
   | { valid: true }
   | { valid: false; reason: string; gamesNeeded: number; slotsAvailable: number };
 
 // ─── Time Utilities ───────────────────────────────────────────────────────────
 
-/** Parse 'HH:MM' or 'H:MM AM/PM' into total minutes since midnight */
 function parseTime(time: string): number {
   if (!time) return 0;
   const cleaned = time.trim().toUpperCase();
-
   const ampmMatch = cleaned.match(/^(\d{1,2})(?::(\d{2}))?\s*(AM|PM)$/);
   if (ampmMatch) {
     let h = parseInt(ampmMatch[1], 10);
@@ -91,13 +84,11 @@ function parseTime(time: string): number {
     else { if (h !== 12) h += 12; }
     return h * 60 + m;
   }
-
   const [h, m] = cleaned.split(':').map(Number);
   if (isNaN(h) || isNaN(m)) return 0;
   return h * 60 + m;
 }
 
-/** Format total minutes since midnight back to 'HH:MM' */
 function formatTime(minutes: number): string {
   const h = Math.floor(minutes / 60);
   const m = minutes % 60;
@@ -106,19 +97,6 @@ function formatTime(minutes: number): string {
 
 // ─── Slot Generation ─────────────────────────────────────────────────────────
 
-/**
- * generateSlots — produces all available time slots for the tournament,
- * grouped by day and ordered TIME-MAJOR within each day: every court's slot
- * at a given time comes before any court's slot at the next time. This is
- * what allows courts to be used in parallel (a 9:00am game can run
- * simultaneously on every court) instead of one court being filled for an
- * entire day before the next court is ever touched.
- *
- * slotIndex is the time-column index within that day, shared across every
- * court at that time — used later to enforce dependency ordering.
- *
- * Slots that don't fit a full game within operating hours are not created.
- */
 export function generateSlots(input: SchedulerInput): TimeSlot[] {
   const slots: TimeSlot[] = [];
   const slotWidth = input.gameDurationMinutes + input.bufferMinutes;
@@ -128,7 +106,6 @@ export function generateSlots(input: SchedulerInput): TimeSlot[] {
   for (const date of input.dates) {
     let current = startMinutes;
     let columnIndex = 0;
-
     while (current + input.gameDurationMinutes <= endMinutes) {
       for (const courtId of input.courts) {
         slots.push({
@@ -150,23 +127,14 @@ export function generateSlots(input: SchedulerInput): TimeSlot[] {
 
 // ─── Constraint Validation ────────────────────────────────────────────────────
 
-/**
- * validateConstraints — checks whether enough slots exist for all required games.
- *
- * Per spec: hard block if games > available slots. No override.
- * Bye games are excluded since they don't consume court time.
- */
 export function validateConstraints(
   bracket: BracketStructure,
   slots: TimeSlot[]
 ): ConstraintValidationResult {
   const gamesNeedingSlots = bracket.games.filter(g =>
-    !g.isBye &&
-    g.id !== 'GF-2' // bracket reset is conditional, doesn't need a pre-assigned slot
+    !g.isBye && g.id !== 'GF-2'
   ).length;
-
   const totalSlots = slots.length;
-
   if (gamesNeedingSlots > totalSlots) {
     return {
       valid: false,
@@ -175,21 +143,14 @@ export function validateConstraints(
       slotsAvailable: totalSlots,
     };
   }
-
   return { valid: true };
 }
 
 // ─── Topological Sort ─────────────────────────────────────────────────────────
 
-/**
- * topologicalSort — orders games so that every game appears after its dependencies.
- * Standard Kahn's algorithm. Bye games and GF-2 are excluded since they don't
- * need scheduling.
- */
 export function topologicalSort(bracket: BracketStructure): BracketGame[] {
   const games = bracket.games.filter(g => !g.isBye && g.id !== 'GF-2');
   const gameMap = new Map<string, BracketGame>(games.map(g => [g.id, g]));
-
   const inDegree = new Map<string, number>();
   const dependents = new Map<string, string[]>();
 
@@ -199,9 +160,8 @@ export function topologicalSort(bracket: BracketStructure): BracketGame[] {
   }
 
   for (const game of games) {
-    const feeders = game.fedByWinner || [];
-    for (const feederId of feeders) {
-      if (!gameMap.has(feederId)) continue; // feeder might be a bye game, skip
+    for (const feederId of (game.fedByWinner || [])) {
+      if (!gameMap.has(feederId)) continue;
       inDegree.set(game.id, (inDegree.get(game.id) || 0) + 1);
       const deps = dependents.get(feederId) || [];
       deps.push(game.id);
@@ -215,13 +175,11 @@ export function topologicalSort(bracket: BracketStructure): BracketGame[] {
   }
 
   const sorted: BracketGame[] = [];
-
   while (queue.length > 0) {
     const gameId = queue.shift()!;
     const game = gameMap.get(gameId);
     if (!game) continue;
     sorted.push(game);
-
     for (const dependentId of (dependents.get(gameId) || [])) {
       const newDegree = (inDegree.get(dependentId) || 0) - 1;
       inDegree.set(dependentId, newDegree);
@@ -231,11 +189,9 @@ export function topologicalSort(bracket: BracketStructure): BracketGame[] {
 
   if (sorted.length !== games.length) {
     throw new Error(
-      `Dependency cycle detected in bracket graph. This indicates a bracket generation error. ` +
-      `Expected ${games.length} games, sorted ${sorted.length}.`
+      `Dependency cycle detected in bracket graph. Expected ${games.length} games, sorted ${sorted.length}.`
     );
   }
-
   return sorted;
 }
 
@@ -243,23 +199,19 @@ export function topologicalSort(bracket: BracketStructure): BracketGame[] {
 
 type DayBucket = {
   date: string;
-  slots: TimeSlot[];    // this day's slots only, time-major order
-  target: number;       // soft target game count for this day (even split)
+  slots: TimeSlot[];
+  target: number;
   assignedCount: number;
 };
 
-/**
- * Splits the total game count as evenly as possible across the configured
- * days (e.g. 16 games / 3 days → 6, 5, 5), giving any remainder to the
- * earliest days. This is a SOFT target — the assignment loop below will
- * exceed it for a given day if dependency timing leaves no other choice,
- * rather than failing the whole schedule.
- */
-function buildDayBuckets(input: SchedulerInput, allSlots: TimeSlot[], totalGames: number): DayBucket[] {
+function buildDayBuckets(
+  input: SchedulerInput,
+  allSlots: TimeSlot[],
+  totalGames: number
+): DayBucket[] {
   const numDays = input.dates.length;
   const base = Math.floor(totalGames / numDays);
   const remainder = totalGames % numDays;
-
   return input.dates.map((date, i) => ({
     date,
     slots: allSlots.filter(s => s.date === date),
@@ -268,50 +220,19 @@ function buildDayBuckets(input: SchedulerInput, allSlots: TimeSlot[], totalGames
   }));
 }
 
-// ─── Main Scheduler ───────────────────────────────────────────────────────────
+// ─── Single-Division Scheduler (backwards compat) ────────────────────────────
 
-/**
- * generateSchedule — the core scheduling constraint solver.
- *
- * Algorithm:
- *   1. Generate all available slots (time-major, grouped by day)
- *   2. Validate that enough slots exist overall (hard block per spec)
- *   3. Topologically sort games (dependency-first order)
- *   4. Compute an even per-day target game count from the total
- *   5. Walk games in dependency order; for each, try to place it on the
- *      earliest day that's still under its target AND has a slot whose
- *      time-column is strictly after every same-day feeder's column
- *      (a feeder on an earlier day imposes no constraint — that whole day
- *      already happens before this one). If no under-target day can fit it,
- *      fall back to the earliest day with any room at all, so the schedule
- *      still completes even when a perfectly even split isn't structurally
- *      possible due to dependency timing.
- *   6. Return complete schedule
- *
- * This function is pure — no Firestore writes. The caller writes the
- * schedule to Firestore using the output.
- */
 export function generateSchedule(
   bracket: BracketStructure,
   input: SchedulerInput
 ): ScheduleOutput {
-  // Step 1: Generate slots
   const slots = generateSlots(input);
-
-  // Step 2: Validate constraints (hard block)
   const validation = validateConstraints(bracket, slots);
-  if (!validation.valid) {
-    throw new Error(validation.reason);
-  }
+  if (!validation.valid) throw new Error(validation.reason);
 
-  // Step 3: Topological sort
   const orderedGames = topologicalSort(bracket);
-
-  // Step 4: Even per-day targets
   const dayBuckets = buildDayBuckets(input, slots, orderedGames.length);
 
-  // Track which day + time-column each scheduled game landed in, so later
-  // games can check their feeders' placement when enforcing dependency timing.
   const gameDayIndex = new Map<string, number>();
   const gameColumn = new Map<string, number>();
   const scheduledGames: ScheduledGame[] = [];
@@ -321,11 +242,6 @@ export function generateSchedule(
     for (const feederId of (game.fedByWinner || [])) {
       const feederDay = gameDayIndex.get(feederId);
       const feederCol = gameColumn.get(feederId);
-      // Only same-day feeders impose a column constraint. A feeder on an
-      // earlier day needs no constraint at all — the entire later day
-      // already happens after it. A feeder that was a bye (never scheduled,
-      // so feederDay is undefined) also imposes no constraint — byes
-      // resolve instantly with no real-world time dependency.
       if (feederDay === dayIdx && feederCol !== undefined) {
         minCol = Math.max(minCol, feederCol + 1);
       }
@@ -338,7 +254,6 @@ export function generateSchedule(
     const minCol = minColumnForDay(game, dayIdx);
     const slot = bucket.slots.find(s => s.available && s.slotIndex >= minCol);
     if (!slot) return false;
-
     slot.available = false;
     bucket.assignedCount++;
     gameDayIndex.set(game.id, dayIdx);
@@ -356,42 +271,206 @@ export function generateSchedule(
 
   for (const game of orderedGames) {
     let placed = false;
-
-    // Pass 1: respect the even-split target, scanning days in order.
     for (let i = 0; i < dayBuckets.length && !placed; i++) {
       if (dayBuckets[i].assignedCount < dayBuckets[i].target) {
         placed = tryAssign(game, i);
       }
     }
-
-    // Pass 2: every day is at (or this game doesn't fit under) its target —
-    // place it on the earliest day with any room left, dependency-respecting.
     if (!placed) {
       for (let i = 0; i < dayBuckets.length && !placed; i++) {
         placed = tryAssign(game, i);
       }
     }
-
     if (!placed) {
-      // Shouldn't happen after validateConstraints passed, but guard
-      // defensively — this can only occur if dependency timing makes an
-      // otherwise-numerically-sufficient set of slots unusable.
       throw new Error(
-        `Could not find a valid slot for game ${game.id} across any configured day. ` +
-        `This usually means there isn't enough combined court time across all days ` +
-        `to fit the bracket while respecting game dependencies — add more courts, ` +
-        `extend daily hours, or add another tournament day.`
+        `Could not find a valid slot for game ${game.id}. Add more courts, extend daily hours, or add another tournament day.`
       );
     }
   }
 
-  const usedSlots = scheduledGames.length;
-  const totalSlots = slots.length;
-
   return {
     scheduledGames,
-    totalSlots,
-    usedSlots,
-    remainingSlots: totalSlots - usedSlots,
+    totalSlots: slots.length,
+    usedSlots: scheduledGames.length,
+    remainingSlots: slots.length - scheduledGames.length,
   };
+}
+
+// ─── Multi-Division Scheduler (new) ──────────────────────────────────────────
+
+/**
+ * generateScheduleMultiDivision
+ *
+ * Schedules all divisions against a single shared (court, time) slot matrix.
+ * No two divisions can claim the same slot. If slots run out, overflow games
+ * get null date/time (displayed as "Time TBD") instead of throwing.
+ *
+ * Algorithm:
+ *   1. Generate one shared slot pool for all courts + days
+ *   2. For each division, topologically sort its games
+ *   3. Interleave all divisions' game queues round-robin so no single division
+ *      hogs all early slots — each division gets one game placed per round
+ *      until all games are exhausted
+ *   4. For each game, find the earliest available slot that respects:
+ *      a. The slot is not already taken by any division
+ *      b. Same-day dependency ordering (feeder's column < this game's column)
+ *   5. If no slot is available, mark the game as TBD (null) — never throw
+ */
+export function generateScheduleMultiDivision(
+  divisions: Array<{
+    divisionId: string;
+    bracket: BracketStructure;
+  }>,
+  input: SchedulerInput,
+): MultiDivisionScheduleOutput {
+  // Step 1: single shared slot pool
+  const sharedSlots = generateSlots(input);
+  const totalSlots = sharedSlots.length;
+
+  // Step 2: topological sort per division
+  type DivisionQueue = {
+    divisionId: string;
+    games: BracketGame[];
+    cursor: number;
+    // per-game tracking for dependency resolution
+    gameDayIndex: Map<string, number>;
+    gameColumn: Map<string, number>;
+  };
+
+  const queues: DivisionQueue[] = divisions
+    .filter(d => d.bracket.games.filter(g => !g.isBye && g.id !== 'GF-2').length > 0)
+    .map(d => ({
+      divisionId: d.divisionId,
+      games: topologicalSort(d.bracket),
+      cursor: 0,
+      gameDayIndex: new Map(),
+      gameColumn: new Map(),
+    }));
+
+  const output: MultiDivisionScheduleOutput = {
+    byDivision: {},
+    totalSlots,
+    usedSlots: 0,
+    overflowGames: 0,
+  };
+
+  for (const q of queues) {
+    output.byDivision[q.divisionId] = [];
+  }
+
+  // Step 3 & 4: interleave round-robin across divisions
+  // Build day buckets from the shared pool
+  const numDays = input.dates.length;
+  const totalGames = queues.reduce((sum, q) => sum + q.games.length, 0);
+  const base = Math.floor(totalGames / Math.max(numDays, 1));
+  const remainder = totalGames % Math.max(numDays, 1);
+
+  // Track per-day assigned count across ALL divisions
+  const dayAssignedCount: number[] = input.dates.map(() => 0);
+  const dayTargets: number[] = input.dates.map((_, i) => base + (i < remainder ? 1 : 0));
+
+  function minColumnForGame(
+    game: BracketGame,
+    dayIdx: number,
+    queue: DivisionQueue
+  ): number {
+    let minCol = 0;
+    for (const feederId of (game.fedByWinner || [])) {
+      const feederDay = queue.gameDayIndex.get(feederId);
+      const feederCol = queue.gameColumn.get(feederId);
+      if (feederDay === dayIdx && feederCol !== undefined) {
+        minCol = Math.max(minCol, feederCol + 1);
+      }
+    }
+    return minCol;
+  }
+
+  function tryPlaceGame(
+    game: BracketGame,
+    queue: DivisionQueue,
+    preferDayIdx?: number
+  ): boolean {
+    // Build candidate day order: preferred day first, then others
+    const dayOrder: number[] = [];
+    if (preferDayIdx !== undefined) dayOrder.push(preferDayIdx);
+    for (let i = 0; i < input.dates.length; i++) {
+      if (i !== preferDayIdx) dayOrder.push(i);
+    }
+
+    for (const dayIdx of dayOrder) {
+      const minCol = minColumnForGame(game, dayIdx, queue);
+      // Find an available slot on this day respecting column constraint
+      const slot = sharedSlots.find(
+        s => s.date === input.dates[dayIdx] &&
+          s.available &&
+          s.slotIndex >= minCol
+      );
+      if (!slot) continue;
+
+      // Claim the slot
+      slot.available = false;
+      dayAssignedCount[dayIdx]++;
+      queue.gameDayIndex.set(game.id, dayIdx);
+      queue.gameColumn.set(game.id, slot.slotIndex);
+      output.byDivision[queue.divisionId].push({
+        gameId: game.id,
+        divisionId: queue.divisionId,
+        date: slot.date,
+        courtId: slot.courtId,
+        startTime: slot.startTime,
+        endTime: slot.endTime,
+        slotIndex: slot.slotIndex,
+      });
+      output.usedSlots++;
+      return true;
+    }
+    return false;
+  }
+
+  // Round-robin: one game per division per pass until all exhausted
+  let anyProgress = true;
+  while (anyProgress) {
+    anyProgress = false;
+    for (const queue of queues) {
+      if (queue.cursor >= queue.games.length) continue;
+      const game = queue.games[queue.cursor];
+
+      // Prefer the day that's most under its target
+      let preferDay = 0;
+      let maxRoom = -Infinity;
+      for (let i = 0; i < input.dates.length; i++) {
+        const room = dayTargets[i] - dayAssignedCount[i];
+        if (room > maxRoom) { maxRoom = room; preferDay = i; }
+      }
+
+      const placed = tryPlaceGame(game, queue, preferDay);
+      if (placed) {
+        queue.cursor++;
+        anyProgress = true;
+      } else {
+        // Try without day preference (any available slot)
+        const placedAny = tryPlaceGame(game, queue);
+        if (placedAny) {
+          queue.cursor++;
+          anyProgress = true;
+        } else {
+          // No slots left — mark as TBD and move on
+          output.byDivision[queue.divisionId].push({
+            gameId: game.id,
+            divisionId: queue.divisionId,
+            date: null,
+            courtId: null,
+            startTime: null,
+            endTime: null,
+            slotIndex: null,
+          });
+          output.overflowGames++;
+          queue.cursor++;
+          anyProgress = true;
+        }
+      }
+    }
+  }
+
+  return output;
 }
