@@ -24,7 +24,15 @@ const divisionOptions = [
 const placeLabels = ['1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th'];
 const paymentMethodOptions = ['Cash', 'Card', 'Zelle', 'Other'];
 
-// Calendar icon, replaces 📅
+// Per-day court hour window
+type DayWindowDisplay = { startDisplay: string; endDisplay: string };
+
+function defaultWindowForDay(i: number): DayWindowDisplay {
+  if (i === 0) return { startDisplay: '6:00 PM', endDisplay: '10:00 PM' };
+  if (i === 1) return { startDisplay: '8:00 AM', endDisplay: '10:00 PM' };
+  return { startDisplay: '8:00 AM', endDisplay: '2:00 PM' };
+}
+
 function CalendarIcon({ size = 16, color = '#008080' }: { size?: number; color?: string }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -36,7 +44,6 @@ function CalendarIcon({ size = 16, color = '#008080' }: { size?: number; color?:
   );
 }
 
-// Location icon, replaces 📍
 function LocationIcon({ size = 13, color = '#003333' }: { size?: number; color?: string }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -46,7 +53,6 @@ function LocationIcon({ size = 13, color = '#003333' }: { size?: number; color?:
   );
 }
 
-// Check icon, replaces ✓
 function CheckIcon({ size = 13, color = '#008080' }: { size?: number; color?: string }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -73,7 +79,7 @@ function parseAmPmToTime24(input: string): string {
     let h = parseInt(m[1], 10);
     const min = m[2] || '00';
     if (m[3] === 'AM') { if (h === 12) h = 0; } else { if (h !== 12) h += 12; }
-    return `${String(h).padStart(2,'0')}:${min}`;
+    return `${String(h).padStart(2, '0')}:${min}`;
   }
   if (/^\d{1,2}:\d{2}$/.test(cleaned)) return cleaned.padStart(5, '0');
   return input;
@@ -96,7 +102,6 @@ async function sendPush(token: string, title: string, body: string) {
   } catch (e) { console.log('Push error:', e); }
 }
 
-// Reusable styled info/error modal matching app theme
 function InfoModal({ visible, title, message, onClose }: { visible: boolean; title: string; message: string; onClose: () => void }) {
   const [fontsLoaded] = useFonts({ Rajdhani_700Bold });
   return (
@@ -139,11 +144,8 @@ export default function EditTournamentScreen() {
   const [divisionSpots, setDivisionSpots] = useState<Record<string, string>>({});
   const [spectatorFee, setSpectatorFee] = useState('');
   const [isFreeSpectator, setIsFreeSpectator] = useState(false);
-
-  // Accepted payment methods for spectator entrance fee
   const [spectatorPaymentMethods, setSpectatorPaymentMethods] = useState<string[]>([]);
   const [spectatorPaymentOther, setSpectatorPaymentOther] = useState('');
-
   const [rosterSize, setRosterSize] = useState('');
   const [contactName, setContactName] = useState('');
   const [contactPhone, setContactPhone] = useState('');
@@ -151,11 +153,8 @@ export default function EditTournamentScreen() {
   const [prizeRows, setPrizeRows] = useState<{ cash: string; physical: string }[]>([
     { cash: '', physical: '' }, { cash: '', physical: '' }, { cash: '', physical: '' },
   ]);
-
-  // Manual prizes fallback — toggle between structured rows and free text
   const [useManualPrizes, setUseManualPrizes] = useState(false);
   const [manualPrizes, setManualPrizes] = useState('');
-
   const [depositAmount, setDepositAmount] = useState('');
   const [depositDue, setDepositDue] = useState('');
   const [showDepositDuePicker, setShowDepositDuePicker] = useState(false);
@@ -168,22 +167,17 @@ export default function EditTournamentScreen() {
   const [courtNames, setCourtNames] = useState<string[]>(['Court 1']);
   const [bracketGameDuration, setBracketGameDuration] = useState('50');
   const [bracketBuffer, setBracketBuffer] = useState('10');
-  const [bracketDailyStartDisplay, setBracketDailyStartDisplay] = useState('8:00 AM');
-  const [bracketDailyEndDisplay, setBracketDailyEndDisplay] = useState('8:00 PM');
+  const [dayWindows, setDayWindows] = useState<DayWindowDisplay[]>([defaultWindowForDay(0)]);
   const [championshipFormat, setChampionshipFormat] = useState<'single' | 'double'>('single');
   const [showChampionshipPicker, setShowChampionshipPicker] = useState(false);
 
-  // Styled info/error modal state
   const [infoModal, setInfoModal] = useState<{ visible: boolean; title: string; message: string }>({
     visible: false, title: '', message: '',
   });
 
-  // Track original values to detect changes for notifications
   const originalRef = useRef<{ date: string; location: string; divisions: string[]; joinedUsers: string[] }>({
     date: '', location: '', divisions: [], joinedUsers: [],
   });
-
-  // Track how many teams are currently registered per division (for shrink warnings)
   const registeredCountRef = useRef<Record<string, number>>({});
 
   const spectatorFeeRef = useRef<TextInput>(null);
@@ -195,10 +189,17 @@ export default function EditTournamentScreen() {
   const contactEmailRef = useRef<TextInput>(null);
   const depositAmountRef = useRef<TextInput>(null);
 
-  // "Available Spots" is only meaningful when there are no divisions, or
-  // when at least one selected division has been left blank (and thus
-  // needs this value as its fallback).
   const needsAvailableSpots = divisions.length === 0 || divisions.some(d => !divisionSpots[d]?.trim());
+
+  // Derive tournament day ISO strings from startDateObj + duration
+  const tournamentDayStrings: string[] = [];
+  if (startDateObj) {
+    const cur = new Date(startDateObj.getFullYear(), startDateObj.getMonth(), startDateObj.getDate());
+    for (let i = 0; i < tournamentDuration; i++) {
+      tournamentDayStrings.push(`${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}-${String(cur.getDate()).padStart(2, '0')}`);
+      cur.setDate(cur.getDate() + 1);
+    }
+  }
 
   const togglePaymentMethod = (method: string) => {
     setSpectatorPaymentMethods(prev => {
@@ -209,6 +210,17 @@ export default function EditTournamentScreen() {
       return [...prev, method];
     });
   };
+
+  // Keep dayWindows in sync when duration changes
+  useEffect(() => {
+    setDayWindows(prev => {
+      const next = [...prev];
+      while (next.length < tournamentDuration) {
+        next.push(defaultWindowForDay(next.length));
+      }
+      return next.slice(0, tournamentDuration);
+    });
+  }, [tournamentDuration]);
 
   useEffect(() => {
     const load = async () => {
@@ -238,7 +250,6 @@ export default function EditTournamentScreen() {
       setDivisions(d.divisions || []);
       setDivisionFees(d.divisionFees || {});
 
-      // Load current remaining spots per division (what's actually stored)
       const loadedDivisionSpots: Record<string, string> = {};
       if (d.divisionSpots) {
         Object.entries(d.divisionSpots).forEach(([div, val]) => {
@@ -263,7 +274,6 @@ export default function EditTournamentScreen() {
       setDepositAmount(d.depositAmount?.replace('$', '') || '');
       setDepositDue(d.depositDue || '');
 
-      // Store originals for change detection
       originalRef.current = {
         date: d.date || '',
         location: d.location || `${d.city || ''}, ${d.state || ''}`,
@@ -271,7 +281,6 @@ export default function EditTournamentScreen() {
         joinedUsers: d.joinedUsers || [],
       };
 
-      // Count currently registered teams per division (for shrink warnings)
       try {
         const teamsSnap = await getDocs(collection(db, 'tournaments', id as string, 'teams'));
         const counts: Record<string, number> = {};
@@ -282,16 +291,11 @@ export default function EditTournamentScreen() {
         registeredCountRef.current = counts;
       } catch (_) {}
 
-      // Determine whether prizes were entered in structured format
-      // ("1st: ... · 2nd: ...") or free-form manual text. If every
-      // non-empty segment starts with a recognized place label, treat
-      // as structured; otherwise load into the manual textarea as-is.
       if (d.prizes) {
         const segments = d.prizes.split(/ · |\n/).map((s: string) => s.trim()).filter(Boolean);
         const isStructured = segments.length > 0 && segments.every((seg: string) =>
           placeLabels.some(label => seg.startsWith(`${label}:`))
         );
-
         if (isStructured) {
           const parsed = segments.map((p: string) => {
             const withoutLabel = p.replace(/^[^:]+:\s*/, '');
@@ -322,9 +326,37 @@ export default function EditTournamentScreen() {
         else if (bs.courts) setCourtNames(Array.from({ length: bs.courts }, (_: any, i: number) => `Court ${i + 1}`));
         setBracketGameDuration(String(bs.gameDurationMinutes || 50));
         setBracketBuffer(String(bs.bufferMinutes || 10));
-        setBracketDailyStartDisplay(formatTimeAmPm(bs.dailyStartTime || '08:00'));
-        setBracketDailyEndDisplay(formatTimeAmPm(bs.dailyEndTime || '20:00'));
         setChampionshipFormat(bs.championshipFormat || 'single');
+
+        // Load per-day windows — prefer new dailyWindows array, fall back
+        // to old flat dailyStartTime/dailyEndTime for backwards compat
+        const dur = d.tournamentDuration || 1;
+        const loadedWindows: DayWindowDisplay[] = [];
+        if (bs.dailyWindows?.length) {
+          for (let i = 0; i < dur; i++) {
+            if (bs.dailyWindows[i]) {
+              loadedWindows.push({
+                startDisplay: formatTimeAmPm(bs.dailyWindows[i].startTime),
+                endDisplay: formatTimeAmPm(bs.dailyWindows[i].endTime),
+              });
+            } else {
+              loadedWindows.push(defaultWindowForDay(i));
+            }
+          }
+        } else if (bs.dailyStartTime || bs.dailyEndTime) {
+          // Migrate from old flat format — apply same hours to every day
+          for (let i = 0; i < dur; i++) {
+            loadedWindows.push({
+              startDisplay: formatTimeAmPm(bs.dailyStartTime || '08:00'),
+              endDisplay: formatTimeAmPm(bs.dailyEndTime || '20:00'),
+            });
+          }
+        } else {
+          for (let i = 0; i < dur; i++) {
+            loadedWindows.push(defaultWindowForDay(i));
+          }
+        }
+        setDayWindows(loadedWindows);
       }
 
       setDataLoaded(true);
@@ -426,8 +458,6 @@ export default function EditTournamentScreen() {
     setLoading(true);
     const prizesFormatted = formatPrizes();
 
-    // Build final divisionSpots map. Blank entries fall back to the overall
-    // "Available Spots" value, same as the create form.
     const fallbackSpots = parseInt(spots) || 0;
     const finalDivisionSpots: Record<string, number> = {};
     divisions.forEach(d => {
@@ -454,7 +484,7 @@ export default function EditTournamentScreen() {
       if (startDateObj) {
         const cur = new Date(startDateObj.getFullYear(), startDateObj.getMonth(), startDateObj.getDate());
         for (let i = 0; i < tournamentDuration; i++) {
-          tournamentDays.push(`${cur.getFullYear()}-${String(cur.getMonth()+1).padStart(2,'0')}-${String(cur.getDate()).padStart(2,'0')}`);
+          tournamentDays.push(`${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}-${String(cur.getDate()).padStart(2, '0')}`);
           cur.setDate(cur.getDate() + 1);
         }
       }
@@ -485,13 +515,16 @@ export default function EditTournamentScreen() {
           courtNames: courtNames.filter(c => c.trim()),
           gameDurationMinutes: parseInt(bracketGameDuration) || 50,
           bufferMinutes: parseInt(bracketBuffer) || 10,
-          dailyStartTime: parseAmPmToTime24(bracketDailyStartDisplay),
-          dailyEndTime: parseAmPmToTime24(bracketDailyEndDisplay),
+          // Save per-day windows — scheduling engine reads these
+          dailyWindows: tournamentDays.map((date, i) => ({
+            date,
+            startTime: parseAmPmToTime24(dayWindows[i]?.startDisplay ?? defaultWindowForDay(i).startDisplay),
+            endTime: parseAmPmToTime24(dayWindows[i]?.endDisplay ?? defaultWindowForDay(i).endDisplay),
+          })),
           championshipFormat,
         } : null,
       });
 
-      // Notify registered users if schedule, location, or divisions changed
       const original = originalRef.current;
       const dateChanged = original.date !== newDate;
       const locationChanged = original.location !== newLocation;
@@ -760,13 +793,10 @@ export default function EditTournamentScreen() {
             <Text style={styles.label}>Contact Email <Text style={styles.optional}>(optional)</Text></Text>
             <TextInput ref={contactEmailRef} style={styles.input} placeholder="Email address" placeholderTextColor="#a0b8b8" value={contactEmail} onChangeText={setContactEmail} keyboardType="email-address" autoCapitalize="none" returnKeyType="next" blurOnSubmit={false} onSubmitEditing={() => Keyboard.dismiss()} />
 
-            {/* Prizes / Awards — structured rows or manual free text */}
             <Text style={styles.label}>Prizes / Awards</Text>
-
             {!useManualPrizes ? (
               <>
                 <Text style={styles.prizesHint}>Fill in cash, physical prizes, or both per place</Text>
-
                 {prizeRows.map((row, i) => (
                   <View key={i} style={styles.prizeRowBlock}>
                     <View style={styles.prizePlaceLabel}>
@@ -781,13 +811,11 @@ export default function EditTournamentScreen() {
                     </View>
                   </View>
                 ))}
-
                 {prizeRows.length < 8 && (
                   <TouchableOpacity style={styles.addPrizeBtn} onPress={addPrizeRow}>
                     <Text style={styles.addPrizeBtnText}>+ Add Place</Text>
                   </TouchableOpacity>
                 )}
-
                 <TouchableOpacity style={styles.manualToggleBtn} onPress={() => setUseManualPrizes(true)}>
                   <Text style={styles.manualToggleText}>Don't see the right format? Enter manually</Text>
                 </TouchableOpacity>
@@ -864,17 +892,51 @@ export default function EditTournamentScreen() {
                   <Text style={styles.addCourtBtnText}>+ Add Court</Text>
                 </TouchableOpacity>
 
-                <Text style={styles.label}>Daily Court Hours</Text>
-                <View style={{ flexDirection: 'row', gap: 10 }}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.bracketHint}>Start time</Text>
-                    <TextInput style={styles.input} placeholder="e.g. 8:00 AM" placeholderTextColor="#a0b8b8" value={bracketDailyStartDisplay} onChangeText={setBracketDailyStartDisplay} />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.bracketHint}>End time</Text>
-                    <TextInput style={styles.input} placeholder="e.g. 8:00 PM" placeholderTextColor="#a0b8b8" value={bracketDailyEndDisplay} onChangeText={setBracketDailyEndDisplay} />
-                  </View>
-                </View>
+                {/* Per-day court hour windows */}
+                <Text style={styles.label}>Court Hours Per Day</Text>
+                <Text style={styles.bracketHint}>Set the available game window for each tournament day</Text>
+                {tournamentDayStrings.map((date, i) => {
+                  const d = new Date(date + 'T00:00:00');
+                  const dayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][d.getDay()];
+                  const month = d.getMonth() + 1;
+                  const day = d.getDate();
+                  const window = dayWindows[i] ?? defaultWindowForDay(i);
+                  return (
+                    <View key={date} style={styles.dayWindowRow}>
+                      <Text style={styles.dayWindowLabel}>{dayName} {month}/{day}</Text>
+                      <View style={styles.dayWindowInputs}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.bracketHint}>Start</Text>
+                          <TextInput
+                            style={styles.input}
+                            placeholder="e.g. 8:00 AM"
+                            placeholderTextColor="#a0b8b8"
+                            value={window.startDisplay}
+                            onChangeText={v => setDayWindows(prev => {
+                              const next = [...prev];
+                              next[i] = { ...next[i], startDisplay: v };
+                              return next;
+                            })}
+                          />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.bracketHint}>End</Text>
+                          <TextInput
+                            style={styles.input}
+                            placeholder="e.g. 8:00 PM"
+                            placeholderTextColor="#a0b8b8"
+                            value={window.endDisplay}
+                            onChangeText={v => setDayWindows(prev => {
+                              const next = [...prev];
+                              next[i] = { ...next[i], endDisplay: v };
+                              return next;
+                            })}
+                          />
+                        </View>
+                      </View>
+                    </View>
+                  );
+                })}
 
                 <Text style={styles.label}>Game Duration (minutes)</Text>
                 <TextInput style={styles.input} placeholder="e.g. 50" placeholderTextColor="#a0b8b8" value={bracketGameDuration} onChangeText={setBracketGameDuration} keyboardType="numeric" />
@@ -984,7 +1046,6 @@ const styles = StyleSheet.create({
   checkbox: { width: 20, height: 20, borderRadius: 6, borderWidth: 1.5, borderColor: '#e0d8c8', backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' },
   checkboxActive: { backgroundColor: '#008080', borderColor: '#008080' },
   freeSpectatorText: { fontSize: 14, color: '#003333', fontWeight: '600' },
-  // Info/Error modal styles
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 },
   modalBox: { backgroundColor: '#f5ede0', borderRadius: 24, padding: 24, width: '100%', shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 16, elevation: 8 },
   modalTitle: { fontSize: 20, color: '#003333', letterSpacing: 2, marginBottom: 8, textAlign: 'center' },
@@ -1018,4 +1079,8 @@ const styles = StyleSheet.create({
   bracketPickerItem: { padding: 14, borderBottomWidth: 1, borderBottomColor: '#f0e8d8' },
   bracketPickerItemActive: { backgroundColor: '#f5ede0' },
   bracketPickerText: { fontSize: 15, color: '#003333' },
+  // Per-day window styles
+  dayWindowRow: { marginBottom: 14 },
+  dayWindowLabel: { fontSize: 13, fontWeight: '700', color: '#003333', marginBottom: 6 },
+  dayWindowInputs: { flexDirection: 'row', gap: 10 },
 });
