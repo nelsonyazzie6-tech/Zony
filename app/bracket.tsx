@@ -11,6 +11,19 @@ import {
   ActivityIndicator, Alert, Modal, ScrollView, StyleSheet,
   Text, TouchableOpacity, View,
 } from 'react-native';
+import Svg, { Path } from 'react-native-svg';
+
+function TrophyIcon({ size = 22, color = '#fff' }: { size?: number; color?: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <Path d="M8 21h8" />
+      <Path d="M12 17v4" />
+      <Path d="M7 4h10v5a5 5 0 0 1-10 0z" />
+      <Path d="M17 5h3a2 2 0 0 1-2 4h-1" />
+      <Path d="M7 5H4a2 2 0 0 0 2 4h1" />
+    </Svg>
+  );
+}
 
 type GameDoc = {
   id: string;
@@ -44,7 +57,6 @@ type BracketMeta = {
 
 type BracketView = 'winners' | 'losers';
 
-// "08:00" → "8:00 AM", "13:30" → "1:30 PM"
 function formatTime(raw: string | null): string | null {
   if (!raw) return null;
   const [hStr, mStr] = raw.split(':');
@@ -57,7 +69,6 @@ function formatTime(raw: string | null): string | null {
   return `${hour}:${minute} ${period}`;
 }
 
-// "2026-06-22" → "Sunday - 6/22"
 function formatDate(raw: string | null): string | null {
   if (!raw) return null;
   const parts = raw.split('-');
@@ -69,18 +80,10 @@ function formatDate(raw: string | null): string | null {
   return `${dayName} - ${month}/${day}`;
 }
 
-// ── Section header ───────────────────────────────────────────────────────────
-
 function Section({
-  title,
-  color = '#008080',
-  fontsLoaded,
-  children,
+  title, color = '#008080', fontsLoaded, children,
 }: {
-  title: string;
-  color?: string;
-  fontsLoaded: boolean;
-  children: React.ReactNode;
+  title: string; color?: string; fontsLoaded: boolean; children: React.ReactNode;
 }) {
   return (
     <View style={sectionStyles.container}>
@@ -99,20 +102,10 @@ const sectionStyles = StyleSheet.create({
   title: { fontSize: 12, letterSpacing: 1.2, marginBottom: 10, fontWeight: '700' },
 });
 
-// ── Game card ────────────────────────────────────────────────────────────────
-
 function GameCard({
-  game,
-  accentColor,
-  isOwner,
-  onPress,
-  fontsLoaded,
+  game, accentColor, isOwner, onPress, fontsLoaded,
 }: {
-  game: GameDoc;
-  accentColor: string;
-  isOwner: boolean;
-  onPress: () => void;
-  fontsLoaded: boolean;
+  game: GameDoc; accentColor: string; isOwner: boolean; onPress: () => void; fontsLoaded: boolean;
 }) {
   const isCompleted = game.status === 'completed';
   const isReady = game.status === 'ready';
@@ -122,15 +115,12 @@ function GameCard({
   const topIsWinner = isCompleted && game.winnerId === game.topTeamId;
   const bottomIsWinner = isCompleted && game.winnerId === game.bottomTeamId;
 
-  const borderColor = game.isBye
-    ? '#d3d1c7'
-    : isCompleted
-    ? accentColor
-    : isReady
-    ? '#B8860B'
+  const borderColor = game.isBye ? '#d3d1c7'
+    : isCompleted ? accentColor
+    : isReady ? '#B8860B'
     : '#e0d8c8';
 
- const scheduleText = [
+  const scheduleText = [
     game.courtName,
     formatDate(game.scheduledDate),
     formatTime(game.scheduledTime),
@@ -163,64 +153,44 @@ function GameCard({
       activeOpacity={canTap ? 0.75 : 1}
     >
       <Text style={cardStyles.gameId}>{game.id}</Text>
-
       {scheduleText ? (
         <Text style={cardStyles.schedule} numberOfLines={1}>{scheduleText}</Text>
       ) : null}
 
-      {/* Top team */}
       <View style={cardStyles.teamRow}>
-        {topIsWinner && (
-          <View style={[cardStyles.winDot, { backgroundColor: accentColor }]} />
-        )}
-        <Text
-          style={[
-            cardStyles.teamName,
-            topIsWinner && { color: accentColor },
-            fontsLoaded && topIsWinner && { fontFamily: 'Rajdhani_700Bold' },
-            !game.topTeamName && cardStyles.tbd,
-          ]}
-          numberOfLines={1}
-        >
+        {topIsWinner && <View style={[cardStyles.winDot, { backgroundColor: accentColor }]} />}
+        <Text style={[
+          cardStyles.teamName,
+          topIsWinner && { color: accentColor },
+          fontsLoaded && topIsWinner && { fontFamily: 'Rajdhani_700Bold' },
+          !game.topTeamName && cardStyles.tbd,
+        ]} numberOfLines={1}>
           {game.topTeamName || 'TBD'}
         </Text>
         {game.topScore !== null && (
-          <Text style={[cardStyles.score, topIsWinner && { color: accentColor }]}>
-            {game.topScore}
-          </Text>
+          <Text style={[cardStyles.score, topIsWinner && { color: accentColor }]}>{game.topScore}</Text>
         )}
       </View>
 
       <View style={cardStyles.divider} />
 
-      {/* Bottom team */}
       <View style={cardStyles.teamRow}>
-        {bottomIsWinner && (
-          <View style={[cardStyles.winDot, { backgroundColor: accentColor }]} />
-        )}
-        <Text
-          style={[
-            cardStyles.teamName,
-            bottomIsWinner && { color: accentColor },
-            fontsLoaded && bottomIsWinner && { fontFamily: 'Rajdhani_700Bold' },
-            !game.bottomTeamName && cardStyles.tbd,
-          ]}
-          numberOfLines={1}
-        >
+        {bottomIsWinner && <View style={[cardStyles.winDot, { backgroundColor: accentColor }]} />}
+        <Text style={[
+          cardStyles.teamName,
+          bottomIsWinner && { color: accentColor },
+          fontsLoaded && bottomIsWinner && { fontFamily: 'Rajdhani_700Bold' },
+          !game.bottomTeamName && cardStyles.tbd,
+        ]} numberOfLines={1}>
           {game.bottomTeamName || 'TBD'}
         </Text>
         {game.bottomScore !== null && (
-          <Text style={[cardStyles.score, bottomIsWinner && { color: accentColor }]}>
-            {game.bottomScore}
-          </Text>
+          <Text style={[cardStyles.score, bottomIsWinner && { color: accentColor }]}>{game.bottomScore}</Text>
         )}
       </View>
 
-      {/* Status badge */}
       <View style={cardStyles.statusRow}>
-        {isPending && (
-          <Text style={cardStyles.badgePending}>WAITING ON PREVIOUS RESULTS</Text>
-        )}
+        {isPending && <Text style={cardStyles.badgePending}>WAITING ON PREVIOUS RESULTS</Text>}
         {isReady && (
           <Text style={[cardStyles.badgeReady, { color: '#B8860B' }]}>
             {isOwner ? 'TAP TO ENTER RESULT' : 'IN PROGRESS'}
@@ -235,14 +205,7 @@ function GameCard({
 }
 
 const cardStyles = StyleSheet.create({
-  card: {
-    backgroundColor: '#fff',
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: '#e0d8c8',
-  },
+  card: { backgroundColor: '#fff', borderRadius: 14, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: '#e0d8c8' },
   pending: { opacity: 0.6 },
   gameId: { fontSize: 10, color: '#c0b8a8', marginBottom: 4 },
   schedule: { fontSize: 12, color: '#5a7a7a', marginBottom: 10 },
@@ -253,25 +216,11 @@ const cardStyles = StyleSheet.create({
   score: { fontSize: 16, color: '#5a7a7a', minWidth: 28, textAlign: 'right' },
   divider: { height: 1, backgroundColor: '#f0ebe3', marginVertical: 8 },
   statusRow: { flexDirection: 'row', marginTop: 10 },
-  badgeBye: {
-    fontSize: 10, color: '#a0b8b8',
-    backgroundColor: '#f0e8d8', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6,
-  },
-  badgePending: {
-    fontSize: 10, color: '#a0b8b8',
-    backgroundColor: '#f0e8d8', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6,
-  },
-  badgeReady: {
-    fontSize: 10, backgroundColor: '#fffbeb',
-    paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6,
-  },
-  badgeCompleted: {
-    fontSize: 10, backgroundColor: '#e8f4f4',
-    paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6,
-  },
+  badgeBye: { fontSize: 10, color: '#a0b8b8', backgroundColor: '#f0e8d8', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
+  badgePending: { fontSize: 10, color: '#a0b8b8', backgroundColor: '#f0e8d8', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
+  badgeReady: { fontSize: 10, backgroundColor: '#fffbeb', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
+  badgeCompleted: { fontSize: 10, backgroundColor: '#e8f4f4', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
 });
-
-// ── Main screen ──────────────────────────────────────────────────────────────
 
 export default function BracketScreen() {
   const router = useRouter();
@@ -279,24 +228,31 @@ export default function BracketScreen() {
     tournamentId, divisionId: initialDivisionId, postedBy,
     divisions: divisionsParam, tournamentName,
   } = useLocalSearchParams<{
-    tournamentId: string;
-    divisionId: string;
-    postedBy: string;
-    divisions: string;
-    tournamentName: string;
+    tournamentId: string; divisionId: string; postedBy: string;
+    divisions: string; tournamentName: string;
   }>();
   const [fontsLoaded] = useFonts({ Rajdhani_700Bold });
 
   const user = auth.currentUser;
   const [tournamentPostedBy, setTournamentPostedBy] = useState<string | null>(null);
+  const [tournamentSport, setTournamentSport] = useState<string>('Basketball');
   const isOwner = user?.uid === (tournamentPostedBy || postedBy);
 
   useEffect(() => {
     if (!tournamentId) return;
     getDoc(doc(db, 'tournaments', tournamentId))
-      .then(snap => { if (snap.exists()) setTournamentPostedBy(snap.data().postedBy || null); })
+      .then(snap => {
+        if (snap.exists()) {
+          setTournamentPostedBy(snap.data().postedBy || null);
+          setTournamentSport(snap.data().sport || 'Basketball');
+        }
+      })
       .catch(e => console.log('Tournament fetch error:', e));
   }, [tournamentId]);
+
+  const sportColor = tournamentSport === 'Volleyball' ? '#7A1818'
+    : tournamentSport === 'Softball' ? '#B8860B'
+    : '#008080';
 
   const divisionsList = divisionsParam
     ? divisionsParam.split(',').map(d => d.trim()).filter(Boolean)
@@ -350,9 +306,7 @@ export default function BracketScreen() {
           onPress: async () => {
             setRegenerating(true);
             try {
-              const gamesSnap = await getDocs(
-                collection(db, BracketPaths.games(tournamentId!, activeDivision)),
-              );
+              const gamesSnap = await getDocs(collection(db, BracketPaths.games(tournamentId!, activeDivision)));
               const batch = writeBatch(db);
               gamesSnap.docs.forEach(d => batch.delete(d.ref));
               batch.delete(doc(db, BracketPaths.bracket(tournamentId!, activeDivision)));
@@ -396,26 +350,24 @@ export default function BracketScreen() {
     } finally { setSubmitting(false); }
   };
 
-  // Derive display data from shared games state — both brackets update
-  // automatically whenever onSnapshot fires (e.g. winners result drops
-  // a team into losers).
   const byeGames = games.filter(g => g.isBye);
-
   const winnersGames = games
     .filter(g => g.bracket === 'winners' && !g.isBye)
     .sort((a, b) => a.round !== b.round ? a.round - b.round : a.position - b.position);
-
   const losersGames = games
     .filter(g => g.bracket === 'losers')
     .sort((a, b) => a.round !== b.round ? a.round - b.round : a.position - b.position);
-
   const finalGames = games
     .filter(g => g.bracket === 'final')
     .sort((a, b) => a.round - b.round);
 
   const winnersRounds = [...new Set(winnersGames.map(g => g.round))].sort((a, b) => a - b);
-  const losersRounds  = [...new Set(losersGames.map(g => g.round))].sort((a, b) => a - b);
+  const losersRounds = [...new Set(losersGames.map(g => g.round))].sort((a, b) => a - b);
   const hasLosers = losersRounds.length > 0;
+
+  const visibleFinalGames = bracketMeta?.championshipFormat === 'double'
+    ? finalGames
+    : finalGames.slice(0, 1);
 
   return (
     <View style={styles.container}>
@@ -464,29 +416,28 @@ export default function BracketScreen() {
 
       {/* Champion banner */}
       {bracketMeta?.championTeamId && (
-        <View style={styles.championBanner}>
-          <Text style={[styles.championLabel, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>
-            🏆 CHAMPION
-          </Text>
-          <Text style={styles.championName}>
-            {games.find(g => g.winnerId === bracketMeta.championTeamId)?.winnerName || ''}
-          </Text>
+        <View style={[styles.championBanner, { backgroundColor: sportColor }]}>
+          <TrophyIcon size={28} color="#fff" />
+          <View style={styles.championTextBlock}>
+            <Text style={[styles.championLabel, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>
+              CHAMPION
+            </Text>
+            <Text style={[styles.championName, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>
+              {(games.find(g => g.winnerId === bracketMeta.championTeamId)?.winnerName || '').toUpperCase()}
+            </Text>
+          </View>
+          <TrophyIcon size={28} color="#fff" />
         </View>
       )}
 
       {/* Organizer hint */}
-      {isOwner && !bracketMeta?.championTeamId && (
+      {isOwner && !bracketMeta?.championTeamId && canRegenerate && (
         <View style={styles.organizerHint}>
-          <Text style={styles.organizerHintText}>
-            Tap any highlighted game to select the winner.
-          </Text>
-          {canRegenerate && (
-            <TouchableOpacity onPress={handleRegenerateBracket} disabled={regenerating}>
-              <Text style={styles.regenerateLink}>
-                {regenerating ? 'Clearing...' : 'Remove team & regenerate bracket'}
-              </Text>
-            </TouchableOpacity>
-          )}
+          <TouchableOpacity onPress={handleRegenerateBracket} disabled={regenerating}>
+            <Text style={styles.regenerateLink}>
+              {regenerating ? 'Clearing...' : 'Remove team & regenerate bracket'}
+            </Text>
+          </TouchableOpacity>
         </View>
       )}
 
@@ -521,61 +472,29 @@ export default function BracketScreen() {
 
           {view === 'winners' && (
             <>
-              {/* Byes */}
               {byeGames.length > 0 && (
                 <Section title="BYES (AUTO-ADVANCED)" fontsLoaded={fontsLoaded}>
                   {byeGames.map(game => (
-                    <GameCard
-                      key={game.id}
-                      game={game}
-                      accentColor="#008080"
-                      isOwner={isOwner}
-                      onPress={() => {}}
-                      fontsLoaded={fontsLoaded}
-                    />
+                    <GameCard key={game.id} game={game} accentColor={sportColor} isOwner={isOwner} onPress={() => {}} fontsLoaded={fontsLoaded} />
                   ))}
                 </Section>
               )}
-
-              {/* Winners rounds */}
               {winnersRounds.map(round => (
                 <Section
                   key={`w-${round}`}
-                  title={
-                    round === Math.max(...winnersRounds)
-                      ? 'WINNERS FINAL'
-                      : `WINNERS BRACKET — ROUND ${round}`
-                  }
-                  color="#008080"
+                  title={round === Math.max(...winnersRounds) ? 'WINNERS FINAL' : `WINNERS BRACKET — ROUND ${round}`}
+                  color={sportColor}
                   fontsLoaded={fontsLoaded}
                 >
-                  {winnersGames
-                    .filter(g => g.round === round)
-                    .map(game => (
-                      <GameCard
-                        key={game.id}
-                        game={game}
-                        accentColor="#008080"
-                        isOwner={isOwner}
-                        onPress={() => handleGamePress(game)}
-                        fontsLoaded={fontsLoaded}
-                      />
-                    ))}
+                  {winnersGames.filter(g => g.round === round).map(game => (
+                    <GameCard key={game.id} game={game} accentColor={sportColor} isOwner={isOwner} onPress={() => handleGamePress(game)} fontsLoaded={fontsLoaded} />
+                  ))}
                 </Section>
               ))}
-
-              {/* Championship (shown on winners tab) */}
-              {finalGames.length > 0 && (
+              {visibleFinalGames.length > 0 && (
                 <Section title="CHAMPIONSHIP" color="#B8860B" fontsLoaded={fontsLoaded}>
-                  {finalGames.map(game => (
-                    <GameCard
-                      key={game.id}
-                      game={game}
-                      accentColor="#B8860B"
-                      isOwner={isOwner}
-                      onPress={() => handleGamePress(game)}
-                      fontsLoaded={fontsLoaded}
-                    />
+                  {visibleFinalGames.map(game => (
+                    <GameCard key={game.id} game={game} accentColor="#B8860B" isOwner={isOwner} onPress={() => handleGamePress(game)} fontsLoaded={fontsLoaded} />
                   ))}
                 </Section>
               )}
@@ -587,61 +506,31 @@ export default function BracketScreen() {
               {losersRounds.map(round => (
                 <Section
                   key={`l-${round}`}
-                  title={
-                    round === Math.max(...losersRounds)
-                      ? 'LOSERS FINAL'
-                      : `LOSERS BRACKET — ROUND ${round}`
-                  }
+                  title={round === Math.max(...losersRounds) ? 'LOSERS FINAL' : `LOSERS BRACKET — ROUND ${round}`}
                   color="#7A1818"
                   fontsLoaded={fontsLoaded}
                 >
-                  {losersGames
-                    .filter(g => g.round === round)
-                    .map(game => (
-                      <GameCard
-                        key={game.id}
-                        game={game}
-                        accentColor="#7A1818"
-                        isOwner={isOwner}
-                        onPress={() => handleGamePress(game)}
-                        fontsLoaded={fontsLoaded}
-                      />
-                    ))}
+                  {losersGames.filter(g => g.round === round).map(game => (
+                    <GameCard key={game.id} game={game} accentColor="#7A1818" isOwner={isOwner} onPress={() => handleGamePress(game)} fontsLoaded={fontsLoaded} />
+                  ))}
                 </Section>
               ))}
-
-              {/* Championship also shown on losers tab */}
-              {finalGames.length > 0 && (
+              {visibleFinalGames.length > 0 && (
                 <Section title="CHAMPIONSHIP" color="#B8860B" fontsLoaded={fontsLoaded}>
-                  {finalGames.map(game => (
-                    <GameCard
-                      key={game.id}
-                      game={game}
-                      accentColor="#B8860B"
-                      isOwner={isOwner}
-                      onPress={() => handleGamePress(game)}
-                      fontsLoaded={fontsLoaded}
-                    />
+                  {visibleFinalGames.map(game => (
+                    <GameCard key={game.id} game={game} accentColor="#B8860B" isOwner={isOwner} onPress={() => handleGamePress(game)} fontsLoaded={fontsLoaded} />
                   ))}
                 </Section>
               )}
             </>
           )}
 
-          {/* No losers bracket — single tab, show everything */}
           {!hasLosers && (
             <>
               {byeGames.length > 0 && (
                 <Section title="BYES (AUTO-ADVANCED)" fontsLoaded={fontsLoaded}>
                   {byeGames.map(game => (
-                    <GameCard
-                      key={game.id}
-                      game={game}
-                      accentColor="#008080"
-                      isOwner={isOwner}
-                      onPress={() => {}}
-                      fontsLoaded={fontsLoaded}
-                    />
+                    <GameCard key={game.id} game={game} accentColor={sportColor} isOwner={isOwner} onPress={() => {}} fontsLoaded={fontsLoaded} />
                   ))}
                 </Section>
               )}
@@ -649,32 +538,18 @@ export default function BracketScreen() {
                 <Section
                   key={`w-${round}`}
                   title={round === Math.max(...winnersRounds) ? 'FINAL' : `ROUND ${round}`}
-                  color="#008080"
+                  color={sportColor}
                   fontsLoaded={fontsLoaded}
                 >
                   {winnersGames.filter(g => g.round === round).map(game => (
-                    <GameCard
-                      key={game.id}
-                      game={game}
-                      accentColor="#008080"
-                      isOwner={isOwner}
-                      onPress={() => handleGamePress(game)}
-                      fontsLoaded={fontsLoaded}
-                    />
+                    <GameCard key={game.id} game={game} accentColor={sportColor} isOwner={isOwner} onPress={() => handleGamePress(game)} fontsLoaded={fontsLoaded} />
                   ))}
                 </Section>
               ))}
-              {finalGames.length > 0 && (
+              {visibleFinalGames.length > 0 && (
                 <Section title="CHAMPIONSHIP" color="#B8860B" fontsLoaded={fontsLoaded}>
-                  {finalGames.map(game => (
-                    <GameCard
-                      key={game.id}
-                      game={game}
-                      accentColor="#B8860B"
-                      isOwner={isOwner}
-                      onPress={() => handleGamePress(game)}
-                      fontsLoaded={fontsLoaded}
-                    />
+                  {visibleFinalGames.map(game => (
+                    <GameCard key={game.id} game={game} accentColor="#B8860B" isOwner={isOwner} onPress={() => handleGamePress(game)} fontsLoaded={fontsLoaded} />
                   ))}
                 </Section>
               )}
@@ -752,36 +627,42 @@ const styles = StyleSheet.create({
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 16, paddingTop: 56, paddingBottom: 14, backgroundColor: '#003333',
+    paddingHorizontal: 20, paddingTop: 60, paddingBottom: 16, backgroundColor: '#f5ede0',
+    borderBottomWidth: 1, borderBottomColor: '#e0d8c8',
   },
-  backBtn: { width: 60, padding: 4 },
-  backText: { color: '#a0c8c8', fontSize: 15 },
+  backBtn: { width: 80, padding: 4 },
+  backText: { color: '#008080', fontSize: 16, fontWeight: '600' },
   headerCenter: { flex: 1, alignItems: 'center' },
-  headerTitle: { fontSize: 20, color: '#fff', letterSpacing: 1.5 },
-  headerSub: { fontSize: 11, color: '#a0c8c8', marginTop: 1 },
-  organizerBadgeWrap: { width: 72, alignItems: 'flex-end' },
+  headerTitle: { fontSize: 22, color: '#003333', letterSpacing: 1.5 },
+  headerSub: { fontSize: 12, color: '#5a7a7a', marginTop: 2 },
+  organizerBadgeWrap: { width: 80, alignItems: 'flex-end', justifyContent: 'center' },
   organizerBadge: {
     fontSize: 11, color: '#B8860B', backgroundColor: '#fffbeb',
-    paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, overflow: 'hidden',
+    paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, overflow: 'hidden',
+    textAlign: 'center', borderWidth: 1, borderColor: '#fde68a',
   },
-  divisionTabsScroll: { backgroundColor: '#003333', maxHeight: 44 },
-  divisionTabsContent: { paddingHorizontal: 12, paddingBottom: 8, gap: 8, flexDirection: 'row' },
+  divisionTabsScroll: { backgroundColor: '#f5ede0', maxHeight: 48, borderBottomWidth: 1, borderBottomColor: '#e0d8c8' },
+  divisionTabsContent: { paddingHorizontal: 12, paddingVertical: 6, gap: 8, flexDirection: 'row' },
   divisionTab: {
-    paddingHorizontal: 14, paddingVertical: 6,
-    borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.1)',
+    paddingHorizontal: 14, paddingVertical: 7,
+    borderRadius: 20, backgroundColor: '#e0d8c8',
+    alignItems: 'center', justifyContent: 'center',
   },
   divisionTabActive: { backgroundColor: '#008080' },
-  divisionTabText: { fontSize: 13, color: 'rgba(255,255,255,0.6)' },
-  divisionTabTextActive: { color: '#fff', fontWeight: '700' },
-  championBanner: { backgroundColor: '#008080', padding: 16, alignItems: 'center' },
-  championLabel: { fontSize: 13, color: '#a0f0e0', letterSpacing: 2 },
-  championName: { fontSize: 22, color: '#fff', marginTop: 2 },
+  divisionTabText: { fontSize: 13, color: '#5a7a7a', textAlign: 'center', fontWeight: '600' },
+  divisionTabTextActive: { color: '#fff', fontWeight: '700', textAlign: 'center' },
+  championBanner: {
+    paddingVertical: 20, paddingHorizontal: 20,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 14,
+  },
+  championTextBlock: { alignItems: 'center' },
+  championLabel: { fontSize: 12, color: '#a0f0e0', letterSpacing: 3, marginBottom: 4 },
+  championName: { fontSize: 26, color: '#fff', letterSpacing: 1 },
   organizerHint: {
     backgroundColor: '#fffbeb', paddingHorizontal: 16, paddingVertical: 12,
-    borderBottomWidth: 1, borderBottomColor: '#fde68a',
+    borderBottomWidth: 1, borderBottomColor: '#fde68a', alignItems: 'center',
   },
-  organizerHintText: { fontSize: 13, color: '#92400e' },
-  regenerateLink: { fontSize: 12, color: '#7A1E1E', marginTop: 6, textDecorationLine: 'underline' },
+  regenerateLink: { fontSize: 13, color: '#7A1E1E', textDecorationLine: 'underline', textAlign: 'center' },
   viewToggleRow: {
     flexDirection: 'row', backgroundColor: '#fff',
     marginHorizontal: 16, marginTop: 12, borderRadius: 12,
@@ -795,17 +676,11 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
   formatNote: { fontSize: 12, color: '#a0b8b8', textAlign: 'center', marginTop: 8, paddingHorizontal: 16 },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' },
-  modalBox: {
-    backgroundColor: '#f5ede0', borderTopLeftRadius: 24,
-    borderTopRightRadius: 24, padding: 24, paddingBottom: 44,
-  },
+  modalBox: { backgroundColor: '#f5ede0', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 44 },
   modalTitle: { fontSize: 22, color: '#003333', letterSpacing: 1, marginBottom: 2 },
   modalGameId: { fontSize: 12, color: '#a0b8b8', marginBottom: 16 },
   modalTeamLabel: { fontSize: 14, color: '#5a7a7a', marginBottom: 12 },
-  winnerBtn: {
-    backgroundColor: '#008080', borderRadius: 14,
-    paddingVertical: 16, paddingHorizontal: 20, marginBottom: 8, alignItems: 'center',
-  },
+  winnerBtn: { backgroundColor: '#008080', borderRadius: 14, paddingVertical: 16, paddingHorizontal: 20, marginBottom: 8, alignItems: 'center' },
   winnerBtnText: { color: '#fff', fontSize: 17, fontWeight: '700' },
   winnerBtnSub: { color: 'rgba(255,255,255,0.7)', fontSize: 11, marginTop: 2 },
   vsText: { textAlign: 'center', color: '#a0b8b8', fontSize: 13, marginVertical: 6 },
