@@ -20,7 +20,6 @@ const FAQ = [
   { q: 'How do I delete my post?', a: 'Open your post and tap "Delete Post" — only visible to the original poster.' },
 ];
 
-// Camera icon, replaces 📷
 function CameraIcon({ size = 16, color = '#003333' }: { size?: number; color?: string }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -30,7 +29,6 @@ function CameraIcon({ size = 16, color = '#003333' }: { size?: number; color?: s
   );
 }
 
-// Trash icon, replaces 🗑️
 function TrashIcon({ size = 16, color = '#cc4444' }: { size?: number; color?: string }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -43,7 +41,6 @@ function TrashIcon({ size = 16, color = '#cc4444' }: { size?: number; color?: st
   );
 }
 
-// Mail icon, replaces ✉️
 function MailIcon({ size = 16, color = '#fff' }: { size?: number; color?: string }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -53,7 +50,6 @@ function MailIcon({ size = 16, color = '#fff' }: { size?: number; color?: string
   );
 }
 
-// Check icon, replaces ✓
 function CheckIcon({ size = 14, color = '#008080' }: { size?: number; color?: string }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -63,7 +59,6 @@ function CheckIcon({ size = 14, color = '#008080' }: { size?: number; color?: st
   );
 }
 
-// X icon, replaces ✗
 function XIcon({ size = 14, color = '#cc4444' }: { size?: number; color?: string }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -92,11 +87,7 @@ export default function ProfileScreen() {
   const [removingPhoto, setRemovingPhoto] = useState(false);
   const [fontsLoaded] = useFonts({ Rajdhani_700Bold });
   const [deletingTournamentId, setDeletingTournamentId] = useState<string | null>(null);
-
-  // Loading state — prevents "SET YOUR NAME" / "??" flash before Firestore data loads
   const [loadingProfile, setLoadingProfile] = useState(true);
-
-  // Item 6 — profile tab state
   const [profileTab, setProfileTab] = useState<'posted' | 'registered'>('posted');
 
   const [showNameModal, setShowNameModal] = useState(false);
@@ -105,13 +96,10 @@ export default function ProfileScreen() {
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
   const [showHelpModal, setShowHelpModal] = useState(false);
   const [expandedFaq, setExpandedFaq] = useState<number | null>(null);
-
   const [showPhotoModal, setShowPhotoModal] = useState(false);
   const [showRemoveConfirmModal, setShowRemoveConfirmModal] = useState(false);
-
   const [showDeleteTournamentModal, setShowDeleteTournamentModal] = useState(false);
   const [tournamentToDelete, setTournamentToDelete] = useState<any>(null);
-
   const [showDeleteAccountModal, setShowDeleteAccountModal] = useState(false);
   const [deletingAccount, setDeletingAccount] = useState(false);
   const [errorModal, setErrorModal] = useState<{ visible: boolean; title: string; message: string }>({
@@ -120,8 +108,6 @@ export default function ProfileScreen() {
 
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [hideContactInfo, setHideContactInfo] = useState(false);
-
-  // Sport Preferences
   const [preferredSports, setPreferredSports] = useState<string[]>(['Basketball', 'Volleyball', 'Softball']);
   const [showSportsModal, setShowSportsModal] = useState(false);
 
@@ -142,7 +128,7 @@ export default function ProfileScreen() {
           if (snap.data().hideContactInfo !== undefined) setHideContactInfo(snap.data().hideContactInfo);
           if (snap.data().preferredSports !== undefined) setPreferredSports(snap.data().preferredSports);
         }
-      } catch (e) { console.error(e); }
+      } catch (_) {}
       setLoadingProfile(false);
     };
     loadUserData();
@@ -163,11 +149,8 @@ export default function ProfileScreen() {
           return true;
         });
       setMyPosted(active);
-    }, (error) => {
-      console.log('Posted tournaments listener error:', error);
-    });
+    }, () => {});
 
-    // Item 6 — listen for registered tournaments
     const joinedQuery = query(collection(db, 'tournaments'), where('joinedUsers', 'array-contains', user.uid));
     const unsubJoined = onSnapshot(joinedQuery, snap => {
       const now = new Date();
@@ -184,9 +167,7 @@ export default function ProfileScreen() {
           return true;
         });
       setMyRegistered(active);
-    }, (error) => {
-      console.log('Joined tournaments listener error:', error);
-    });
+    }, () => {});
 
     return () => { unsubPosted(); unsubJoined(); };
   }, []);
@@ -219,8 +200,7 @@ export default function ProfileScreen() {
       const downloadURL = await getDownloadURL(storageRef);
       setPhotoURL(downloadURL);
       await setDoc(doc(db, 'users', user!.uid), { photoURL: downloadURL }, { merge: true });
-    } catch (e: any) {
-      console.error(e);
+    } catch (_) {
       setErrorModal({
         visible: true,
         title: 'UPLOAD FAILED',
@@ -239,7 +219,7 @@ export default function ProfileScreen() {
       try { await deleteObject(storageRef); } catch (_) {}
       await setDoc(doc(db, 'users', user!.uid), { photoURL: '' }, { merge: true });
       setPhotoURL(null);
-    } catch (e: any) { console.error(e); }
+    } catch (_) {}
     setRemovingPhoto(false);
   };
 
@@ -257,8 +237,7 @@ export default function ProfileScreen() {
       await setDoc(doc(db, 'users', user!.uid), { username: nameInput.trim() }, { merge: true });
       setFullName(nameInput.trim());
       setShowNameModal(false);
-    } catch (e: any) {
-      console.error(e);
+    } catch (_) {
       setErrorModal({
         visible: true,
         title: 'SOMETHING WENT WRONG',
@@ -357,8 +336,7 @@ export default function ProfileScreen() {
       );
 
       await updateDoc(doc(db, 'tournaments', tournamentId), { status: 'canceled' });
-    } catch (e: any) {
-      console.error(e);
+    } catch (_) {
       setErrorModal({
         visible: true,
         title: 'SOMETHING WENT WRONG',
@@ -375,43 +353,33 @@ export default function ProfileScreen() {
     try {
       const uid = user.uid;
 
-      // Delete tournaments the user posted
       const tournamentsSnap = await getDocs(query(collection(db, 'tournaments'), where('postedBy', '==', uid)));
       await Promise.all(tournamentsSnap.docs.map(d => deleteDoc(d.ref)));
 
-      // Delete board posts the user made
       const boardSnap = await getDocs(query(collection(db, 'board'), where('postedBy', '==', uid)));
       await Promise.all(boardSnap.docs.map(d => deleteDoc(d.ref)));
 
-      // Delete community posts the user made
       const communitySnap = await getDocs(query(collection(db, 'community'), where('authorId', '==', uid)));
       await Promise.all(communitySnap.docs.map(d => deleteDoc(d.ref)));
 
-      // Delete the user's own notifications
       const notifsSnap = await getDocs(query(collection(db, 'notifications'), where('toUserId', '==', uid)));
       await Promise.all(notifsSnap.docs.map(d => deleteDoc(d.ref)));
 
-      // Clean up registrations in OTHER users' tournaments:
-      // remove user from joinedUsers, free up the spot, delete their team doc
       const joinedSnap = await getDocs(query(collection(db, 'tournaments'), where('joinedUsers', 'array-contains', uid)));
       await Promise.all(joinedSnap.docs.map(async (tDoc) => {
         try {
-          // Remove their team registration doc(s) in this tournament
           const teamsSnap = await getDocs(collection(db, 'tournaments', tDoc.id, 'teams'));
           const myTeams = teamsSnap.docs.filter(t => t.data().registeredBy === uid);
           await Promise.all(myTeams.map(t => deleteDoc(t.ref)));
-
-          // Remove uid from joinedUsers and free up a spot
           await runTransaction(db, async (tx) => {
             const tRef = doc(db, 'tournaments', tDoc.id);
             const tSnap = await tx.get(tRef);
             if (!tSnap.exists()) return;
             tx.update(tRef, { joinedUsers: arrayRemove(uid), spots: increment(1) });
           });
-        } catch (e) { console.log('Cleanup join error:', e); }
+        } catch (_) {}
       }));
 
-      // Clean up waitlist entries in OTHER users' tournaments
       const allTournamentsSnap = await getDocs(collection(db, 'tournaments'));
       await Promise.all(allTournamentsSnap.docs.map(async (tDoc) => {
         try {
@@ -419,10 +387,9 @@ export default function ProfileScreen() {
             query(collection(db, 'tournaments', tDoc.id, 'waitlist'), where('userId', '==', uid))
           );
           await Promise.all(waitlistSnap.docs.map(w => deleteDoc(w.ref)));
-        } catch (e) { console.log('Cleanup waitlist error:', e); }
+        } catch (_) {}
       }));
 
-      // Delete profile photo
       try {
         const storage = getStorage();
         const storageRef = ref(storage, `profilePhotos/${uid}.jpg`);
@@ -432,8 +399,7 @@ export default function ProfileScreen() {
       await deleteDoc(doc(db, 'users', uid));
       await deleteUser(user);
       router.replace('/login');
-    } catch (e: any) {
-      console.error(e);
+    } catch (_) {
       setDeletingAccount(false);
       setShowDeleteAccountModal(false);
       setErrorModal({
@@ -448,7 +414,7 @@ export default function ProfileScreen() {
     try {
       await signOut(auth);
       router.replace('/login');
-    } catch (e: any) { console.error(e); }
+    } catch (_) {}
   };
 
   const displayName = fullName || '';
@@ -520,7 +486,6 @@ export default function ProfileScreen() {
         </View>
       </View>
 
-      {/* Item 6 — My Tournaments tab switcher */}
       <View style={styles.tournamentTabRow}>
         <TouchableOpacity
           style={[styles.tournamentTab, profileTab === 'posted' && styles.tournamentTabActive]}
@@ -681,7 +646,6 @@ export default function ProfileScreen() {
         <Text style={styles.deleteAccountText}>Delete Account</Text>
       </TouchableOpacity>
 
-      {/* Photo Action Modal */}
       <Modal visible={showPhotoModal} animationType="fade" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalBox}>
@@ -706,7 +670,6 @@ export default function ProfileScreen() {
         </View>
       </Modal>
 
-      {/* Remove Photo Confirm Modal */}
       <Modal visible={showRemoveConfirmModal} animationType="fade" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalBox}>
@@ -724,7 +687,6 @@ export default function ProfileScreen() {
         </View>
       </Modal>
 
-      {/* Cancel Tournament Modal */}
       <Modal visible={showDeleteTournamentModal} animationType="fade" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalBox}>
@@ -744,7 +706,6 @@ export default function ProfileScreen() {
         </View>
       </Modal>
 
-      {/* Delete Account Modal */}
       <Modal visible={showDeleteAccountModal} animationType="fade" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalBox}>
@@ -766,7 +727,6 @@ export default function ProfileScreen() {
         </View>
       </Modal>
 
-      {/* Error Modal */}
       <Modal visible={errorModal.visible} animationType="fade" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalBox}>
@@ -782,7 +742,6 @@ export default function ProfileScreen() {
         </View>
       </Modal>
 
-      {/* Name Modal */}
       <Modal visible={showNameModal} animationType="fade" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalBox}>
@@ -801,7 +760,6 @@ export default function ProfileScreen() {
         </View>
       </Modal>
 
-      {/* Notifications Modal */}
       <Modal visible={showNotifModal} animationType="fade" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalBox}>
@@ -822,7 +780,6 @@ export default function ProfileScreen() {
         </View>
       </Modal>
 
-      {/* Privacy Modal */}
       <Modal visible={showPrivacyModal} animationType="fade" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalBox}>
@@ -847,7 +804,6 @@ export default function ProfileScreen() {
         </View>
       </Modal>
 
-      {/* Sport Preferences Modal */}
       <Modal visible={showSportsModal} animationType="fade" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalBox}>
@@ -871,7 +827,6 @@ export default function ProfileScreen() {
         </View>
       </Modal>
 
-      {/* Help Modal */}
       <Modal visible={showHelpModal} animationType="slide" transparent>
         <View style={styles.sheetOverlay}>
           <TouchableOpacity style={styles.sheetBackdrop} onPress={() => setShowHelpModal(false)} />
@@ -930,7 +885,6 @@ const styles = StyleSheet.create({
   logoutText: { color: '#dc2626', fontSize: 14, fontWeight: '600' },
   deleteAccountBtn: { marginTop: 12, paddingVertical: 10 },
   deleteAccountText: { fontSize: 12, color: '#ccc', fontWeight: '500' },
-  // Item 6 — tournament tab styles
   tournamentTabRow: { flexDirection: 'row', width: '90%', backgroundColor: '#e8e8e8', borderRadius: 12, padding: 3, marginBottom: 10, marginTop: 4 },
   tournamentTab: { flex: 1, paddingVertical: 9, borderRadius: 10, alignItems: 'center' },
   tournamentTabActive: { backgroundColor: '#008080' },

@@ -23,12 +23,12 @@ async function sendPush(token: string, title: string, body: string) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ to: token, title, body, sound: 'default' }),
     });
-  } catch (e) { console.log('Push error:', e); }
+  } catch (_) {}
 }
 
 function PostImage({ uri }: { uri: string }) {
   const { width: screenWidth } = useWindowDimensions();
-  const imgWidth = screenWidth - 32 - 32; // scroll padding (16*2) + postCard padding (16*2)
+  const imgWidth = screenWidth - 32 - 32;
   const [aspectRatio, setAspectRatio] = useState(1);
 
   useEffect(() => {
@@ -64,8 +64,6 @@ export default function CommunityPostScreen() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [showImageModal, setShowImageModal] = useState(false);
-
-  // Report state
   const [showReportModal, setShowReportModal] = useState(false);
   const [reportSubmitting, setReportSubmitting] = useState(false);
   const [showReportConfirm, setShowReportConfirm] = useState(false);
@@ -85,9 +83,7 @@ export default function CommunityPostScreen() {
     const q = query(collection(db, 'community', id as string, 'comments'), orderBy('createdAt', 'asc'));
     const unsub = onSnapshot(q, (snap) => {
       setComments(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    }, (error) => {
-      console.log('Comments listener error:', error);
-    });
+    }, () => {});
     return () => unsub();
   }, []);
 
@@ -104,7 +100,6 @@ export default function CommunityPostScreen() {
       });
       await updateDoc(doc(db, 'community', id as string), { commentCount: increment(1) });
 
-      // Item 4 — notify post author when someone comments (not if they comment on their own post)
       if (post?.authorId && post.authorId !== user.uid) {
         await addDoc(collection(db, 'notifications'), {
           toUserId: post.authorId,
@@ -121,8 +116,7 @@ export default function CommunityPostScreen() {
       }
 
       setCommentText('');
-    } catch (e: any) {
-      console.log(e);
+    } catch (_) {
       setErrorModal({
         visible: true,
         title: 'SOMETHING WENT WRONG',
@@ -143,7 +137,6 @@ export default function CommunityPostScreen() {
         body: replyText.trim(), authorName: username, authorInitials: initials, authorId: user.uid, createdAt: serverTimestamp(),
       });
 
-      // Item 5 — notify commenter when someone replies (not if replying to yourself)
       if (commentAuthorId && commentAuthorId !== user.uid) {
         await addDoc(collection(db, 'notifications'), {
           toUserId: commentAuthorId,
@@ -161,8 +154,7 @@ export default function CommunityPostScreen() {
 
       setReplyText('');
       setReplyingTo(null);
-    } catch (e: any) {
-      console.log(e);
+    } catch (_) {
       setErrorModal({
         visible: true,
         title: 'SOMETHING WENT WRONG',
@@ -176,8 +168,7 @@ export default function CommunityPostScreen() {
     try {
       await deleteDoc(doc(db, 'community', id as string));
       router.replace('/(tabs)/community');
-    } catch (e: any) {
-      console.log(e);
+    } catch (_) {
       setErrorModal({
         visible: true,
         title: 'SOMETHING WENT WRONG',
@@ -221,8 +212,7 @@ export default function CommunityPostScreen() {
       });
       setShowReportModal(false);
       setShowReportConfirm(true);
-    } catch (e: any) {
-      console.log(e);
+    } catch (_) {
       setErrorModal({
         visible: true,
         title: 'SOMETHING WENT WRONG',
@@ -282,7 +272,6 @@ export default function CommunityPostScreen() {
               </TouchableOpacity>
             ) : null}
             {isSale && post.price ? <Text style={styles.postPrice}>{post.price}</Text> : null}
-
             {isSale && !isOwner && post.authorId ? (
               <TouchableOpacity style={styles.messageBtn} onPress={handleMessage} activeOpacity={0.85}>
                 <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" style={{ marginRight: 8 }}>
@@ -373,7 +362,6 @@ export default function CommunityPostScreen() {
         </View>
       </Modal>
 
-      {/* Report Reason Modal */}
       <Modal visible={showReportModal} animationType="fade" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalBox}>
@@ -397,7 +385,6 @@ export default function CommunityPostScreen() {
         </View>
       </Modal>
 
-      {/* Report Confirmation Modal */}
       <Modal visible={showReportConfirm} animationType="fade" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalBox}>
@@ -422,7 +409,6 @@ export default function CommunityPostScreen() {
         </View>
       </Modal>
 
-      {/* Full-Screen Image Viewer */}
       <Modal visible={showImageModal} animationType="fade" transparent onRequestClose={() => setShowImageModal(false)}>
         <View style={styles.fullImageOverlay}>
           <TouchableOpacity style={styles.fullImageCloseBtn} onPress={() => setShowImageModal(false)} activeOpacity={0.8}>

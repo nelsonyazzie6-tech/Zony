@@ -11,7 +11,6 @@ import { auth, db } from '../firebaseConfig';
 
 const typeOptions = ['Sale', 'Question'];
 
-// Camera icon, replaces 📷
 function CameraIcon({ size = 16, color = '#008080' }: { size?: number; color?: string }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -21,7 +20,6 @@ function CameraIcon({ size = 16, color = '#008080' }: { size?: number; color?: s
   );
 }
 
-// X icon, replaces ✕
 function XIcon({ size = 14, color = '#888' }: { size?: number; color?: string }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -40,8 +38,6 @@ export default function NewPostScreen() {
   const [body, setBody] = useState('');
   const [price, setPrice] = useState('');
   const [loading, setLoading] = useState(false);
-
-  // Photo state — local picked image and upload progress
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
@@ -51,15 +47,16 @@ export default function NewPostScreen() {
   };
 
   const handlePickPhoto = async () => {
-  const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-  if (!permission.granted) return;
-  const result = await ImagePicker.launchImageLibraryAsync({
-    mediaTypes: ImagePicker.MediaTypeOptions.Images,
-    quality: 1,
-  });
-  if (result.canceled) return;
-  setPhotoUri(result.assets[0].uri);
-};
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) return;
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      quality: 1,
+    });
+    if (result.canceled) return;
+    setPhotoUri(result.assets[0].uri);
+  };
+
   const handleRemovePhoto = () => setPhotoUri(null);
 
   const handlePost = async () => {
@@ -95,8 +92,6 @@ export default function NewPostScreen() {
         createdAt: serverTimestamp(),
       });
 
-      // If a photo was picked, compress and upload it now, then attach
-      // the resulting URL to the post we just created.
       if (photoUri) {
         setUploadingPhoto(true);
         try {
@@ -112,8 +107,7 @@ export default function NewPostScreen() {
           await uploadBytes(storageRef, blob);
           const downloadURL = await getDownloadURL(storageRef);
           await updateDoc(doc(db, 'community', docRef.id), { imageUrl: downloadURL });
-        } catch (e: any) {
-          console.log('Photo upload error:', e);
+        } catch (_) {
           Alert.alert('Photo didn\'t upload', 'Your post was created, but the photo failed to attach. You can delete this post and try again if you want the photo included.');
         }
         setUploadingPhoto(false);
@@ -130,7 +124,6 @@ export default function NewPostScreen() {
 
   return (
     <ScrollView style={styles.container} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-
       <View style={styles.topRow}>
         <TouchableOpacity onPress={() => router.back()} style={styles.cancelRow}>
           <XIcon size={13} color="#888" />
@@ -145,7 +138,6 @@ export default function NewPostScreen() {
       </View>
 
       <View style={styles.form}>
-
         <Text style={styles.label}>Post Type</Text>
         <TouchableOpacity style={styles.dropdown} onPress={() => setShowTypePicker(!showTypePicker)} activeOpacity={0.8}>
           <Text style={type ? styles.dropdownSelected : styles.dropdownPlaceholder}>
@@ -168,22 +160,9 @@ export default function NewPostScreen() {
         {type === 'Sale' && (
           <>
             <Text style={styles.label}>Item Title</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="e.g. Nike Volleyball Jersey — Size M"
-              placeholderTextColor="#a0b8b8"
-              value={title}
-              onChangeText={setTitle}
-            />
+            <TextInput style={styles.input} placeholder="e.g. Nike Volleyball Jersey — Size M" placeholderTextColor="#a0b8b8" value={title} onChangeText={setTitle} />
             <Text style={styles.label}>Price <Text style={styles.optional}>(optional)</Text></Text>
-            <TextInput
-              style={styles.input}
-              placeholder="e.g. $35"
-              placeholderTextColor="#a0b8b8"
-              value={price}
-              onChangeText={handlePriceChange}
-              keyboardType="decimal-pad"
-            />
+            <TextInput style={styles.input} placeholder="e.g. $35" placeholderTextColor="#a0b8b8" value={price} onChangeText={handlePriceChange} keyboardType="decimal-pad" />
           </>
         )}
 
@@ -224,7 +203,6 @@ export default function NewPostScreen() {
             )}
           </TouchableOpacity>
         )}
-
       </View>
     </ScrollView>
   );

@@ -88,8 +88,7 @@ export default function NotificationsScreen() {
       data.sort((a: any, b: any) => b.createdAt?.seconds - a.createdAt?.seconds);
       setNotifications(data);
       setLoading(false);
-    }, (error) => {
-      console.log('Notifications error:', error);
+    }, () => {
       setLoading(false);
     });
     return () => unsub();
@@ -98,14 +97,14 @@ export default function NotificationsScreen() {
   const handleDelete = async (id: string) => {
     try {
       await deleteDoc(doc(db, 'notifications', id));
-    } catch (e: any) { console.error(e); }
+    } catch (_) {}
   };
 
   const handleMarkRead = async (id: string, alreadyRead: boolean) => {
     if (alreadyRead) return;
     try {
       await updateDoc(doc(db, 'notifications', id), { read: true });
-    } catch (e: any) { console.error(e); }
+    } catch (_) {}
   };
 
   const handleMarkAllRead = () => {
@@ -118,7 +117,7 @@ export default function NotificationsScreen() {
     setClearing(true);
     try {
       await Promise.all(notifications.map((n: any) => deleteDoc(doc(db, 'notifications', n.id))));
-    } catch (e: any) { console.error(e); }
+    } catch (_) {}
     setClearing(false);
     setShowClearModal(false);
   };
@@ -129,9 +128,7 @@ export default function NotificationsScreen() {
     try {
       const parsed = parseLink(n.link);
       router.push(parsed as any);
-    } catch {
-      console.log('Navigation failed for link:', n.link);
-    }
+    } catch (_) {}
   };
 
   const renderItem = ({ item: n }: any) => {

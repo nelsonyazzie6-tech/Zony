@@ -257,7 +257,7 @@ export default function BracketScreen() {
           setTournamentSport(snap.data().sport || 'Basketball');
         }
       })
-      .catch(e => console.log('Tournament fetch error:', e));
+      .catch(() => {});
   }, [tournamentId]);
 
   const sportColor = tournamentSport === 'Volleyball' ? '#7A1818'
@@ -287,13 +287,13 @@ export default function BracketScreen() {
     const bracketRef = doc(db, BracketPaths.bracket(tournamentId, activeDivision));
     const unsubBracket = onSnapshot(bracketRef, snap => {
       if (snap.exists()) setBracketMeta(snap.data() as BracketMeta);
-    }, e => console.log('Bracket meta error:', e));
+    }, () => {});
 
     const gamesRef = collection(db, BracketPaths.games(tournamentId, activeDivision));
     const unsubGames = onSnapshot(gamesRef, snap => {
       setGames(snap.docs.map(d => d.data() as GameDoc));
       setLoading(false);
-    }, e => { console.log('Games error:', e); setLoading(false); });
+    }, () => { setLoading(false); });
 
     return () => { unsubBracket(); unsubGames(); };
   }, [tournamentId, activeDivision]);
@@ -324,7 +324,7 @@ export default function BracketScreen() {
               await batch.commit();
               Alert.alert('Bracket Cleared', 'Tap "Generate Bracket" on the tournament page to generate a new one.',
                 [{ text: 'OK', onPress: () => router.back() }]);
-            } catch (e: any) {
+            } catch (_) {
               Alert.alert('Error', 'Failed to clear the bracket. Please try again.');
             } finally { setRegenerating(false); }
           },
@@ -379,27 +379,18 @@ export default function BracketScreen() {
     ? finalGames
     : finalGames.slice(0, 1);
 
-  // ── Derive placements from completed games ────────────────────────────────
-  // Champion: winner of the final/championship game
   const championGame = finalGames.find(g => g.status === 'completed');
   const championName = championGame?.winnerName || null;
-
-  // Runner-up: loser of the championship game
   const runnerUpName = championGame?.loserName || null;
-
-  // 3rd place: in double elimination, the loser of the losers final
-  // (the team that lost to the eventual runner-up in the losers bracket final)
   const losersFinalGame = losersGames
     .filter(g => g.status === 'completed')
     .sort((a, b) => b.round - a.round)[0];
   const thirdPlaceName = losersFinalGame?.loserName || null;
-
   const showPlacements = !!bracketMeta?.championTeamId && !!championName;
 
   return (
     <View style={styles.container}>
 
-      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
           <Text style={styles.backText}>← Back</Text>
@@ -419,7 +410,6 @@ export default function BracketScreen() {
         </View>
       </View>
 
-      {/* Division tabs */}
       {divisionsList.length > 1 && (
         <ScrollView
           horizontal
@@ -441,10 +431,8 @@ export default function BracketScreen() {
         </ScrollView>
       )}
 
-      {/* Placements banner */}
       {showPlacements && (
         <View style={[styles.placementsBanner, { backgroundColor: sportColor }]}>
-          {/* 1st place — center, largest */}
           <View style={styles.placementsRow}>
             <View style={[styles.placementBubble, styles.placementFirst]}>
               <TrophyIcon size={22} color="#B8860B" />
@@ -456,8 +444,6 @@ export default function BracketScreen() {
               </Text>
             </View>
           </View>
-
-          {/* 2nd and 3rd side by side */}
           {(runnerUpName || thirdPlaceName) && (
             <View style={styles.placementsSubRow}>
               {runnerUpName && (
@@ -487,7 +473,6 @@ export default function BracketScreen() {
         </View>
       )}
 
-      {/* Organizer hint */}
       {isOwner && !bracketMeta?.championTeamId && canRegenerate && (
         <View style={styles.organizerHint}>
           <TouchableOpacity onPress={handleRegenerateBracket} disabled={regenerating}>
@@ -498,7 +483,6 @@ export default function BracketScreen() {
         </View>
       )}
 
-      {/* Winners / Losers toggle */}
       {!loading && hasLosers && (
         <View style={styles.viewToggleRow}>
           <TouchableOpacity
@@ -526,7 +510,6 @@ export default function BracketScreen() {
         </View>
       ) : (
         <ScrollView style={styles.scroll} contentContainerStyle={{ padding: 16, paddingBottom: 60 }}>
-
           {view === 'winners' && (
             <>
               {byeGames.length > 0 && (
@@ -625,7 +608,6 @@ export default function BracketScreen() {
         </ScrollView>
       )}
 
-      {/* Result entry modal */}
       <Modal visible={!!selectedGame} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalBox}>
@@ -708,46 +690,17 @@ const styles = StyleSheet.create({
   divisionTabActive: { backgroundColor: '#008080' },
   divisionTabText: { fontSize: 13, color: '#5a7a7a', textAlign: 'center', fontWeight: '600' },
   divisionTabTextActive: { color: '#fff', fontWeight: '700', textAlign: 'center' },
-
-  // ── Placements banner ──────────────────────────────────────────────────────
-  placementsBanner: {
-    paddingTop: 20, paddingBottom: 16, paddingHorizontal: 16,
-  },
-  placementsRow: {
-    alignItems: 'center', marginBottom: 10,
-  },
-  placementsSubRow: {
-    flexDirection: 'row', gap: 10, justifyContent: 'center',
-  },
-  placementBubble: {
-    borderRadius: 16, alignItems: 'center', padding: 14,
-  },
-  placementFirst: {
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    paddingHorizontal: 32, paddingVertical: 16,
-    minWidth: 200,
-  },
-  placementSecond: {
-    backgroundColor: 'rgba(255,255,255,0.10)',
-    flex: 1, paddingVertical: 12,
-  },
-  placementThird: {
-    backgroundColor: 'rgba(255,255,255,0.10)',
-    flex: 1, paddingVertical: 12,
-  },
-  placementRank: {
-    fontSize: 11, letterSpacing: 2, marginTop: 6, marginBottom: 4,
-  },
-  placementRankSmall: {
-    fontSize: 10, letterSpacing: 1.5, marginTop: 4, marginBottom: 3,
-  },
-  placementName: {
-    fontSize: 22, color: '#fff', letterSpacing: 0.5, textAlign: 'center',
-  },
-  placementNameSmall: {
-    fontSize: 14, color: 'rgba(255,255,255,0.9)', letterSpacing: 0.3, textAlign: 'center',
-  },
-
+  placementsBanner: { paddingTop: 20, paddingBottom: 16, paddingHorizontal: 16 },
+  placementsRow: { alignItems: 'center', marginBottom: 10 },
+  placementsSubRow: { flexDirection: 'row', gap: 10, justifyContent: 'center' },
+  placementBubble: { borderRadius: 16, alignItems: 'center', padding: 14 },
+  placementFirst: { backgroundColor: 'rgba(255,255,255,0.18)', paddingHorizontal: 32, paddingVertical: 16, minWidth: 200 },
+  placementSecond: { backgroundColor: 'rgba(255,255,255,0.10)', flex: 1, paddingVertical: 12 },
+  placementThird: { backgroundColor: 'rgba(255,255,255,0.10)', flex: 1, paddingVertical: 12 },
+  placementRank: { fontSize: 11, letterSpacing: 2, marginTop: 6, marginBottom: 4 },
+  placementRankSmall: { fontSize: 10, letterSpacing: 1.5, marginTop: 4, marginBottom: 3 },
+  placementName: { fontSize: 22, color: '#fff', letterSpacing: 0.5, textAlign: 'center' },
+  placementNameSmall: { fontSize: 14, color: 'rgba(255,255,255,0.9)', letterSpacing: 0.3, textAlign: 'center' },
   organizerHint: {
     backgroundColor: '#fffbeb', paddingHorizontal: 16, paddingVertical: 12,
     borderBottomWidth: 1, borderBottomColor: '#fde68a', alignItems: 'center',

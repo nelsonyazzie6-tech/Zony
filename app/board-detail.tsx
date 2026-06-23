@@ -13,7 +13,6 @@ function getSportColor(sport: string) {
   return '#008080';
 }
 
-// Sport icons, replace 🏀
 function BasketballIcon({ size = 12, color = '#fff' }: { size?: number; color?: string }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -53,7 +52,6 @@ function SportIcon({ sport, size = 12, color = '#fff' }: { sport: string; size?:
   return <BasketballIcon size={size} color={color} />;
 }
 
-// Trophy icon, used for forTournament badge
 function TrophyIcon({ size = 12, color = '#fff' }: { size?: number; color?: string }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -66,7 +64,6 @@ function TrophyIcon({ size = 12, color = '#fff' }: { size?: number; color?: stri
   );
 }
 
-// Person icon, used for division badge
 function PersonIcon({ size = 12, color = '#fff' }: { size?: number; color?: string }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -76,7 +73,6 @@ function PersonIcon({ size = 12, color = '#fff' }: { size?: number; color?: stri
   );
 }
 
-// Phone (Mobile) icon, replaces 📱
 function PhoneMobileIcon({ size = 13, color = '#008080' }: { size?: number; color?: string }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -86,7 +82,6 @@ function PhoneMobileIcon({ size = 13, color = '#008080' }: { size?: number; colo
   );
 }
 
-// Mail icon, replaces ✉️
 function MailIcon({ size = 13, color = '#008080' }: { size?: number; color?: string }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -109,8 +104,6 @@ export default function BoardDetailScreen() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [loading, setLoading] = useState(true);
-
-  // Report state
   const [showReportModal, setShowReportModal] = useState(false);
   const [reportSubmitting, setReportSubmitting] = useState(false);
   const [showReportConfirm, setShowReportConfirm] = useState(false);
@@ -170,8 +163,7 @@ export default function BoardDetailScreen() {
     try {
       await deleteDoc(doc(db, 'board', id as string));
       router.replace('/(tabs)/board');
-    } catch (e: any) {
-      console.log(e);
+    } catch (_) {
       setErrorModal({
         visible: true,
         title: 'SOMETHING WENT WRONG',
@@ -214,8 +206,7 @@ export default function BoardDetailScreen() {
       });
       setShowReportModal(false);
       setShowReportConfirm(true);
-    } catch (e: any) {
-      console.log(e);
+    } catch (_) {
       setErrorModal({
         visible: true,
         title: 'SOMETHING WENT WRONG',
@@ -290,7 +281,6 @@ export default function BoardDetailScreen() {
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
-
         {post.description ? (
           <View style={styles.section}>
             <Text style={styles.sectionLabel}>ABOUT</Text>
@@ -317,7 +307,6 @@ export default function BoardDetailScreen() {
               <Text style={styles.infoValue}>{post.forTournament}</Text>
             </View>
           ) : null}
-
           {post.contactPhone ? (
             showContact ? (
               <TouchableOpacity
@@ -333,7 +322,6 @@ export default function BoardDetailScreen() {
               </TouchableOpacity>
             ) : null
           ) : null}
-
           {post.contactEmail ? (
             showContact ? (
               <TouchableOpacity
@@ -349,7 +337,6 @@ export default function BoardDetailScreen() {
               </TouchableOpacity>
             ) : null
           ) : null}
-
           {!showContact && (post.contactPhone || post.contactEmail) ? (
             <View style={[styles.infoRow, { borderBottomWidth: 0 }]}>
               <Text style={styles.infoLabel}>Contact</Text>

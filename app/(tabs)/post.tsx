@@ -33,12 +33,8 @@ const boardDescriptionPlaceholders = [
   'e.g. "Looking for a 14U player to complete our roster for an upcoming event."',
 ];
 
-// ── Types ─────────────────────────────────────────────────────────────────────
-
 type PrizeRow = { cash: string; physical: string };
 type DayWindowDisplay = { startDisplay: string; endDisplay: string };
-
-// ── Helpers ──────────────────────────────────────────────────────────────────
 
 function defaultWindowForDay(i: number): DayWindowDisplay {
   if (i === 0) return { startDisplay: '6:00 PM', endDisplay: '10:00 PM' };
@@ -121,7 +117,7 @@ async function sendPush(token: string, title: string, body: string) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ to: token, title, body, sound: 'default' }),
     });
-  } catch (e) { console.log('Push error:', e); }
+  } catch (_) {}
 }
 
 function InfoModal({ visible, title, message, onClose }: { visible: boolean; title: string; message: string; onClose: () => void }) {
@@ -206,8 +202,6 @@ function HubScreen({ onSelect }: { onSelect: (tab: 'tournament' | 'board') => vo
   );
 }
 
-// ── Prize Editor ──────────────────────────────────────────────────────────────
-
 function PrizeEditor({
   rows, onUpdateCash, onUpdatePhysical, onAddRow,
   useManual, onToggleManual, manual, onChangeManual,
@@ -288,8 +282,6 @@ function PrizeEditor({
   );
 }
 
-// ── Tournament Form ───────────────────────────────────────────────────────────
-
 function TournamentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: () => void }) {
   const scrollRef = useRef<ScrollView>(null);
   const [headerHeight, setHeaderHeight] = useState(120);
@@ -325,17 +317,14 @@ function TournamentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
   const [showDepositDuePicker, setShowDepositDuePicker] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  // Prizes — per division or shared
   const [samePrizesForAll, setSamePrizesForAll] = useState(false);
   const [sharedPrizeRows, setSharedPrizeRows] = useState<PrizeRow[]>(emptyPrizeRows());
   const [sharedUseManual, setSharedUseManual] = useState(false);
   const [sharedManual, setSharedManual] = useState('');
-  // per-division prize state: keyed by division name
   const [divPrizeRows, setDivPrizeRows] = useState<Record<string, PrizeRow[]>>({});
   const [divUseManual, setDivUseManual] = useState<Record<string, boolean>>({});
   const [divManual, setDivManual] = useState<Record<string, string>>({});
 
-  // Bracket settings
   const [bracketEnabled, setBracketEnabled] = useState(false);
   const [tournamentFormat, setTournamentFormat] = useState<'double' | 'single'>('double');
   const [courtNames, setCourtNames] = useState<string[]>(['Court 1']);
@@ -361,7 +350,6 @@ function TournamentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
   const contactEmailRef = useRef<TextInput>(null);
   const depositAmountRef = useRef<TextInput>(null);
 
-  // Derive tournament day strings from startDateObj + duration
   const tournamentDayStrings: string[] = [];
   if (startDateObj) {
     const cur = new Date(startDateObj.getFullYear(), startDateObj.getMonth(), startDateObj.getDate());
@@ -371,7 +359,6 @@ function TournamentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
     }
   }
 
-  // Keep dayWindows in sync with duration
   useEffect(() => {
     setDayWindows(prev => {
       const next = [...prev];
@@ -413,7 +400,6 @@ function TournamentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
         setDivManual(m => { const n = { ...m }; delete n[d]; return n; });
         return prev.filter(x => x !== d);
       }
-      // Initialize prize rows for new division
       setDivPrizeRows(r => ({ ...r, [d]: emptyPrizeRows() }));
       setDivUseManual(m => ({ ...m, [d]: false }));
       setDivManual(m => ({ ...m, [d]: '' }));
@@ -528,7 +514,6 @@ function TournamentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
     if (!user) return;
     setLoading(true);
 
-    // Build prizes — per division or shared
     const divisionPrizes: Record<string, string> = {};
     if (divisions.length > 0) {
       divisions.forEach(d => {
@@ -544,7 +529,6 @@ function TournamentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
       });
     }
 
-    // For backwards compat — also write a top-level prizes field
     const topLevelPrizes = samePrizesForAll
       ? formatPrizeRows(sharedPrizeRows, sharedUseManual, sharedManual)
       : Object.values(divisionPrizes).join('\n\n');
@@ -616,12 +600,11 @@ function TournamentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
               }
             })
         );
-      } catch (e) { console.log('Notify error:', e); }
+      } catch (_) {}
 
       resetFields();
       onSuccess();
     } catch (e) {
-      console.error('Error posting tournament:', e);
       setInfoModal({ visible: true, title: 'POST FAILED', message: 'We couldn\'t post your tournament. Check your internet connection and try again.' });
     }
     setLoading(false);
@@ -657,7 +640,6 @@ function TournamentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
         </View>
 
         <View style={styles.form}>
-
           <Text style={styles.label}>Tournament Name</Text>
           <TextInput style={styles.input} placeholder="Tournament name" placeholderTextColor="#a0b8b8" value={name} onChangeText={setName} returnKeyType="next" blurOnSubmit={false} onSubmitEditing={() => { Keyboard.dismiss(); setShowSportPicker(true); }} />
 
@@ -793,14 +775,9 @@ function TournamentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
             </View>
           )}
 
-          {/* ── Prizes ── */}
           <Text style={styles.label}>Prizes / Awards</Text>
-
           {divisions.length > 1 && (
-            <TouchableOpacity
-              style={styles.samePrizesToggleRow}
-              onPress={() => setSamePrizesForAll(p => !p)}
-            >
+            <TouchableOpacity style={styles.samePrizesToggleRow} onPress={() => setSamePrizesForAll(p => !p)}>
               <View style={[styles.checkbox, samePrizesForAll && styles.checkboxActive]}>
                 {samePrizesForAll ? <CheckIcon size={12} color="#fff" /> : null}
               </View>
@@ -809,7 +786,6 @@ function TournamentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
           )}
 
           {divisions.length === 0 || samePrizesForAll ? (
-            // Single shared prize editor
             <PrizeEditor
               rows={sharedPrizeRows}
               onUpdateCash={updateSharedPrizeCash}
@@ -821,7 +797,6 @@ function TournamentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
               onChangeManual={setSharedManual}
             />
           ) : (
-            // Per-division prize editors
             divisions.map(d => (
               <View key={d} style={styles.divPrizeBlock}>
                 <Text style={styles.divPrizeLabel}>{d}</Text>
@@ -839,7 +814,6 @@ function TournamentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
             ))
           )}
 
-          {/* ── Deposit ── */}
           <Text style={styles.label}>Deposit Amount <Text style={styles.optional}>(optional)</Text></Text>
           <TextInput ref={depositAmountRef} style={styles.input} placeholder="Amount in dollars" placeholderTextColor="#a0b8b8" value={depositAmount} onChangeText={setDepositAmount} keyboardType="numeric" returnKeyType="next" blurOnSubmit={false} onSubmitEditing={() => { Keyboard.dismiss(); setShowDepositDuePicker(true); }} />
 
@@ -849,7 +823,6 @@ function TournamentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
           </TouchableOpacity>
           <DateTimePickerModal isVisible={showDepositDuePicker} mode="date" onConfirm={handleDepositDueConfirm} onCancel={() => setShowDepositDuePicker(false)} />
 
-          {/* ── Spectator ── */}
           <Text style={styles.label}>Spectator Entrance Fee <Text style={styles.optional}>(optional)</Text></Text>
           <TouchableOpacity style={styles.freeSpectatorToggle} onPress={() => { const next = !isFreeSpectator; setIsFreeSpectator(next); if (next) { setSpectatorFee(''); setSpectatorPaymentMethods([]); setSpectatorPaymentOther(''); } }}>
             <View style={[styles.checkbox, isFreeSpectator && styles.checkboxActive]}>
@@ -879,11 +852,9 @@ function TournamentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
             </View>
           ) : null}
 
-          {/* ── Roster Size ── */}
           <Text style={styles.label}>Roster Size</Text>
           <TextInput ref={rosterSizeRef} style={styles.input} placeholder="Number of players" placeholderTextColor="#a0b8b8" value={rosterSize} onChangeText={setRosterSize} keyboardType="numeric" returnKeyType="next" blurOnSubmit={false} onSubmitEditing={() => contactNameRef.current?.focus()} />
 
-          {/* ── Contact Info ── */}
           <Text style={styles.label}>Contact Name</Text>
           <TextInput ref={contactNameRef} style={styles.input} placeholder="Contact name" placeholderTextColor="#a0b8b8" value={contactName} onChangeText={setContactName} returnKeyType="next" blurOnSubmit={false} onSubmitEditing={() => contactPhoneRef.current?.focus()} />
 
@@ -893,7 +864,6 @@ function TournamentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
           <Text style={styles.label}>Contact Email <Text style={styles.optional}>(optional)</Text></Text>
           <TextInput ref={contactEmailRef} style={styles.input} placeholder="Email address" placeholderTextColor="#a0b8b8" value={contactEmail} onChangeText={setContactEmail} keyboardType="email-address" autoCapitalize="none" returnKeyType="next" blurOnSubmit={false} onSubmitEditing={() => Keyboard.dismiss()} />
 
-          {/* ── Bracket Options ── */}
           <View style={styles.sectionDivider} />
 
           <Text style={[styles.label, { marginTop: 8 }]}>Tournament Format</Text>
@@ -938,9 +908,8 @@ function TournamentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
                 <Text style={styles.addCourtBtnText}>+ Add Court</Text>
               </TouchableOpacity>
 
-              {/* Per-day court hour windows */}
               <Text style={styles.label}>Court Hours Per Day</Text>
-              <Text style={styles.bracketSettingsHint}>Set the available game window for each tournament day. Games will only be scheduled within these hours.</Text>
+              <Text style={styles.bracketSettingsHint}>Set the available game window for each tournament day.</Text>
               {tournamentDayStrings.length === 0 && (
                 <Text style={styles.bracketSettingsHint}>Select a start date above to configure per-day hours.</Text>
               )}
@@ -956,31 +925,11 @@ function TournamentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
                     <View style={styles.dayWindowInputs}>
                       <View style={{ flex: 1 }}>
                         <Text style={styles.bracketSettingsHint}>Start</Text>
-                        <TextInput
-                          style={styles.input}
-                          placeholder="e.g. 8:00 AM"
-                          placeholderTextColor="#a0b8b8"
-                          value={window.startDisplay}
-                          onChangeText={v => setDayWindows(prev => {
-                            const next = [...prev];
-                            next[i] = { ...next[i], startDisplay: v };
-                            return next;
-                          })}
-                        />
+                        <TextInput style={styles.input} placeholder="e.g. 8:00 AM" placeholderTextColor="#a0b8b8" value={window.startDisplay} onChangeText={v => setDayWindows(prev => { const next = [...prev]; next[i] = { ...next[i], startDisplay: v }; return next; })} />
                       </View>
                       <View style={{ flex: 1 }}>
                         <Text style={styles.bracketSettingsHint}>End</Text>
-                        <TextInput
-                          style={styles.input}
-                          placeholder="e.g. 8:00 PM"
-                          placeholderTextColor="#a0b8b8"
-                          value={window.endDisplay}
-                          onChangeText={v => setDayWindows(prev => {
-                            const next = [...prev];
-                            next[i] = { ...next[i], endDisplay: v };
-                            return next;
-                          })}
-                        />
+                        <TextInput style={styles.input} placeholder="e.g. 8:00 PM" placeholderTextColor="#a0b8b8" value={window.endDisplay} onChangeText={v => setDayWindows(prev => { const next = [...prev]; next[i] = { ...next[i], endDisplay: v }; return next; })} />
                       </View>
                     </View>
                   </View>
@@ -1020,15 +969,12 @@ function TournamentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
               {loading ? 'Posting...' : 'POST TOURNAMENT'}
             </Text>
           </TouchableOpacity>
-
         </View>
       </ScrollView>
       <InfoModal visible={infoModal.visible} title={infoModal.title} message={infoModal.message} onClose={() => setInfoModal({ visible: false, title: '', message: '' })} />
     </KeyboardAvoidingView>
   );
 }
-
-// ── Board Form ────────────────────────────────────────────────────────────────
 
 function BoardForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: () => void }) {
   const [fontsLoaded] = useFonts({ Rajdhani_700Bold });
@@ -1061,7 +1007,7 @@ function BoardForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: () =>
         const snap = await getDocs(collection(db, 'tournaments'));
         const data = snap.docs.map(d => ({ id: d.id, name: d.data().name || 'Unnamed', sport: d.data().sport || '', startDate: d.data().date ? d.data().date.split(' - ')[0] : '', divisions: d.data().divisions || [] }));
         setTournaments(data);
-      } catch (e) { console.error(e); }
+      } catch (_) {}
     };
     const loadName = async () => {
       if (!user) return;
@@ -1107,8 +1053,7 @@ function BoardForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: () =>
         postedBy: user.uid, createdAt: serverTimestamp(), expiresAt,
       });
       resetFields(); onSuccess();
-    } catch (e) {
-      console.error(e);
+    } catch (_) {
       setInfoModal({ visible: true, title: 'POST FAILED', message: 'We couldn\'t post to the board. Check your internet connection and try again.' });
     }
     setLoading(false);
@@ -1209,8 +1154,6 @@ function BoardForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: () =>
     </ScrollView>
   );
 }
-
-// ── Root ──────────────────────────────────────────────────────────────────────
 
 export default function PostScreen() {
   const router = useRouter();
@@ -1348,11 +1291,9 @@ const styles = StyleSheet.create({
   modalOkBtn: { backgroundColor: '#008080', borderRadius: 14, paddingVertical: 13, alignItems: 'center' },
   modalOkText: { fontSize: 15, color: '#fff', letterSpacing: 1 },
   bracketToggleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, marginTop: 8 },
-  // Per-day window styles
   dayWindowRow: { marginBottom: 14 },
   dayWindowLabel: { fontSize: 13, fontWeight: '700', color: '#003333', marginBottom: 6 },
   dayWindowInputs: { flexDirection: 'row', gap: 10 },
-  // Prize per division styles
   samePrizesToggleRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12, marginTop: 4 },
   samePrizesLabel: { fontSize: 14, color: '#003333', fontWeight: '600' },
   divPrizeBlock: { backgroundColor: '#f0fafa', borderRadius: 12, padding: 14, marginBottom: 12, borderWidth: 1, borderColor: '#e0f0f0' },

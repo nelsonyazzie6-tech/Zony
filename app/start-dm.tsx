@@ -52,7 +52,7 @@ export default function StartDmScreen() {
         },
       });
     };
-    go().catch(console.log);
+    go().catch(() => {});
   }, []);
 
   return (

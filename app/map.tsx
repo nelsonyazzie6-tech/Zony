@@ -21,13 +21,11 @@ export default function MapScreen() {
             const { lat, lng } = json.results[0].geometry.location;
             return { ...t, lat, lng };
           }
-        } catch (e) {}
+        } catch (_) {}
         return null;
       }));
       setTournaments(data.filter(Boolean));
-    }, (error) => {
-      console.log('Map listener error:', error);
-    });
+    }, () => {});
     return () => unsub();
   }, []);
 
@@ -45,7 +43,7 @@ export default function MapScreen() {
           longitudeDelta: 4,
         }}
       >
-        {tournaments.map(t => (
+        {tournaments.map((t: any) => (
           <Marker key={t.id} coordinate={{ latitude: t.lat, longitude: t.lng }}>
             <Callout onPress={() => router.push({ pathname: '/tournament', params: { id: t.id, postedBy: t.postedBy } })}>
               <View style={styles.callout}>

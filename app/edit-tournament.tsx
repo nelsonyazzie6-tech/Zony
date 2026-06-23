@@ -24,7 +24,6 @@ const divisionOptions = [
 const placeLabels = ['1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th'];
 const paymentMethodOptions = ['Cash', 'Card', 'Zelle', 'Other'];
 
-// Per-day court hour window
 type DayWindowDisplay = { startDisplay: string; endDisplay: string };
 
 function defaultWindowForDay(i: number): DayWindowDisplay {
@@ -99,7 +98,7 @@ async function sendPush(token: string, title: string, body: string) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ to: token, title, body, sound: 'default' }),
     });
-  } catch (e) { console.log('Push error:', e); }
+  } catch (_) {}
 }
 
 function InfoModal({ visible, title, message, onClose }: { visible: boolean; title: string; message: string; onClose: () => void }) {
@@ -161,7 +160,6 @@ export default function EditTournamentScreen() {
   const [loading, setLoading] = useState(false);
   const [dataLoaded, setDataLoaded] = useState(false);
 
-  // Bracket settings
   const [bracketEnabled, setBracketEnabled] = useState(true);
   const [tournamentFormat, setTournamentFormat] = useState<'double' | 'single'>('double');
   const [courtNames, setCourtNames] = useState<string[]>(['Court 1']);
@@ -191,7 +189,6 @@ export default function EditTournamentScreen() {
 
   const needsAvailableSpots = divisions.length === 0 || divisions.some(d => !divisionSpots[d]?.trim());
 
-  // Derive tournament day ISO strings from startDateObj + duration
   const tournamentDayStrings: string[] = [];
   if (startDateObj) {
     const cur = new Date(startDateObj.getFullYear(), startDateObj.getMonth(), startDateObj.getDate());
@@ -211,13 +208,10 @@ export default function EditTournamentScreen() {
     });
   };
 
-  // Keep dayWindows in sync when duration changes
   useEffect(() => {
     setDayWindows(prev => {
       const next = [...prev];
-      while (next.length < tournamentDuration) {
-        next.push(defaultWindowForDay(next.length));
-      }
+      while (next.length < tournamentDuration) next.push(defaultWindowForDay(next.length));
       return next.slice(0, tournamentDuration);
     });
   }, [tournamentDuration]);
@@ -317,7 +311,6 @@ export default function EditTournamentScreen() {
         }
       }
 
-      // Load bracket settings
       setBracketEnabled(d.bracketEnabled !== false);
       setTournamentFormat(d.tournamentFormat || 'double');
       if (d.bracketSettings) {
@@ -328,8 +321,6 @@ export default function EditTournamentScreen() {
         setBracketBuffer(String(bs.bufferMinutes || 10));
         setChampionshipFormat(bs.championshipFormat || 'single');
 
-        // Load per-day windows — prefer new dailyWindows array, fall back
-        // to old flat dailyStartTime/dailyEndTime for backwards compat
         const dur = d.tournamentDuration || 1;
         const loadedWindows: DayWindowDisplay[] = [];
         if (bs.dailyWindows?.length) {
@@ -344,7 +335,6 @@ export default function EditTournamentScreen() {
             }
           }
         } else if (bs.dailyStartTime || bs.dailyEndTime) {
-          // Migrate from old flat format — apply same hours to every day
           for (let i = 0; i < dur; i++) {
             loadedWindows.push({
               startDisplay: formatTimeAmPm(bs.dailyStartTime || '08:00'),
@@ -352,9 +342,7 @@ export default function EditTournamentScreen() {
             });
           }
         } else {
-          for (let i = 0; i < dur; i++) {
-            loadedWindows.push(defaultWindowForDay(i));
-          }
+          for (let i = 0; i < dur; i++) loadedWindows.push(defaultWindowForDay(i));
         }
         setDayWindows(loadedWindows);
       }
@@ -457,7 +445,6 @@ export default function EditTournamentScreen() {
 
     setLoading(true);
     const prizesFormatted = formatPrizes();
-
     const fallbackSpots = parseInt(spots) || 0;
     const finalDivisionSpots: Record<string, number> = {};
     divisions.forEach(d => {
@@ -515,7 +502,6 @@ export default function EditTournamentScreen() {
           courtNames: courtNames.filter(c => c.trim()),
           gameDurationMinutes: parseInt(bracketGameDuration) || 50,
           bufferMinutes: parseInt(bracketBuffer) || 10,
-          // Save per-day windows — scheduling engine reads these
           dailyWindows: tournamentDays.map((date, i) => ({
             date,
             startTime: parseAmPmToTime24(dayWindows[i]?.startDisplay ?? defaultWindowForDay(i).startDisplay),
@@ -560,12 +546,11 @@ export default function EditTournamentScreen() {
                 }
               })
           );
-        } catch (e) { console.log('Notify error:', e); }
+        } catch (_) {}
       }
 
       router.back();
-    } catch (e) {
-      console.error(e);
+    } catch (_) {
       setInfoModal({
         visible: true,
         title: 'SAVE FAILED',
@@ -588,7 +573,6 @@ export default function EditTournamentScreen() {
           <Text style={styles.sub}>Update the details below</Text>
 
           <View style={styles.form}>
-
             <Text style={styles.label}>Tournament Name</Text>
             <TextInput style={styles.input} placeholder="Tournament name" placeholderTextColor="#a0b8b8" value={name} onChangeText={setName} returnKeyType="next" blurOnSubmit={false} onSubmitEditing={() => Keyboard.dismiss()} />
 
@@ -691,25 +675,11 @@ export default function EditTournamentScreen() {
                         </View>
                         <View style={styles.divisionRowInputs}>
                           <View style={styles.divisionSpotsInputWrapper}>
-                            <TextInput
-                              style={styles.divisionFeeInput}
-                              placeholder="Spots"
-                              placeholderTextColor="#a0b8b8"
-                              value={divisionSpots[d] || ''}
-                              onChangeText={v => setDivisionSpots(prev => ({ ...prev, [d]: v.replace(/[^0-9]/g, '') }))}
-                              keyboardType="numeric"
-                            />
+                            <TextInput style={styles.divisionFeeInput} placeholder="Spots" placeholderTextColor="#a0b8b8" value={divisionSpots[d] || ''} onChangeText={v => setDivisionSpots(prev => ({ ...prev, [d]: v.replace(/[^0-9]/g, '') }))} keyboardType="numeric" />
                           </View>
                           <View style={styles.divisionFeeInputWrapper}>
                             <Text style={styles.prizeInputPrefix}>$</Text>
-                            <TextInput
-                              style={styles.divisionFeeInput}
-                              placeholder="Fee"
-                              placeholderTextColor="#a0b8b8"
-                              value={divisionFees[d] || ''}
-                              onChangeText={v => setDivisionFees(prev => ({ ...prev, [d]: v.replace(/[^0-9]/g, '') }))}
-                              keyboardType="numeric"
-                            />
+                            <TextInput style={styles.divisionFeeInput} placeholder="Fee" placeholderTextColor="#a0b8b8" value={divisionFees[d] || ''} onChangeText={v => setDivisionFees(prev => ({ ...prev, [d]: v.replace(/[^0-9]/g, '') }))} keyboardType="numeric" />
                           </View>
                         </View>
                       </View>
@@ -723,24 +693,15 @@ export default function EditTournamentScreen() {
             )}
 
             <Text style={styles.label}>Spectator Entrance Fee <Text style={styles.optional}>(optional)</Text></Text>
-            <TouchableOpacity
-              style={styles.freeSpectatorToggle}
-              onPress={() => {
-                const next = !isFreeSpectator;
-                setIsFreeSpectator(next);
-                if (next) { setSpectatorFee(''); setSpectatorPaymentMethods([]); setSpectatorPaymentOther(''); }
-              }}
-            >
+            <TouchableOpacity style={styles.freeSpectatorToggle} onPress={() => { const next = !isFreeSpectator; setIsFreeSpectator(next); if (next) { setSpectatorFee(''); setSpectatorPaymentMethods([]); setSpectatorPaymentOther(''); } }}>
               <View style={[styles.checkbox, isFreeSpectator && styles.checkboxActive]}>
                 {isFreeSpectator ? <CheckIcon size={12} color="#fff" /> : null}
               </View>
               <Text style={styles.freeSpectatorText}>Open to Public — Free</Text>
             </TouchableOpacity>
-
             {!isFreeSpectator && (
               <TextInput ref={spectatorFeeRef} style={styles.input} placeholder="Amount in dollars" placeholderTextColor="#a0b8b8" value={spectatorFee} onChangeText={setSpectatorFee} keyboardType="numeric" returnKeyType="next" blurOnSubmit={false} onSubmitEditing={() => rosterSizeRef.current?.focus()} />
             )}
-
             {spectatorFee && !isFreeSpectator ? (
               <View style={styles.paymentMethodsBlock}>
                 <Text style={styles.paymentMethodsLabel}>Accepted Payment Methods <Text style={styles.optional}>(optional)</Text></Text>
@@ -748,28 +709,14 @@ export default function EditTournamentScreen() {
                   {paymentMethodOptions.map(method => {
                     const selected = spectatorPaymentMethods.includes(method);
                     return (
-                      <TouchableOpacity
-                        key={method}
-                        style={[styles.paymentMethodPill, selected && styles.paymentMethodPillActive]}
-                        onPress={() => togglePaymentMethod(method)}
-                      >
+                      <TouchableOpacity key={method} style={[styles.paymentMethodPill, selected && styles.paymentMethodPillActive]} onPress={() => togglePaymentMethod(method)}>
                         <Text style={[styles.paymentMethodPillText, selected && styles.paymentMethodPillTextActive]}>{method}</Text>
                       </TouchableOpacity>
                     );
                   })}
                 </View>
                 {spectatorPaymentMethods.includes('Other') && (
-                  <TextInput
-                    ref={spectatorPaymentOtherRef}
-                    style={[styles.input, { marginTop: 8 }]}
-                    placeholder="e.g. Venmo, CashApp"
-                    placeholderTextColor="#a0b8b8"
-                    value={spectatorPaymentOther}
-                    onChangeText={setSpectatorPaymentOther}
-                    returnKeyType="next"
-                    blurOnSubmit={false}
-                    onSubmitEditing={() => rosterSizeRef.current?.focus()}
-                  />
+                  <TextInput ref={spectatorPaymentOtherRef} style={[styles.input, { marginTop: 8 }]} placeholder="e.g. Venmo, CashApp" placeholderTextColor="#a0b8b8" value={spectatorPaymentOther} onChangeText={setSpectatorPaymentOther} returnKeyType="next" blurOnSubmit={false} onSubmitEditing={() => rosterSizeRef.current?.focus()} />
                 )}
               </View>
             ) : null}
@@ -828,15 +775,7 @@ export default function EditTournamentScreen() {
                     <Text style={styles.manualLocationSwitch}>Use Structured Format Instead</Text>
                   </TouchableOpacity>
                 </View>
-                <TextInput
-                  style={[styles.input, styles.textArea]}
-                  placeholder={'e.g.\n1st: $500 + Custom Trophy\n2nd: $250\nAll players: Tournament T-Shirt'}
-                  placeholderTextColor="#a0b8b8"
-                  value={manualPrizes}
-                  onChangeText={setManualPrizes}
-                  multiline
-                  numberOfLines={5}
-                />
+                <TextInput style={[styles.input, styles.textArea]} placeholder={'e.g.\n1st: $500 + Custom Trophy\n2nd: $250\nAll players: Tournament T-Shirt'} placeholderTextColor="#a0b8b8" value={manualPrizes} onChangeText={setManualPrizes} multiline numberOfLines={5} />
               </View>
             )}
 
@@ -850,7 +789,6 @@ export default function EditTournamentScreen() {
             </TouchableOpacity>
             <DateTimePickerModal isVisible={showDepositDuePicker} mode="date" onConfirm={handleDepositDueConfirm} onCancel={() => setShowDepositDuePicker(false)} />
 
-            {/* ── Bracket Settings ── */}
             <View style={styles.sectionDivider} />
 
             <Text style={styles.label}>Tournament Format</Text>
@@ -892,7 +830,6 @@ export default function EditTournamentScreen() {
                   <Text style={styles.addCourtBtnText}>+ Add Court</Text>
                 </TouchableOpacity>
 
-                {/* Per-day court hour windows */}
                 <Text style={styles.label}>Court Hours Per Day</Text>
                 <Text style={styles.bracketHint}>Set the available game window for each tournament day</Text>
                 {tournamentDayStrings.map((date, i) => {
@@ -907,31 +844,11 @@ export default function EditTournamentScreen() {
                       <View style={styles.dayWindowInputs}>
                         <View style={{ flex: 1 }}>
                           <Text style={styles.bracketHint}>Start</Text>
-                          <TextInput
-                            style={styles.input}
-                            placeholder="e.g. 8:00 AM"
-                            placeholderTextColor="#a0b8b8"
-                            value={window.startDisplay}
-                            onChangeText={v => setDayWindows(prev => {
-                              const next = [...prev];
-                              next[i] = { ...next[i], startDisplay: v };
-                              return next;
-                            })}
-                          />
+                          <TextInput style={styles.input} placeholder="e.g. 8:00 AM" placeholderTextColor="#a0b8b8" value={window.startDisplay} onChangeText={v => setDayWindows(prev => { const next = [...prev]; next[i] = { ...next[i], startDisplay: v }; return next; })} />
                         </View>
                         <View style={{ flex: 1 }}>
                           <Text style={styles.bracketHint}>End</Text>
-                          <TextInput
-                            style={styles.input}
-                            placeholder="e.g. 8:00 PM"
-                            placeholderTextColor="#a0b8b8"
-                            value={window.endDisplay}
-                            onChangeText={v => setDayWindows(prev => {
-                              const next = [...prev];
-                              next[i] = { ...next[i], endDisplay: v };
-                              return next;
-                            })}
-                          />
+                          <TextInput style={styles.input} placeholder="e.g. 8:00 PM" placeholderTextColor="#a0b8b8" value={window.endDisplay} onChangeText={v => setDayWindows(prev => { const next = [...prev]; next[i] = { ...next[i], endDisplay: v }; return next; })} />
                         </View>
                       </View>
                     </View>
@@ -965,17 +882,11 @@ export default function EditTournamentScreen() {
             <TouchableOpacity style={styles.submitBtn} onPress={handleSave} disabled={loading}>
               <Text style={[styles.submitText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>{loading ? 'Saving...' : 'SAVE CHANGES'}</Text>
             </TouchableOpacity>
-
           </View>
         </ScrollView>
       </TouchableWithoutFeedback>
 
-      <InfoModal
-        visible={infoModal.visible}
-        title={infoModal.title}
-        message={infoModal.message}
-        onClose={() => setInfoModal({ visible: false, title: '', message: '' })}
-      />
+      <InfoModal visible={infoModal.visible} title={infoModal.title} message={infoModal.message} onClose={() => setInfoModal({ visible: false, title: '', message: '' })} />
     </KeyboardAvoidingView>
   );
 }
@@ -1079,7 +990,6 @@ const styles = StyleSheet.create({
   bracketPickerItem: { padding: 14, borderBottomWidth: 1, borderBottomColor: '#f0e8d8' },
   bracketPickerItemActive: { backgroundColor: '#f5ede0' },
   bracketPickerText: { fontSize: 15, color: '#003333' },
-  // Per-day window styles
   dayWindowRow: { marginBottom: 14 },
   dayWindowLabel: { fontSize: 13, fontWeight: '700', color: '#003333', marginBottom: 6 },
   dayWindowInputs: { flexDirection: 'row', gap: 10 },

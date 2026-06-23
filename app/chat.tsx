@@ -18,7 +18,7 @@ async function sendPushNotification(toToken: string, fromName: string, message: 
         sound: 'default',
       }),
     });
-  } catch (e) { console.log('Push error:', e); }
+  } catch (_) {}
 }
 
 export default function ChatScreen() {
@@ -55,18 +55,14 @@ export default function ChatScreen() {
         const otherId = data.participants?.find((p: string) => p !== user.uid);
         setOtherIsViewing(!!data.viewing?.[otherId]);
       }
-    }, (error) => {
-      console.log('Thread listener error:', error);
-    });
+    }, () => {});
 
     const q = query(collection(db, 'messages', threadId as string, 'chats'), orderBy('createdAt', 'asc'));
     const msgUnsub = onSnapshot(q, (snap) => {
       setMessages(snap.docs.map(d => ({ id: d.id, ...d.data() })));
       updateDoc(threadRef, { [`unreadCount.${user.uid}`]: 0 }).catch(() => {});
       setTimeout(() => flatRef.current?.scrollToEnd({ animated: true }), 100);
-    }, (error) => {
-      console.log('Messages listener error:', error);
-    });
+    }, () => {});
 
     return () => {
       updateDoc(threadRef, { [`viewing.${user.uid}`]: false }).catch(() => {});
@@ -107,8 +103,7 @@ export default function ChatScreen() {
           await sendPushNotification(pushToken, username, msgBody);
         }
       }
-    } catch (e: any) {
-      console.log(e);
+    } catch (_) {
       setText(msgBody);
       setSendError(true);
     }
@@ -159,7 +154,6 @@ export default function ChatScreen() {
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={0}>
       <View style={styles.container}>
-
         <View style={styles.topBar}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
             <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
@@ -180,7 +174,6 @@ export default function ChatScreen() {
           </View>
         </View>
 
-        {/* Item 12 — context banner when DM opened from board post */}
         {context ? (
           <View style={styles.contextBanner}>
             <Text style={styles.contextBannerText}>📋 Re: {context}</Text>
