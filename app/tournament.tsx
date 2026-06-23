@@ -272,9 +272,7 @@ export default function TournamentScreen() {
         setSpotsLeft(data.spots);
       }
       setJoined(!!data.joinedUsers?.includes(user?.uid));
-    }, (error) => {
-      console.log('Tournament listener error:', error);
-    });
+     }, () => {});
 
     const teamsQuery = query(collection(db, 'tournaments', id as string, 'teams'), orderBy('createdAt', 'asc'));
     const unsubTeams = onSnapshot(teamsQuery, (snap) => {
@@ -282,9 +280,7 @@ export default function TournamentScreen() {
       setTeams(docs);
       const myTeam = docs.find((t: any) => t.registeredBy === user?.uid);
       setMyTeamName(myTeam ? (myTeam as any).teamName || null : null);
-    }, (error) => {
-      console.log('Teams listener error:', error);
-    });
+    }, () => {});
 
     const waitlistQuery = query(collection(db, 'tournaments', id as string, 'waitlist'), orderBy('createdAt', 'asc'));
     const unsubWaitlist = onSnapshot(waitlistQuery, (snap) => {
@@ -298,9 +294,7 @@ export default function TournamentScreen() {
         setOnWaitlist(false);
         setMyWaitlistDivision(null);
       }
-    }, (error) => {
-      console.log('Waitlist listener error:', error);
-    });
+    }, () => {});
 
     return () => { unsubTournament(); unsubTeams(); unsubWaitlist(); };
   }, []);
@@ -457,7 +451,6 @@ export default function TournamentScreen() {
         });
       }
     } catch (e: any) {
-      console.error(e);
       setInfoModal({
         visible: true,
         title: 'SOMETHING WENT WRONG',
@@ -518,7 +511,6 @@ export default function TournamentScreen() {
         });
       }
     } catch (e: any) {
-      console.error(e);
       setInfoModal({
         visible: true,
         title: 'SOMETHING WENT WRONG',
@@ -547,7 +539,6 @@ export default function TournamentScreen() {
         read: false,
       });
     } catch (e: any) {
-      console.error(e);
       setInfoModal({
         visible: true,
         title: 'SOMETHING WENT WRONG',
@@ -570,7 +561,7 @@ export default function TournamentScreen() {
       setTeamDivision(data.division || '');
       setIsEditingRegistration(true);
       setShowTeamModal(true);
-    } catch (e: any) { console.error(e); }
+    } catch (e: any) { }
   };
 
   const tryCloseModal = () => {
@@ -712,7 +703,6 @@ export default function TournamentScreen() {
         setShowSuccessModal(true);
       }
     } catch (e: any) {
-      console.error(e);
       setInfoModal({
         visible: true,
         title: 'REGISTRATION FAILED',
@@ -789,7 +779,6 @@ export default function TournamentScreen() {
       setShowDeleteModal(false);
       setShowOrganizerReminderModal(true);
     } catch (e: any) {
-      console.error(e);
       setInfoModal({
         visible: true,
         title: 'SOMETHING WENT WRONG',
@@ -814,7 +803,6 @@ export default function TournamentScreen() {
         try {
           await deleteObject(ref(storage, tournament.imagePath));
         } catch (imgErr) {
-          console.error(imgErr);
         }
       }
 
@@ -824,7 +812,6 @@ export default function TournamentScreen() {
       setDeleteEventLoading(false);
       router.replace('/');
     } catch (e: any) {
-      console.error(e);
       setDeleteEventLoading(false);
       setInfoModal({
         visible: true,
@@ -840,7 +827,7 @@ export default function TournamentScreen() {
       await Share.share({
         message: `🏆 ${tournament.name}\n📅 ${tournament.date}\n📍 ${tournament.city}, ${tournament.state}${tournament.contactPhone ? `\n📞 ${tournament.contactPhone}` : ''}\n\nFind this tournament on Zony!`,
       });
-    } catch (e: any) { console.error(e); }
+    } catch (e: any) {  }
   };
 
   const handleMessageOrganizer = () => {

@@ -98,7 +98,7 @@ async function sendPush(token: string, title: string, body: string) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ to: token, title, body, sound: 'default' }),
     });
-  } catch (e) { console.log('Push error:', e); }
+  } catch (_) {}
 }
 
 /**
@@ -149,9 +149,7 @@ async function notifyTeam({
     if (userSnap.exists() && userSnap.data().pushToken && userSnap.data().notificationsEnabled !== false) {
       await sendPush(userSnap.data().pushToken, title, body);
     }
-  } catch (e) {
-    console.log('notifyTeam error:', e);
-  }
+  } catch (_) {}
 }
 
 /**
@@ -175,7 +173,7 @@ async function notifyGameResult({
   winnerName: string;
   loserName: string;
   loserDropsTo: string | null;
-  bracket: string; // 'winners' | 'losers' | 'final'
+  bracket: string;
   loserBracketGames: GameDoc[];
 }) {
   const link = `/bracket?tournamentId=${tournamentId}&divisionId=${divisionId}`;
@@ -185,7 +183,6 @@ async function notifyGameResult({
     ? `Losers Bracket Round ${game.round}`
     : `Round ${game.round}`;
 
-  // Notify winner
   await notifyTeam({
     tournamentId,
     divisionId,
@@ -196,10 +193,8 @@ async function notifyGameResult({
     link,
   });
 
-  // Notify loser
   const isEliminated = !loserDropsTo;
   if (isEliminated) {
-    // Loser has no path forward — they're fully eliminated
     await notifyTeam({
       tournamentId,
       divisionId,
@@ -210,7 +205,6 @@ async function notifyGameResult({
       link,
     });
   } else {
-    // Loser drops to losers bracket — still alive
     await notifyTeam({
       tournamentId,
       divisionId,
@@ -225,27 +219,12 @@ async function notifyGameResult({
 
 // ─── Main Entry Point ─────────────────────────────────────────────────────────
 
-/**
- * enterResult — organizer marks a winner for a game.
- *
- * Runs entirely inside a single Firestore transaction: reads the source
- * game, the bracket metadata, and whatever destination games it feeds
- * into, builds the same in-memory shape bracketAdvancement.ts uses for
- * byes, runs the one shared applyGameResult function, then writes back
- * exactly what it touched. No partial state is ever visible to live
- * listeners on other devices, and no destination game can be left
- * half-updated by a concurrent write.
- *
- * Notifications are sent AFTER the transaction commits so they don't
- * block or roll back bracket state on push delivery failures.
- */
 export async function enterResult(input: EnterResultInput): Promise<ProgressionResult> {
   const { tournamentId, divisionId, gameId, winnerId, winnerName, loserId, loserName } = input;
 
   const gameRef = doc(db, BracketPaths.game(tournamentId, divisionId, gameId));
   const bracketRef = doc(db, BracketPaths.bracket(tournamentId, divisionId));
 
-  // Capture game state before transaction for post-commit notifications
   let capturedGame: GameDoc | null = null;
   let capturedBracket: BracketDoc | null = null;
 
@@ -260,8 +239,6 @@ export async function enterResult(input: EnterResultInput): Promise<ProgressionR
     const bracket = bracketSnap.data() as BracketDoc;
     capturedBracket = bracket;
 
-    // ── Championship special cases (GF-1 and GF-2) ───────────────────────
-
     if (gameId === 'GF-1') {
       return handleGrandFinal(tx, { input, game, bracket, bracketRef, winnerId, winnerName, loserId, loserName });
     }
@@ -274,8 +251,6 @@ export async function enterResult(input: EnterResultInput): Promise<ProgressionR
       });
       return { outcome: 'champion', championId: winnerId, championName: winnerName };
     }
-
-    // ── Normal game ───────────────────────────────────────────────────────
 
     const destIds = new Set<string>();
     if (game.winnerAdvancesTo) destIds.add(game.winnerAdvancesTo);
@@ -332,11 +307,6 @@ export async function enterResult(input: EnterResultInput): Promise<ProgressionR
     return { outcome: 'advanced', gamesUpdated: touched };
   });
 
-  // ── Post-transaction notifications (fire and forget) ─────────────────────
-  // These run after the transaction commits so a push failure never
-  // rolls back bracket state. We use the game state captured inside the
-  // transaction so we have the correct loserDropsTo etc.
-
   if (capturedGame && result.outcome === 'advanced') {
     notifyGameResult({
       tournamentId,
@@ -347,11 +317,10 @@ export async function enterResult(input: EnterResultInput): Promise<ProgressionR
       loserDropsTo: capturedGame.loserDropsTo,
       bracket: capturedGame.bracket,
       loserBracketGames: [],
-    }).catch(e => console.log('Notification error:', e));
+    }).catch(() => {});
   }
 
   if (result.outcome === 'champion') {
-    // Champion notification
     notifyTeam({
       tournamentId,
       divisionId,
@@ -360,9 +329,8 @@ export async function enterResult(input: EnterResultInput): Promise<ProgressionR
       message: `${winnerName} won the ${divisionId} championship!`,
       body: `Congratulations! ${winnerName} is the ${divisionId} champion!`,
       link: `/bracket?tournamentId=${tournamentId}&divisionId=${divisionId}`,
-    }).catch(e => console.log('Champion notification error:', e));
+    }).catch(() => {});
 
-    // Runner-up notification
     notifyTeam({
       tournamentId,
       divisionId,
@@ -371,11 +339,10 @@ export async function enterResult(input: EnterResultInput): Promise<ProgressionR
       message: `${loserName} finished 2nd in ${divisionId}`,
       body: `Great tournament! ${loserName} finished as runner-up in the ${divisionId} division.`,
       link: `/bracket?tournamentId=${tournamentId}&divisionId=${divisionId}`,
-    }).catch(e => console.log('Runner-up notification error:', e));
+    }).catch(() => {});
   }
 
   if (result.outcome === 'reset_required') {
-    // Bracket reset — notify both teams a second game is needed
     notifyTeam({
       tournamentId,
       divisionId,
@@ -384,7 +351,7 @@ export async function enterResult(input: EnterResultInput): Promise<ProgressionR
       message: `${divisionId} championship requires a second game`,
       body: `${winnerName} won game 1 — but a bracket reset is required. Game 2 is now ready.`,
       link: `/bracket?tournamentId=${tournamentId}&divisionId=${divisionId}`,
-    }).catch(e => console.log('Reset notification error:', e));
+    }).catch(() => {});
 
     notifyTeam({
       tournamentId,
@@ -394,7 +361,7 @@ export async function enterResult(input: EnterResultInput): Promise<ProgressionR
       message: `${divisionId} championship requires a second game`,
       body: `${loserName} lost game 1 — but the bracket resets. Game 2 is now ready.`,
       link: `/bracket?tournamentId=${tournamentId}&divisionId=${divisionId}`,
-    }).catch(e => console.log('Reset notification error:', e));
+    }).catch(() => {});
   }
 
   return result;
