@@ -11,11 +11,11 @@ import {
 } from 'react-native';
 import { auth, db } from '../firebaseConfig';
 import DateTimePickerModal from 'react-native-modal-datetime-picker';
-import { generateBracketFromTeams, generateSeedPlacements, MAX_AUTO_BRACKET_TEAMS } from '../src/bracket/bracketEngine';
+import { generateBracketFromTeams, generateSeedPlacements } from '../src/bracket/bracketEngine';
 import { cascadeByeAdvancements, AdvancementGame } from '../src/bracket/bracketAdvancement';
 import { BracketDoc, BracketPaths, GameDoc } from '../src/bracket/bracketSchema';
 import { getChampionshipExplanation } from '../src/bracket/championshipFormat';
-import { generateScheduleMultiDivision, generateSlots, SchedulerInput, validateConstraints } from '../src/bracket/schedulingEngine';
+import { generateScheduleMultiDivision, SchedulerInput } from '../src/bracket/schedulingEngine';
 
 type DivisionSummary = {
   name: string;
@@ -57,41 +57,6 @@ export default function BracketGenerateScreen() {
   const [editDuration, setEditDuration] = useState<1 | 2 | 3>(1);
   const [showDatePicker, setShowDatePicker] = useState(false);
 
-  const [showTestTeamsModal, setShowTestTeamsModal] = useState(false);
-  const [generatingTestTeams, setGeneratingTestTeams] = useState(false);
-
-  const generateTestTeams = async (count: number) => {
-    if (!tournamentId) return;
-    setGeneratingTestTeams(true);
-    try {
-      const divisions = divisionSummaries.length > 0
-        ? divisionSummaries.map(d => d.name)
-        : [divisionId];
-      const batch = writeBatch(db);
-      divisions.forEach(div => {
-        for (let i = 1; i <= count; i++) {
-          const teamRef = doc(collection(db, 'tournaments', tournamentId, 'teams'));
-          batch.set(teamRef, {
-            teamName: `Test Team ${i}`,
-            contactName: 'Dev Test',
-            contactInfo: '',
-            division: div,
-            registeredBy: `dev-test-${div}-${i}-${Date.now()}`,
-            isDevTestTeam: true,
-            createdAt: serverTimestamp(),
-          });
-        }
-      });
-      await batch.commit();
-      await loadTournament();
-      setShowTestTeamsModal(false);
-    } catch (e: any) {
-      Alert.alert('Error', e.message || 'Could not generate test teams.');
-    } finally {
-      setGeneratingTestTeams(false);
-    }
-  };
-
   const loadTournament = async () => {
     if (!tournamentId || !divisionId) return;
     try {
@@ -123,7 +88,7 @@ export default function BracketGenerateScreen() {
       });
       setDivisionSummaries(summaries);
     } catch (e) {
-      console.log('Error loading bracket data:', e);
+      // silently fail — user sees empty state
     } finally {
       setLoading(false);
     }
@@ -382,10 +347,9 @@ export default function BracketGenerateScreen() {
                 });
               }
             }));
-          } catch (e) { console.log('Notification error:', e); }
+          } catch (_) {}
 
         } catch (e: any) {
-          console.error(`Failed ${divData.divisionId}:`, e);
           failed.push(divData.divisionId);
         }
       }
@@ -406,7 +370,6 @@ export default function BracketGenerateScreen() {
       setShowSuccessModal(true);
 
     } catch (e: any) {
-      console.error('Multi-division generation error:', e);
       setGenerating(false);
       setGenerateProgress(null);
       Alert.alert('Generation Failed', e.message || 'Something went wrong. Please try again.');
@@ -423,7 +386,6 @@ export default function BracketGenerateScreen() {
   const gameDuration = settings.gameDurationMinutes || 50;
   const buffer = settings.bufferMinutes || 10;
   const format = settings.championshipFormat || 'single';
-
   const allGenerated = divisionSummaries.length > 0 && divisionSummaries.every(d => d.alreadyGenerated);
   const anyEligible = divisionSummaries.some(d => !d.alreadyGenerated && d.teamCount >= 2);
 
@@ -511,12 +473,6 @@ export default function BracketGenerateScreen() {
           )}
         </View>
       ))}
-
-      {__DEV__ && (
-        <TouchableOpacity style={styles.devTestBtn} onPress={() => setShowTestTeamsModal(true)}>
-          <Text style={styles.devTestBtnText}>🧪 DEV: Generate Test Teams</Text>
-        </TouchableOpacity>
-      )}
 
       <View style={styles.warningCard}>
         <Text style={styles.warningText}>
@@ -645,36 +601,6 @@ export default function BracketGenerateScreen() {
           </View>
         </View>
       </Modal>
-
-      {/* Dev-only: Generate Test Teams Modal */}
-      {__DEV__ && (
-        <Modal visible={showTestTeamsModal} animationType="slide" transparent>
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalBox}>
-              <View style={styles.modalHeader}>
-                <Text style={[styles.modalTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>🧪 GENERATE TEST TEAMS</Text>
-                <TouchableOpacity onPress={() => setShowTestTeamsModal(false)}>
-                  <Text style={styles.modalClose}>✕</Text>
-                </TouchableOpacity>
-              </View>
-              <Text style={styles.devTestHint}>
-                Adds test teams to ALL divisions ({divisionSummaries.length > 0 ? divisionSummaries.map(d => d.name).join(', ') : divisionId}). Pick how many teams per division:
-              </Text>
-              <View style={styles.testTeamCountGrid}>
-                {[2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24].map(count => (
-                  <TouchableOpacity key={count} style={styles.testTeamCountBtn} onPress={() => generateTestTeams(count)} disabled={generatingTestTeams}>
-                    <Text style={styles.testTeamCountText}>{count}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-              {generatingTestTeams && <ActivityIndicator color="#008080" style={{ marginTop: 16 }} />}
-              <TouchableOpacity style={styles.cancelBtn} onPress={() => setShowTestTeamsModal(false)} disabled={generatingTestTeams}>
-                <Text style={styles.cancelBtnText}>Cancel</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </Modal>
-      )}
 
       {/* Confirm Generate Modal */}
       <Modal visible={showConfirmModal} animationType="fade" transparent>
@@ -875,12 +801,6 @@ const styles = StyleSheet.create({
   durationOptionActive: { borderColor: '#008080', backgroundColor: '#e8f4f4' },
   durationText: { fontSize: 14, color: '#5a7a7a', fontWeight: '600' },
   durationTextActive: { color: '#008080' },
-  devTestBtn: { backgroundColor: '#1a1a2e', borderRadius: 10, paddingVertical: 10, alignItems: 'center', marginBottom: 12 },
-  devTestBtnText: { color: '#fff', fontSize: 13, fontWeight: '700' },
-  devTestHint: { fontSize: 13, color: '#5a7a7a', lineHeight: 19, marginBottom: 16 },
-  testTeamCountGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  testTeamCountBtn: { width: '28%', backgroundColor: '#e8f4f4', borderRadius: 12, paddingVertical: 16, alignItems: 'center', borderWidth: 1.5, borderColor: '#008080' },
-  testTeamCountText: { fontSize: 18, color: '#008080', fontWeight: '700' },
   confirmBox: {
     backgroundColor: '#f5ede0', borderRadius: 24, padding: 28,
     width: '100%', shadowColor: '#000', shadowOpacity: 0.15,
