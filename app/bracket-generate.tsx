@@ -39,6 +39,10 @@ export default function BracketGenerateScreen() {
   const [teams, setTeams] = useState<{ id: string; teamName: string; registeredBy: string }[]>([]);
   const [constraintError, setConstraintError] = useState<string | null>(null);
   const [generateProgress, setGenerateProgress] = useState<string | null>(null);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
+  const [eligibleDivisions, setEligibleDivisions] = useState<DivisionSummary[]>([]);
 
   // Edit modal state
   const [showEditModal, setShowEditModal] = useState(false);
@@ -127,7 +131,6 @@ export default function BracketGenerateScreen() {
 
   useEffect(() => { loadTournament(); }, [tournamentId, divisionId]);
 
-  // Soft constraint check — warn but don't hard block
   useEffect(() => {
     if (!tournament || teams.length === 0) return;
     const settings = tournament.bracketSettings;
@@ -143,24 +146,7 @@ export default function BracketGenerateScreen() {
         setConstraintError('No courts configured. Add at least one court in Edit Settings.');
         return;
       }
-      // Soft check: just warn if slots are tight, don't hard block
-      const input: SchedulerInput = {
-        dates, courts,
-        dailyStartTime: settings.dailyStartTime || '08:00',
-        dailyEndTime: settings.dailyEndTime || '20:00',
-        gameDurationMinutes: settings.gameDurationMinutes || 50,
-        bufferMinutes: settings.bufferMinutes || 10,
-      };
-      const tempBracket = generateBracketFromTeams(teams.map(t => t.teamName));
-      const slots = generateSlots(input);
-      const validation = validateConstraints(tempBracket, slots);
-      // Only block on missing dates/courts — slot overflow is now handled
-      // gracefully as TBD games, so we don't hard-block on it
-      if (!validation.valid && (validation as any).reason?.includes('dates') || !validation.valid && (validation as any).reason?.includes('courts')) {
-        setConstraintError((validation as any).reason);
-      } else {
-        setConstraintError(null);
-      }
+      setConstraintError(null);
     } catch (e: any) {
       setConstraintError(e.message);
     }
@@ -240,7 +226,6 @@ export default function BracketGenerateScreen() {
     if (constraintError) { Alert.alert('Cannot Generate', constraintError); return; }
 
     const eligible = divisionSummaries.filter(d => !d.alreadyGenerated && d.teamCount >= 2);
-    const skipped = divisionSummaries.filter(d => !d.alreadyGenerated && d.teamCount < 2);
     const alreadyDone = divisionSummaries.filter(d => d.alreadyGenerated);
 
     if (eligible.length === 0) {
@@ -253,202 +238,179 @@ export default function BracketGenerateScreen() {
       return;
     }
 
-    const skipMsg = skipped.length > 0
-      ? `\n\nSkipping: ${skipped.map(d => `${d.name} (${d.teamCount} team${d.teamCount === 1 ? '' : 's'})`).join(', ')} — need at least 2.`
-      : '';
-    const alreadyMsg = alreadyDone.length > 0
-      ? `\n\nAlready generated: ${alreadyDone.map(d => d.name).join(', ')} — will not be overwritten.`
-      : '';
+    setEligibleDivisions(eligible);
+    setShowConfirmModal(true);
+  };
 
-    Alert.alert(
-      'Generate All Brackets?',
-      `This will generate brackets for ${eligible.length} division${eligible.length === 1 ? '' : 's'}:\n${eligible.map(d => `• ${d.name} (${d.teamCount} teams)`).join('\n')}${skipMsg}${alreadyMsg}\n\nAll divisions share courts — the scheduler prevents conflicts. Games that can't fit will show as Time TBD.\n\nRegistration will be locked. This cannot be undone.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Generate All', style: 'default',
-          onPress: async () => {
-            setGenerating(true);
-            try {
-              const settings = tournament.bracketSettings || {};
-              const dates = getTournamentDays(tournament);
-              const courts = resolveCourts(settings);
+  const doGenerate = async () => {
+    setShowConfirmModal(false);
+    const eligible = eligibleDivisions;
+    setGenerating(true);
+    try {
+      const settings = tournament.bracketSettings || {};
+      const dates = getTournamentDays(tournament);
+      const courts = resolveCourts(settings);
 
-              // Step 1: build all brackets in memory
-              setGenerateProgress('Generating brackets...');
-              const divisionBrackets: Array<{
-                divisionId: string;
-                bracket: ReturnType<typeof generateBracketFromTeams>;
-                shuffled: DivisionSummary['teams'];
-                slotTeams: (DivisionSummary['teams'][0] | null)[];
-              }> = [];
+      setGenerateProgress('Generating brackets...');
+      const divisionBrackets: Array<{
+        divisionId: string;
+        bracket: ReturnType<typeof generateBracketFromTeams>;
+        shuffled: DivisionSummary['teams'];
+        slotTeams: (DivisionSummary['teams'][0] | null)[];
+      }> = [];
 
-              for (const div of eligible) {
-                const shuffled = [...div.teams].sort(() => Math.random() - 0.5);
-                const bracket = generateBracketFromTeams(shuffled.map(t => t.teamName));
-                const seedPlacements = generateSeedPlacements(bracket.bracketSize, shuffled.length);
-                const slotTeams = seedPlacements.map(s => (s === -1 ? null : shuffled[s - 1] || null));
-                divisionBrackets.push({ divisionId: div.name, bracket, shuffled, slotTeams });
+      for (const div of eligible) {
+        const shuffled = [...div.teams].sort(() => Math.random() - 0.5);
+        const bracket = generateBracketFromTeams(shuffled.map(t => t.teamName));
+        const seedPlacements = generateSeedPlacements(bracket.bracketSize, shuffled.length);
+        const slotTeams = seedPlacements.map(s => (s === -1 ? null : shuffled[s - 1] || null));
+        divisionBrackets.push({ divisionId: div.name, bracket, shuffled, slotTeams });
+      }
+
+      setGenerateProgress('Scheduling across all courts...');
+      const scheduleInput: SchedulerInput = {
+        dates, courts,
+        dailyStartTime: settings.dailyStartTime || '08:00',
+        dailyEndTime: settings.dailyEndTime || '20:00',
+        gameDurationMinutes: settings.gameDurationMinutes || 50,
+        bufferMinutes: settings.bufferMinutes || 10,
+      };
+
+      const multiSchedule = generateScheduleMultiDivision(
+        divisionBrackets.map(d => ({ divisionId: d.divisionId, bracket: d.bracket })),
+        scheduleInput,
+      );
+
+      const failed: string[] = [];
+      for (const divData of divisionBrackets) {
+        setGenerateProgress(`Saving ${divData.divisionId}...`);
+        try {
+          const { divisionId: div, bracket, shuffled, slotTeams } = divData;
+          const divSchedule = multiSchedule.byDivision[div] || [];
+          const scheduleLookup = new Map(divSchedule.map(sg => [sg.gameId, sg]));
+
+          const gameMap = new Map<string, AdvancementGame>();
+          for (const game of bracket.games) {
+            const topTeam = game.topSeed && game.topSeed > 0 ? slotTeams[game.topSeed - 1] : null;
+            const bottomTeam = game.bottomSeed && game.bottomSeed > 0 ? slotTeams[game.bottomSeed - 1] : null;
+            let status: AdvancementGame['status'] = 'pending';
+            if (!game.isBye && topTeam && bottomTeam) status = 'ready';
+            gameMap.set(game.id, {
+              id: game.id, isBye: game.isBye, status,
+              topTeamId: topTeam?.id || null, topTeamName: topTeam?.teamName || null,
+              bottomTeamId: bottomTeam?.id || null, bottomTeamName: bottomTeam?.teamName || null,
+              winnerId: null, winnerName: null, loserId: null, loserName: null,
+              winnerAdvancesTo: game.winnerAdvancesTo, winnerAdvancesToSlot: game.winnerAdvancesToSlot,
+              loserDropsTo: game.loserDropsTo, loserDropsToSlot: game.loserDropsToSlot,
+            });
+          }
+          cascadeByeAdvancements(gameMap);
+
+          const batch = writeBatch(db);
+          const bracketRef = doc(db, BracketPaths.bracket(tournamentId!, div));
+          const bracketDoc: Partial<BracketDoc> = {
+            divisionId: div, tournamentId: tournamentId!,
+            championshipFormat: settings.championshipFormat || 'single',
+            bracketSize: bracket.bracketSize,
+            teamCount: shuffled.length,
+            status: 'generated',
+            generatedAt: serverTimestamp() as any,
+            completedAt: null,
+            seededTeams: shuffled.map((team, i) => ({ seed: i + 1, teamId: team.id, teamName: team.teamName, isBye: false })),
+            championTeamId: null,
+            grandFinalId: 'GF-1',
+            bracketResetId: settings.championshipFormat === 'double' ? 'GF-2' : null,
+            bracketResetRequired: false,
+            scheduleGeneratedAt: serverTimestamp() as any,
+            explanation: getChampionshipExplanation(settings.championshipFormat || 'single'),
+          };
+          batch.set(bracketRef, bracketDoc);
+
+          for (const game of bracket.games) {
+            const state = gameMap.get(game.id)!;
+            const gameRef = doc(db, BracketPaths.game(tournamentId!, div, game.id));
+            const sg = scheduleLookup.get(game.id);
+            const gameDoc: Partial<GameDoc> = {
+              id: game.id, divisionId: div, tournamentId: tournamentId!,
+              bracket: game.bracket, round: game.round, position: game.position,
+              topTeamId: state.topTeamId, topTeamName: state.topTeamName,
+              bottomTeamId: state.bottomTeamId, bottomTeamName: state.bottomTeamName,
+              isBye: game.isBye,
+              fedByWinnerOf: game.fedByWinner || null,
+              winnerAdvancesTo: state.winnerAdvancesTo, winnerAdvancesToSlot: state.winnerAdvancesToSlot,
+              loserDropsTo: state.loserDropsTo, loserDropsToSlot: state.loserDropsToSlot,
+              status: state.status,
+              winnerId: state.winnerId, winnerName: state.winnerName,
+              loserId: state.loserId, loserName: state.loserName,
+              topScore: null, bottomScore: null,
+              resultEnteredAt: state.status === 'bye' ? (serverTimestamp() as any) : null,
+              resultEnteredBy: state.status === 'bye' ? 'system' : null,
+              courtId: sg?.courtId || null,
+              courtName: sg?.courtId || null,
+              scheduledDate: sg?.date || null,
+              scheduledTime: sg?.startTime || null,
+              scheduledSlotIndex: sg?.slotIndex ?? null,
+              createdAt: serverTimestamp() as any,
+            };
+            batch.set(gameRef, gameDoc);
+          }
+
+          batch.update(doc(db, 'tournaments', tournamentId!), {
+            bracketStatus: 'bracket_generated',
+            [`bracketGenerated_${div}`]: true,
+          });
+          await batch.commit();
+
+          try {
+            const notified = new Set<string>();
+            await Promise.all(shuffled.map(async (td) => {
+              const uid = td.registeredBy;
+              if (!uid || notified.has(uid)) return;
+              notified.add(uid);
+              await addDoc(collection(db, 'notifications'), {
+                toUserId: uid,
+                message: `Bracket is now live for ${tournament.name}`,
+                body: `The ${div} bracket is ready. Tap to view matchups.`,
+                link: `/bracket?tournamentId=${tournamentId}&divisionId=${div}&postedBy=${tournament.postedBy}`,
+                createdAt: serverTimestamp(), read: false,
+              });
+              const userSnap = await getDoc(doc(db, 'users', uid));
+              if (userSnap.exists() && userSnap.data().pushToken && userSnap.data().notificationsEnabled !== false) {
+                await fetch('https://exp.host/--/api/v2/push/send', {
+                  method: 'POST', headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ to: userSnap.data().pushToken, title: '🏆 Bracket is Live!', body: `${tournament.name} — ${div} bracket is ready.`, sound: 'default' }),
+                });
               }
+            }));
+          } catch (e) { console.log('Notification error:', e); }
 
-              // Step 2: shared slot matrix — no two divisions clash
-              setGenerateProgress('Scheduling across all courts...');
-              const scheduleInput: SchedulerInput = {
-                dates,
-                courts,
-                dailyStartTime: settings.dailyStartTime || '08:00',
-                dailyEndTime: settings.dailyEndTime || '20:00',
-                gameDurationMinutes: settings.gameDurationMinutes || 50,
-                bufferMinutes: settings.bufferMinutes || 10,
-              };
+        } catch (e: any) {
+          console.error(`Failed ${divData.divisionId}:`, e);
+          failed.push(divData.divisionId);
+        }
+      }
 
-              const multiSchedule = generateScheduleMultiDivision(
-                divisionBrackets.map(d => ({ divisionId: d.divisionId, bracket: d.bracket })),
-                scheduleInput,
-              );
+      setGenerating(false);
+      setGenerateProgress(null);
+      await loadTournament();
 
-              // Step 3: write each division to Firestore
-              const failed: string[] = [];
-              for (const divData of divisionBrackets) {
-                setGenerateProgress(`Saving ${divData.divisionId}...`);
-                try {
-                  const { divisionId: div, bracket, shuffled, slotTeams } = divData;
-                  const divSchedule = multiSchedule.byDivision[div] || [];
-                  const scheduleLookup = new Map(divSchedule.map(sg => [sg.gameId, sg]));
+      const overflowMsg = multiSchedule.overflowGames > 0
+        ? `\n${multiSchedule.overflowGames} game${multiSchedule.overflowGames === 1 ? '' : 's'} will show as Time TBD — add more courts or extend hours to fill these in.`
+        : '';
 
-                  const gameMap = new Map<string, AdvancementGame>();
-                  for (const game of bracket.games) {
-                    const topTeam = game.topSeed && game.topSeed > 0 ? slotTeams[game.topSeed - 1] : null;
-                    const bottomTeam = game.bottomSeed && game.bottomSeed > 0 ? slotTeams[game.bottomSeed - 1] : null;
-                    let status: AdvancementGame['status'] = 'pending';
-                    if (!game.isBye && topTeam && bottomTeam) status = 'ready';
-                    gameMap.set(game.id, {
-                      id: game.id, isBye: game.isBye, status,
-                      topTeamId: topTeam?.id || null, topTeamName: topTeam?.teamName || null,
-                      bottomTeamId: bottomTeam?.id || null, bottomTeamName: bottomTeam?.teamName || null,
-                      winnerId: null, winnerName: null, loserId: null, loserName: null,
-                      winnerAdvancesTo: game.winnerAdvancesTo, winnerAdvancesToSlot: game.winnerAdvancesToSlot,
-                      loserDropsTo: game.loserDropsTo, loserDropsToSlot: game.loserDropsToSlot,
-                    });
-                  }
-                  cascadeByeAdvancements(gameMap);
+      if (failed.length > 0) {
+        setSuccessMessage(`Generated ${eligible.length - failed.length} of ${eligible.length} divisions.\n\nFailed: ${failed.join(', ')}${overflowMsg}`);
+      } else {
+        setSuccessMessage(`${eligible.length} division${eligible.length === 1 ? '' : 's'} generated with a conflict-free shared schedule.${overflowMsg}`);
+      }
+      setShowSuccessModal(true);
 
-                  const batch = writeBatch(db);
-                  const bracketRef = doc(db, BracketPaths.bracket(tournamentId!, div));
-                  const bracketDoc: Partial<BracketDoc> = {
-                    divisionId: div, tournamentId: tournamentId!,
-                    championshipFormat: settings.championshipFormat || 'single',
-                    bracketSize: bracket.bracketSize,
-                    teamCount: shuffled.length,
-                    status: 'generated',
-                    generatedAt: serverTimestamp() as any,
-                    completedAt: null,
-                    seededTeams: shuffled.map((team, i) => ({ seed: i + 1, teamId: team.id, teamName: team.teamName, isBye: false })),
-                    championTeamId: null,
-                    grandFinalId: 'GF-1',
-                    bracketResetId: settings.championshipFormat === 'double' ? 'GF-2' : null,
-                    bracketResetRequired: false,
-                    scheduleGeneratedAt: serverTimestamp() as any,
-                    explanation: getChampionshipExplanation(settings.championshipFormat || 'single'),
-                  };
-                  batch.set(bracketRef, bracketDoc);
-
-                  for (const game of bracket.games) {
-                    const state = gameMap.get(game.id)!;
-                    const gameRef = doc(db, BracketPaths.game(tournamentId!, div, game.id));
-                    const sg = scheduleLookup.get(game.id);
-                    const gameDoc: Partial<GameDoc> = {
-                      id: game.id, divisionId: div, tournamentId: tournamentId!,
-                      bracket: game.bracket, round: game.round, position: game.position,
-                      topTeamId: state.topTeamId, topTeamName: state.topTeamName,
-                      bottomTeamId: state.bottomTeamId, bottomTeamName: state.bottomTeamName,
-                      isBye: game.isBye,
-                      fedByWinnerOf: game.fedByWinner || null,
-                      winnerAdvancesTo: state.winnerAdvancesTo, winnerAdvancesToSlot: state.winnerAdvancesToSlot,
-                      loserDropsTo: state.loserDropsTo, loserDropsToSlot: state.loserDropsToSlot,
-                      status: state.status,
-                      winnerId: state.winnerId, winnerName: state.winnerName,
-                      loserId: state.loserId, loserName: state.loserName,
-                      topScore: null, bottomScore: null,
-                      resultEnteredAt: state.status === 'bye' ? (serverTimestamp() as any) : null,
-                      resultEnteredBy: state.status === 'bye' ? 'system' : null,
-                      courtId: sg?.courtId || null,
-                      courtName: sg?.courtId || null,
-                      scheduledDate: sg?.date || null,
-                      scheduledTime: sg?.startTime || null,
-                      scheduledSlotIndex: sg?.slotIndex ?? null,
-                      createdAt: serverTimestamp() as any,
-                    };
-                    batch.set(gameRef, gameDoc);
-                  }
-
-                  batch.update(doc(db, 'tournaments', tournamentId!), {
-                    bracketStatus: 'bracket_generated',
-                    [`bracketGenerated_${div}`]: true,
-                  });
-                  await batch.commit();
-
-                  // Notify teams
-                  try {
-                    const notified = new Set<string>();
-                    await Promise.all(shuffled.map(async (td) => {
-                      const uid = td.registeredBy;
-                      if (!uid || notified.has(uid)) return;
-                      notified.add(uid);
-                      await addDoc(collection(db, 'notifications'), {
-                        toUserId: uid,
-                        message: `Bracket is now live for ${tournament.name}`,
-                        body: `The ${div} bracket is ready. Tap to view matchups.`,
-                        link: `/bracket?tournamentId=${tournamentId}&divisionId=${div}&postedBy=${tournament.postedBy}`,
-                        createdAt: serverTimestamp(), read: false,
-                      });
-                      const userSnap = await getDoc(doc(db, 'users', uid));
-                      if (userSnap.exists() && userSnap.data().pushToken && userSnap.data().notificationsEnabled !== false) {
-                        await fetch('https://exp.host/--/api/v2/push/send', {
-                          method: 'POST', headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ to: userSnap.data().pushToken, title: '🏆 Bracket is Live!', body: `${tournament.name} — ${div} bracket is ready.`, sound: 'default' }),
-                        });
-                      }
-                    }));
-                  } catch (e) { console.log('Notification error:', e); }
-
-                } catch (e: any) {
-                  console.error(`Failed ${divData.divisionId}:`, e);
-                  failed.push(divData.divisionId);
-                }
-              }
-
-              setGenerating(false);
-              setGenerateProgress(null);
-              await loadTournament();
-
-              const overflowMsg = multiSchedule.overflowGames > 0
-                ? `\n\n${multiSchedule.overflowGames} game${multiSchedule.overflowGames === 1 ? '' : 's'} couldn't fit the schedule and will show as "Time TBD" — add more courts or extend hours to fill these in.`
-                : '';
-
-              if (failed.length > 0) {
-                Alert.alert(
-                  'Partial Success',
-                  `Generated ${eligible.length - failed.length} of ${eligible.length} divisions.\n\nFailed: ${failed.join(', ')}${overflowMsg}`,
-                  [{ text: 'OK', onPress: () => router.back() }],
-                );
-              } else {
-                Alert.alert(
-                  'All Brackets Generated!',
-                  `${eligible.length} division${eligible.length === 1 ? '' : 's'} generated with a conflict-free shared schedule.${overflowMsg}`,
-                  [{ text: 'View Bracket', onPress: () => router.back() }],
-                );
-              }
-            } catch (e: any) {
-              console.error('Multi-division generation error:', e);
-              setGenerating(false);
-              setGenerateProgress(null);
-              Alert.alert('Generation Failed', e.message || 'Something went wrong. Please try again.');
-            }
-          },
-        },
-      ],
-    );
+    } catch (e: any) {
+      console.error('Multi-division generation error:', e);
+      setGenerating(false);
+      setGenerateProgress(null);
+      Alert.alert('Generation Failed', e.message || 'Something went wrong. Please try again.');
+    }
   };
 
   if (loading) return <View style={styles.centered}><ActivityIndicator size="large" color="#008080" /></View>;
@@ -713,6 +675,62 @@ export default function BracketGenerateScreen() {
           </View>
         </Modal>
       )}
+
+      {/* Confirm Generate Modal */}
+      <Modal visible={showConfirmModal} animationType="fade" transparent>
+        <View style={styles.centeredOverlay}>
+          <View style={styles.confirmBox}>
+            <Text style={[styles.confirmTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>
+              GENERATE ALL BRACKETS?
+            </Text>
+            <Text style={styles.confirmBody}>
+              This will generate brackets for {eligibleDivisions.length} division{eligibleDivisions.length === 1 ? '' : 's'}:
+            </Text>
+            {eligibleDivisions.map(d => (
+              <Text key={d.name} style={styles.confirmDivRow}>
+                · {d.name} — {d.teamCount} teams
+              </Text>
+            ))}
+            <Text style={[styles.confirmBody, { marginTop: 14 }]}>
+              All divisions share courts. The scheduler prevents conflicts. Games that can't fit will show as Time TBD.
+            </Text>
+            <Text style={[styles.confirmBody, { marginTop: 8, color: '#cc4444', fontWeight: '600' }]}>
+              Registration will be locked. This cannot be undone.
+            </Text>
+            <View style={styles.confirmBtns}>
+              <TouchableOpacity style={styles.confirmCancelBtn} onPress={() => setShowConfirmModal(false)}>
+                <Text style={styles.confirmCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.confirmGenerateBtn} onPress={doGenerate}>
+                <Text style={[styles.confirmGenerateText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>
+                  GENERATE ALL
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Success Modal */}
+      <Modal visible={showSuccessModal} animationType="fade" transparent>
+        <View style={styles.centeredOverlay}>
+          <View style={styles.confirmBox}>
+            <Text style={[styles.confirmTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>
+              BRACKETS GENERATED!
+            </Text>
+            <Text style={styles.confirmBody}>{successMessage}</Text>
+            <TouchableOpacity
+              style={[styles.confirmGenerateBtn, { marginTop: 24, flex: 0, paddingHorizontal: 24 }]}
+              onPress={() => { setShowSuccessModal(false); router.back(); }}
+            >
+              <Text style={[styles.confirmGenerateText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>
+                VIEW BRACKET
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
     </ScrollView>
   );
 }
@@ -790,6 +808,7 @@ function Row({ label, value }: { label: string; value: string }) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f5ede0' },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f5ede0' },
+  centeredOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 24 },
   backBtn: { paddingTop: 60, paddingBottom: 8 },
   backText: { fontSize: 16, color: '#008080', fontWeight: '600' },
   title: { fontSize: 26, color: '#003333', letterSpacing: 1.5, marginBottom: 4 },
@@ -862,4 +881,26 @@ const styles = StyleSheet.create({
   testTeamCountGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   testTeamCountBtn: { width: '28%', backgroundColor: '#e8f4f4', borderRadius: 12, paddingVertical: 16, alignItems: 'center', borderWidth: 1.5, borderColor: '#008080' },
   testTeamCountText: { fontSize: 18, color: '#008080', fontWeight: '700' },
+  confirmBox: {
+    backgroundColor: '#f5ede0', borderRadius: 24, padding: 28,
+    width: '100%', shadowColor: '#000', shadowOpacity: 0.15,
+    shadowRadius: 16, elevation: 8,
+  },
+  confirmTitle: {
+    fontSize: 22, color: '#003333', letterSpacing: 1.5,
+    marginBottom: 14, textAlign: 'center',
+  },
+  confirmBody: { fontSize: 14, color: '#555', lineHeight: 22 },
+  confirmDivRow: { fontSize: 14, color: '#003333', fontWeight: '600', marginTop: 4, paddingLeft: 4 },
+  confirmBtns: { flexDirection: 'row', gap: 12, marginTop: 24 },
+  confirmCancelBtn: {
+    flex: 1, borderRadius: 14, paddingVertical: 14, alignItems: 'center',
+    borderWidth: 1, borderColor: '#e0d8c8', backgroundColor: '#fff',
+  },
+  confirmCancelText: { fontSize: 15, color: '#5a7a7a', fontWeight: '600' },
+  confirmGenerateBtn: {
+    flex: 1, backgroundColor: '#008080', borderRadius: 14,
+    paddingVertical: 14, alignItems: 'center',
+  },
+  confirmGenerateText: { color: '#fff', fontSize: 15, letterSpacing: 1 },
 });
