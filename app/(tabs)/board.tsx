@@ -17,7 +17,6 @@ function SadFace() {
   );
 }
 
-// Trophy icon, used for forTournament
 function TrophyIcon({ size = 13, color = '#5a5a5a' }: { size?: number; color?: string }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -30,7 +29,6 @@ function TrophyIcon({ size = 13, color = '#5a5a5a' }: { size?: number; color?: s
   );
 }
 
-// Person icon, used for division
 function PersonIcon({ size = 13, color = '#5a5a5a' }: { size?: number; color?: string }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -127,10 +125,6 @@ export default function BoardScreen() {
         return expDate <= now;
       });
 
-      // Opportunistically clean up expired posts from the database.
-      // This isn't on a fixed schedule, but runs whenever anyone has this
-      // screen open, which keeps the database from accumulating old posts
-      // without needing a paid scheduled function.
       if (expired.length > 0) {
         Promise.all(expired.map((p: any) => deleteDoc(doc(db, 'board', p.id)).catch(() => {}))).catch(() => {});
       }
@@ -158,8 +152,7 @@ export default function BoardScreen() {
         } catch (_) {}
       }));
       setUserCache(prev => ({ ...prev, ...newCache }));
-    }, (error) => {
-      console.log('Board listener error:', error);
+    }, () => {
       setLoading(false);
     });
     return () => unsub();
@@ -285,7 +278,6 @@ export default function BoardScreen() {
                 onPress={() => router.push({ pathname: '/board-detail', params: { id: p.id } })}
               >
                 <View style={[styles.cardAccentBar, { backgroundColor: sportColor }]} />
-
                 <View style={styles.cardInner}>
                   <View style={styles.cardTopRow}>
                     <Text
@@ -298,7 +290,6 @@ export default function BoardScreen() {
                       <Text style={[styles.sportBadgeText, { color: sportColor }]}>{p.sport}</Text>
                     </View>
                   </View>
-
                   {p.division ? (
                     <View style={styles.detailRow}>
                       <PersonIcon size={13} color="#5a5a5a" />
@@ -312,7 +303,6 @@ export default function BoardScreen() {
                     </View>
                   ) : null}
                   {p.description ? <Text style={styles.description} numberOfLines={2}>{p.description}</Text> : null}
-
                   <View style={styles.cardFooter}>
                     {poster?.photoURL ? (
                       <Image source={{ uri: poster.photoURL }} style={styles.posterPhoto} />

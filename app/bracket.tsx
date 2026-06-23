@@ -25,6 +25,15 @@ function TrophyIcon({ size = 22, color = '#fff' }: { size?: number; color?: stri
   );
 }
 
+function MedalIcon({ size = 18, color = '#fff' }: { size?: number; color?: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <Path d="M12 15a6 6 0 1 0 0-12 6 6 0 0 0 0 12z" />
+      <Path d="M8.21 13.89 7 23l5-3 5 3-1.21-9.12" />
+    </Svg>
+  );
+}
+
 type GameDoc = {
   id: string;
   bracket: 'winners' | 'losers' | 'final';
@@ -39,6 +48,7 @@ type GameDoc = {
   winnerId: string | null;
   winnerName: string | null;
   loserId: string | null;
+  loserName: string | null;
   topScore: number | null;
   bottomScore: number | null;
   courtName: string | null;
@@ -369,6 +379,23 @@ export default function BracketScreen() {
     ? finalGames
     : finalGames.slice(0, 1);
 
+  // ── Derive placements from completed games ────────────────────────────────
+  // Champion: winner of the final/championship game
+  const championGame = finalGames.find(g => g.status === 'completed');
+  const championName = championGame?.winnerName || null;
+
+  // Runner-up: loser of the championship game
+  const runnerUpName = championGame?.loserName || null;
+
+  // 3rd place: in double elimination, the loser of the losers final
+  // (the team that lost to the eventual runner-up in the losers bracket final)
+  const losersFinalGame = losersGames
+    .filter(g => g.status === 'completed')
+    .sort((a, b) => b.round - a.round)[0];
+  const thirdPlaceName = losersFinalGame?.loserName || null;
+
+  const showPlacements = !!bracketMeta?.championTeamId && !!championName;
+
   return (
     <View style={styles.container}>
 
@@ -414,19 +441,49 @@ export default function BracketScreen() {
         </ScrollView>
       )}
 
-      {/* Champion banner */}
-      {bracketMeta?.championTeamId && (
-        <View style={[styles.championBanner, { backgroundColor: sportColor }]}>
-          <TrophyIcon size={28} color="#fff" />
-          <View style={styles.championTextBlock}>
-            <Text style={[styles.championLabel, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>
-              CHAMPION
-            </Text>
-            <Text style={[styles.championName, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>
-              {(games.find(g => g.winnerId === bracketMeta.championTeamId)?.winnerName || '').toUpperCase()}
-            </Text>
+      {/* Placements banner */}
+      {showPlacements && (
+        <View style={[styles.placementsBanner, { backgroundColor: sportColor }]}>
+          {/* 1st place — center, largest */}
+          <View style={styles.placementsRow}>
+            <View style={[styles.placementBubble, styles.placementFirst]}>
+              <TrophyIcon size={22} color="#B8860B" />
+              <Text style={[styles.placementRank, { color: '#B8860B' }, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>
+                1ST PLACE
+              </Text>
+              <Text style={[styles.placementName, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]} numberOfLines={2}>
+                {championName!.toUpperCase()}
+              </Text>
+            </View>
           </View>
-          <TrophyIcon size={28} color="#fff" />
+
+          {/* 2nd and 3rd side by side */}
+          {(runnerUpName || thirdPlaceName) && (
+            <View style={styles.placementsSubRow}>
+              {runnerUpName && (
+                <View style={[styles.placementBubble, styles.placementSecond]}>
+                  <MedalIcon size={16} color="#a0a0a0" />
+                  <Text style={[styles.placementRankSmall, { color: '#888' }, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>
+                    2ND PLACE
+                  </Text>
+                  <Text style={[styles.placementNameSmall, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]} numberOfLines={2}>
+                    {runnerUpName.toUpperCase()}
+                  </Text>
+                </View>
+              )}
+              {thirdPlaceName && (
+                <View style={[styles.placementBubble, styles.placementThird]}>
+                  <MedalIcon size={16} color="#c87941" />
+                  <Text style={[styles.placementRankSmall, { color: '#c87941' }, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>
+                    3RD PLACE
+                  </Text>
+                  <Text style={[styles.placementNameSmall, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]} numberOfLines={2}>
+                    {thirdPlaceName.toUpperCase()}
+                  </Text>
+                </View>
+              )}
+            </View>
+          )}
         </View>
       )}
 
@@ -651,13 +708,46 @@ const styles = StyleSheet.create({
   divisionTabActive: { backgroundColor: '#008080' },
   divisionTabText: { fontSize: 13, color: '#5a7a7a', textAlign: 'center', fontWeight: '600' },
   divisionTabTextActive: { color: '#fff', fontWeight: '700', textAlign: 'center' },
-  championBanner: {
-    paddingVertical: 20, paddingHorizontal: 20,
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 14,
+
+  // ── Placements banner ──────────────────────────────────────────────────────
+  placementsBanner: {
+    paddingTop: 20, paddingBottom: 16, paddingHorizontal: 16,
   },
-  championTextBlock: { alignItems: 'center' },
-  championLabel: { fontSize: 12, color: '#a0f0e0', letterSpacing: 3, marginBottom: 4 },
-  championName: { fontSize: 26, color: '#fff', letterSpacing: 1 },
+  placementsRow: {
+    alignItems: 'center', marginBottom: 10,
+  },
+  placementsSubRow: {
+    flexDirection: 'row', gap: 10, justifyContent: 'center',
+  },
+  placementBubble: {
+    borderRadius: 16, alignItems: 'center', padding: 14,
+  },
+  placementFirst: {
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    paddingHorizontal: 32, paddingVertical: 16,
+    minWidth: 200,
+  },
+  placementSecond: {
+    backgroundColor: 'rgba(255,255,255,0.10)',
+    flex: 1, paddingVertical: 12,
+  },
+  placementThird: {
+    backgroundColor: 'rgba(255,255,255,0.10)',
+    flex: 1, paddingVertical: 12,
+  },
+  placementRank: {
+    fontSize: 11, letterSpacing: 2, marginTop: 6, marginBottom: 4,
+  },
+  placementRankSmall: {
+    fontSize: 10, letterSpacing: 1.5, marginTop: 4, marginBottom: 3,
+  },
+  placementName: {
+    fontSize: 22, color: '#fff', letterSpacing: 0.5, textAlign: 'center',
+  },
+  placementNameSmall: {
+    fontSize: 14, color: 'rgba(255,255,255,0.9)', letterSpacing: 0.3, textAlign: 'center',
+  },
+
   organizerHint: {
     backgroundColor: '#fffbeb', paddingHorizontal: 16, paddingVertical: 12,
     borderBottomWidth: 1, borderBottomColor: '#fde68a', alignItems: 'center',

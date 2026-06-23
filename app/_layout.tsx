@@ -16,17 +16,9 @@ import { auth, db } from '@/firebaseConfig';
 
 Sentry.init({
   dsn: 'https://3e555aa3301825d73fc1da854b7fd082@o4511583367528448.ingest.us.sentry.io/4511583375130624',
-
-  // Adds more context data to events (IP address, cookies, user, etc.)
-  // For more information, visit: https://docs.sentry.io/platforms/react-native/data-management/data-collected/
   sendDefaultPii: true,
-
-  // Enable Logs
   enableLogs: true,
   integrations: [Sentry.feedbackIntegration()],
-
-  // uncomment the line below to enable Spotlight (https://spotlightjs.com)
-  // spotlight: __DEV__,
 });
 
 export const unstable_settings = {
@@ -55,7 +47,7 @@ async function registerPushToken(uid: string) {
     const token = (await Notifications.getExpoPushTokenAsync()).data;
     await setDoc(doc(db, 'users', uid), { pushToken: token }, { merge: true });
   } catch (e) {
-    console.log('Push token error:', e);
+    Sentry.captureException(e);
   }
 }
 
@@ -158,9 +150,9 @@ export default Sentry.wrap(function RootLayout() {
           <Stack.Screen name="edit-board" options={{ headerShown: false }} />
           <Stack.Screen name="new-post" options={{ headerShown: false }} />
           <Stack.Screen name="messages" options={{ headerShown: false }} />
-<Stack.Screen name="chat" options={{ headerShown: false }} />
-<Stack.Screen name="start-dm" options={{ headerShown: false }} />
-<Stack.Screen name="community-post" options={{ headerShown: false }} />
+          <Stack.Screen name="chat" options={{ headerShown: false }} />
+          <Stack.Screen name="start-dm" options={{ headerShown: false }} />
+          <Stack.Screen name="community-post" options={{ headerShown: false }} />
         </Stack>
         <StatusBar style="auto" />
       </ThemeProvider>

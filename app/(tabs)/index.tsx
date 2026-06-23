@@ -27,28 +27,17 @@ function simplifyDivisions(divisions: string[]): string {
   const result: string[] = [];
   const adultDivisions = divisions.filter(d => d.startsWith('Adult'));
   const groupDivisions = divisions.filter(d => !d.startsWith('Adult'));
-
   groups.forEach(g => {
     const hasBoys = groupDivisions.includes(`${g} Boys`);
     const hasGirls = groupDivisions.includes(`${g} Girls`);
     const hasCoed = groupDivisions.includes(`${g} Coed`);
-    if (hasBoys && hasGirls) {
-      result.push(g);
-    } else if (hasBoys) {
-      result.push(`${g} Boys`);
-    } else if (hasGirls) {
-      result.push(`${g} Girls`);
-    } else if (hasCoed) {
-      result.push(`${g} Coed`);
-    }
+    if (hasBoys && hasGirls) { result.push(g); }
+    else if (hasBoys) { result.push(`${g} Boys`); }
+    else if (hasGirls) { result.push(`${g} Girls`); }
+    else if (hasCoed) { result.push(`${g} Coed`); }
   });
-
-  if (adultDivisions.length === 1) {
-    result.push(adultDivisions[0]);
-  } else if (adultDivisions.length > 1) {
-    result.push('Adults');
-  }
-
+  if (adultDivisions.length === 1) { result.push(adultDivisions[0]); }
+  else if (adultDivisions.length > 1) { result.push('Adults'); }
   return result.join(', ');
 }
 
@@ -96,7 +85,6 @@ function NotiTrophyIcon() {
   );
 }
 
-// Calendar icon, replaces 📅
 function CalendarIcon({ size = 14, color = '#5a5a5a' }: { size?: number; color?: string }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -108,7 +96,6 @@ function CalendarIcon({ size = 14, color = '#5a5a5a' }: { size?: number; color?:
   );
 }
 
-// Location icon, replaces 📍
 function LocationIcon({ size = 14, color = '#5a5a5a' }: { size?: number; color?: string }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -118,7 +105,6 @@ function LocationIcon({ size = 14, color = '#5a5a5a' }: { size?: number; color?:
   );
 }
 
-// Trophy icon, replaces 🏅
 function TrophyIcon({ size = 13, color = '#008080' }: { size?: number; color?: string }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -131,7 +117,6 @@ function TrophyIcon({ size = 13, color = '#008080' }: { size?: number; color?: s
   );
 }
 
-// Person icon, replaces division trophy
 function PersonIcon({ size = 13, color = '#008080' }: { size?: number; color?: string }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -141,7 +126,6 @@ function PersonIcon({ size = 13, color = '#008080' }: { size?: number; color?: s
   );
 }
 
-// X icon, replaces ✕
 function XIcon({ size = 12, color = '#ccc' }: { size?: number; color?: string }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -151,7 +135,6 @@ function XIcon({ size = 12, color = '#ccc' }: { size?: number; color?: string })
   );
 }
 
-// Warning icon for canceled modal
 function WarningIcon({ size = 32, color = '#cc4444' }: { size?: number; color?: string }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -187,8 +170,7 @@ export default function HomeScreen() {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setTournaments(data);
       setLoading(false);
-    }, (error) => {
-      console.log('Tournaments feed listener error:', error);
+    }, () => {
       setLoading(false);
     });
     return () => unsub();
@@ -202,9 +184,7 @@ export default function HomeScreen() {
       data.sort((a: any, b: any) => b.createdAt?.seconds - a.createdAt?.seconds);
       setNotifications(data);
       setHasNewNotifications(data.some((n: any) => !n.read));
-    }, (error) => {
-      console.log('Home notifications listener error:', error);
-    });
+    }, () => {});
     return () => unsub();
   }, []);
 
@@ -217,9 +197,7 @@ export default function HomeScreen() {
         return (data.unreadCount?.[user.uid] || 0) > 0;
       });
       setHasUnreadMessages(hasUnread);
-    }, (error) => {
-      console.log('Unread messages listener error:', error);
-    });
+    }, () => {});
     return () => unsub();
   }, []);
 
@@ -230,13 +208,13 @@ export default function HomeScreen() {
           updateDoc(doc(db, 'notifications', n.id), { read: true })
         )
       );
-    } catch (e) { console.log(e); }
+    } catch (_) {}
   };
 
   const handleDeleteNotification = async (id: string) => {
     try {
       await deleteDoc(doc(db, 'notifications', id));
-    } catch (e) { console.log(e); }
+    } catch (_) {}
   };
 
   const handleClearAllNotifications = async () => {
@@ -244,7 +222,7 @@ export default function HomeScreen() {
       await Promise.all(
         notifications.map((n: any) => deleteDoc(doc(db, 'notifications', n.id)))
       );
-    } catch (e) { console.log(e); }
+    } catch (_) {}
   };
 
   const handleNotificationPress = async (n: any) => {
@@ -252,10 +230,9 @@ export default function HomeScreen() {
       if (!n.read) {
         await updateDoc(doc(db, 'notifications', n.id), { read: true });
       }
-    } catch (e) { console.log(e); }
+    } catch (_) {}
 
     const isCanceled = n.message?.includes('canceled by the organizer');
-
     if (isCanceled) {
       const match = n.message?.match(/^[^\w]*(.+?) has been canceled by the organizer/);
       const tournamentName = match?.[1] || 'This tournament';
@@ -270,7 +247,6 @@ export default function HomeScreen() {
     }
 
     setShowNotifications(false);
-
     if (n.link) {
       router.push(n.link as any);
     } else {
@@ -281,6 +257,7 @@ export default function HomeScreen() {
   const sportLabel = sportOptions.find(o => o.value === sport)?.label || 'All Sports';
 
   const filtered = tournaments
+    .filter((t: any) => t.status !== 'canceled')
     .filter((t: any) => sport === 'All' || t.sport === sport)
     .filter((t: any) => stateFilter === 'All States' || t.state === stateFilter)
     .filter((t: any) =>
@@ -402,10 +379,9 @@ export default function HomeScreen() {
               ? t.organizerName.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase()
               : '?';
             const hasDivisions = t.divisions?.length > 0;
-
             return (
               <TouchableOpacity
-                style={[styles.card, t.status === 'canceled' && styles.cardCanceled]}
+                style={styles.card}
                 onPress={() => router.push({ pathname: '/tournament', params: { id: t.id, postedBy: t.postedBy } })}
               >
                 <View style={[styles.cardHeader, { backgroundColor: sportColor }]}>
@@ -421,32 +397,20 @@ export default function HomeScreen() {
                     <LocationIcon size={14} color="#5a5a5a" />
                     <Text style={styles.detail}>{t.city}, {t.state}</Text>
                   </View>
-
                   {hasDivisions ? (
                     <View style={styles.divisionsRow}>
                       <View style={styles.detailRow}>
                         <PersonIcon size={14} color="#5a5a5a" />
                         <Text style={styles.divisionsText}>{simplifyDivisions(t.divisions)}</Text>
                       </View>
-                      {t.status === 'canceled' && (
-                        <View style={[styles.canceledBadge, { marginTop: 4, alignSelf: 'flex-start' }]}>
-                          <Text style={styles.canceledBadgeText}>Canceled</Text>
-                        </View>
-                      )}
                     </View>
                   ) : (
                     <View style={styles.spotsRow}>
                       <View style={[styles.spotsBadge, { backgroundColor: `${sportColor}1A`, borderColor: sportColor }]}>
                         <Text style={[styles.spots, { color: sportColor }]}>{t.spots} spots left</Text>
                       </View>
-                      {t.status === 'canceled' && (
-                        <View style={styles.canceledBadge}>
-                          <Text style={styles.canceledBadgeText}>Canceled</Text>
-                        </View>
-                      )}
                     </View>
                   )}
-
                   {t.tournamentFormat && (
                     <View style={[styles.formatBadge, { backgroundColor: `${sportColor}18` }]}>
                       <Text style={[styles.formatBadgeText, { color: sportColor }]}>
@@ -454,7 +418,6 @@ export default function HomeScreen() {
                       </Text>
                     </View>
                   )}
-
                   {t.organizerName ? (
                     <View style={styles.organizerRow}>
                       {t.organizerPhoto ? (
@@ -467,7 +430,6 @@ export default function HomeScreen() {
                       <Text style={styles.organizerName}>by {t.organizerName}</Text>
                     </View>
                   ) : null}
-
                   <Text style={styles.viewMoreHint}>View card for more details</Text>
                 </View>
               </TouchableOpacity>
@@ -567,7 +529,6 @@ export default function HomeScreen() {
         </View>
       </Modal>
 
-      {/* Canceled Event Modal */}
       <Modal visible={canceledNotiModal.visible} animationType="fade" transparent>
         <View style={styles.canceledModalOverlay}>
           <View style={styles.canceledModalBox}>
@@ -690,7 +651,6 @@ const styles = StyleSheet.create({
   clearAllNotisBtn: { alignSelf: 'center', marginTop: 12, marginBottom: 8, paddingHorizontal: 20, paddingVertical: 10, opacity: 0.5 },
   clearAllNotisText: { fontSize: 13, color: '#bbb', fontWeight: '400' },
   notiDeleteText: { fontSize: 12, color: '#ccc' },
-  // Canceled event modal
   canceledModalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 24 },
   canceledModalBox: { backgroundColor: '#f5ede0', borderRadius: 24, padding: 28, alignItems: 'center', width: '100%', shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 16, elevation: 8 },
   canceledModalTitle: { fontSize: 26, color: '#cc4444', letterSpacing: 2, marginTop: 12, marginBottom: 4, textAlign: 'center' },

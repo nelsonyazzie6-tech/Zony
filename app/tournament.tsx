@@ -894,42 +894,64 @@ export default function TournamentScreen() {
           </View>
         )}
 
-        {(isOwner || tournament?.bracketStatus === 'bracket_generated') && (
-          <View style={styles.tabRow}>
-            {isOwner && (
-              <>
-                <TouchableOpacity style={[styles.tab, activeTab === 'details' && { backgroundColor: sportColor }]} onPress={() => setActiveTab('details')}>
-                  <Text style={[styles.tabText, activeTab === 'details' && styles.tabTextActive]}>Details</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={[styles.tab, activeTab === 'teams' && { backgroundColor: sportColor }]} onPress={() => setActiveTab('teams')}>
-                  <Text style={[styles.tabText, activeTab === 'teams' && styles.tabTextActive]}>Teams {teams.length > 0 ? `(${teams.length})` : ''}</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={[styles.tab, activeTab === 'waitlist' && { backgroundColor: sportColor }]} onPress={() => setActiveTab('waitlist')}>
-                  <Text style={[styles.tabText, activeTab === 'waitlist' && styles.tabTextActive]}>Waitlist {waitlistEntries.length > 0 ? `(${waitlistEntries.length})` : ''}</Text>
-                </TouchableOpacity>
-              </>
-            )}
-            {tournament?.bracketStatus === 'bracket_generated' && (
-              <TouchableOpacity
-                style={[styles.tab, activeTab === 'bracket' && { backgroundColor: sportColor }]}
-                onPress={() => {
-                  router.push({
-                    pathname: '/bracket',
-                    params: {
-                      tournamentId: id,
-                      divisionId: tournament?.divisions?.[0] || 'open',
-                      postedBy: tournament?.postedBy || postedBy,
-                      divisions: (tournament?.divisions || []).join(','),
-                      tournamentName: tournament?.name || '',
-                    },
-                  });
-                }}
-              >
-                <Text style={[styles.tabText, activeTab === 'bracket' && styles.tabTextActive]}>Bracket</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        )}
+        {isOwner && (
+  <View style={styles.tabRow}>
+    <TouchableOpacity style={[styles.tab, activeTab === 'details' && { backgroundColor: sportColor }]} onPress={() => setActiveTab('details')}>
+      <Text style={[styles.tabText, activeTab === 'details' && styles.tabTextActive]}>Details</Text>
+    </TouchableOpacity>
+    <TouchableOpacity style={[styles.tab, activeTab === 'teams' && { backgroundColor: sportColor }]} onPress={() => setActiveTab('teams')}>
+      <Text style={[styles.tabText, activeTab === 'teams' && styles.tabTextActive]}>Teams {teams.length > 0 ? `(${teams.length})` : ''}</Text>
+    </TouchableOpacity>
+    <TouchableOpacity style={[styles.tab, activeTab === 'waitlist' && { backgroundColor: sportColor }]} onPress={() => setActiveTab('waitlist')}>
+      <Text style={[styles.tabText, activeTab === 'waitlist' && styles.tabTextActive]}>Waitlist {waitlistEntries.length > 0 ? `(${waitlistEntries.length})` : ''}</Text>
+    </TouchableOpacity>
+    {tournament?.bracketStatus === 'bracket_generated' && (
+      <TouchableOpacity
+        style={[styles.tab, activeTab === 'bracket' && { backgroundColor: sportColor }]}
+        onPress={() => {
+          router.push({
+            pathname: '/bracket',
+            params: {
+              tournamentId: id,
+              divisionId: tournament?.divisions?.[0] || 'open',
+              postedBy: tournament?.postedBy || postedBy,
+              divisions: (tournament?.divisions || []).join(','),
+              tournamentName: tournament?.name || '',
+            },
+          });
+        }}
+      >
+        <Text style={[styles.tabText, activeTab === 'bracket' && styles.tabTextActive]}>Bracket</Text>
+      </TouchableOpacity>
+    )}
+  </View>
+)}
+
+{/* Non-organizer bracket button — styled, sport color */}
+{!isOwner && tournament?.bracketStatus === 'bracket_generated' && (
+  <TouchableOpacity
+    style={[styles.bracketUserBtn, {
+  borderColor: sportColor,
+  backgroundColor: tournament.sport === 'Basketball' ? '#e0f5f5'
+    : tournament.sport === 'Volleyball' ? '#f5e0e0'
+    : '#fdf3d9',
+}]}
+    onPress={() => {
+      router.push({
+        pathname: '/bracket',
+        params: {
+          tournamentId: id,
+          divisionId: tournament?.divisions?.[0] || 'open',
+          postedBy: tournament?.postedBy || postedBy,
+          divisions: (tournament?.divisions || []).join(','),
+          tournamentName: tournament?.name || '',
+        },
+      });
+    }}
+  >
+<Text style={[styles.bracketUserBtnText, { color: sportColor }, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>BRACKET</Text>
+  </TouchableOpacity>
+)}
 
         {activeTab === 'teams' && isOwner ? (
           <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 40 }}>
@@ -1683,9 +1705,19 @@ waitlistModalCancelBtn: { flex: 1, borderRadius: 14, paddingVertical: 14, alignI
 waitlistModalCancelText: { fontSize: 16, color: '#5a7a7a', fontWeight: '600' },
 
 waitlistModalConfirmBtn: { flex: 1, borderRadius: 14, paddingVertical: 14, alignItems: 'center' },
-
 disclaimerBox: { marginTop: 16, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#f0f0f0' },
-
 disclaimerText: { fontSize: 11, color: '#b0b0b0', fontStyle: 'italic', lineHeight: 16, textAlign: 'center' },
-
+bracketUserBtn: {
+  marginHorizontal: 20,
+  marginBottom: 12,
+  paddingVertical: 13,
+  borderRadius: 14,
+  borderWidth: 2,
+  alignItems: 'center',
+},
+bracketUserBtnText: {
+  fontSize: 16,
+  fontWeight: '700',
+  letterSpacing: 1.5,
+},
 });

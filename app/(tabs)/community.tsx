@@ -17,7 +17,6 @@ function SadFace() {
   );
 }
 
-// Chat bubble icon to replace 💬, matching the muted gray style of commentCount text
 function ChatBubbleIcon({ size = 13, color = '#aaa' }: { size?: number; color?: string }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -84,8 +83,7 @@ export default function CommunityScreen() {
     const unsub = onSnapshot(q, (snap) => {
       setPosts(snap.docs.map(d => ({ id: d.id, ...d.data() })));
       setLoading(false);
-    }, (error) => {
-      console.log('Community listener error:', error);
+    }, () => {
       setLoading(false);
     });
     return () => unsub();

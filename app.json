@@ -6,7 +6,7 @@
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "zony",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "owner": "nelzony",
     "extra": {
@@ -14,33 +14,46 @@
         "projectId": "655aca0e-ce2d-4cfe-aa67-7a22d07cac85"
       }
     },
+    "splash": {
+      "image": "./assets/images/icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#8B1A1A"
+    },
     "ios": {
-      "supportsTablet": true,
+      "supportsTablet": false,
       "bundleIdentifier": "com.nelzony.zony",
+      "buildNumber": "1",
       "infoPlist": {
         "CFBundleURLTypes": [
           {
             "CFBundleURLSchemes": [
               "com.googleusercontent.apps.295900317104-dk7n2cq2obdc9a2v37p1p6ih61pj9fha"
             ]
-          },
-          {
-            "CFBundleURLSchemes": [
-              "com.googleusercontent.apps.295900317104-dk7n2cq2obdc9a2v37p1p6ih61pj9fha"
-            ]
           }
         ],
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSCameraUsageDescription": "Zony uses your camera to upload photos for community posts and your profile.",
+        "NSPhotoLibraryUsageDescription": "Zony uses your photo library to upload photos for community posts and your profile.",
+        "NSLocationWhenInUseUsageDescription": "Zony uses your location to help find tournaments near you."
       }
     },
     "android": {
       "package": "com.nelzony.zony",
+      "versionCode": 1,
       "adaptiveIcon": {
         "backgroundColor": "#8B1A1A",
         "foregroundImage": "./assets/images/icon.png"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.RECEIVE_BOOT_COMPLETED",
+        "android.permission.VIBRATE"
+      ]
     },
     "web": {
       "output": "static",
@@ -55,7 +68,16 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#8B1A1A"
+          "backgroundColor": "#8B1A1A",
+          "image": "./assets/images/icon.png",
+          "imageWidth": 200
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Zony uses your photo library to upload photos for community posts and your profile.",
+          "cameraPermission": "Zony uses your camera to upload photos for community posts and your profile."
         }
       ],
       "@react-native-community/datetimepicker",
