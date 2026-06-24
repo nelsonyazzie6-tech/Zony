@@ -868,7 +868,7 @@ const styles = StyleSheet.create({
   avatar: { width: 84, height: 84, borderRadius: 22, borderWidth: 4, borderColor: '#F5F0E8', alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 8, elevation: 4 },
   avatarImg: { width: 84, height: 84, borderRadius: 22, borderWidth: 4, borderColor: '#F5F0E8' },
   avatarText: { fontSize: 28, color: '#fff', fontWeight: 'bold' },
-  name: { fontSize: 26, fontWeight: '900', color: '#111', marginTop: 10, letterSpacing: 1 },
+  name: { fontSize: 26, fontWeight: '900', color: '#003333', marginTop: 10, letterSpacing: 1 },
   email: { fontSize: 13, color: '#aaa', marginTop: 2 },
   editBtn: { marginTop: 10, paddingHorizontal: 20, paddingVertical: 6, borderRadius: 20, borderWidth: 2, borderColor: '#008080' },
   editBtnText: { fontSize: 13, fontWeight: '600', color: '#008080' },

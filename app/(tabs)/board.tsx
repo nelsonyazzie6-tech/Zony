@@ -3,7 +3,7 @@ import { useRouter } from 'expo-router';
 import { collection, deleteDoc, doc, getDoc, onSnapshot } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import Svg, { Circle, Path, Polygon } from 'react-native-svg';
+import Svg, { Circle, Path } from 'react-native-svg';
 import { db } from '../../firebaseConfig';
 
 function SadFace() {
@@ -102,7 +102,6 @@ export default function BoardScreen() {
   const [sportFilter, setSportFilter] = useState('All');
   const [divisionFilter, setDivisionFilter] = useState('All');
   const [search, setSearch] = useState('');
-  const [headerHeight, setHeaderHeight] = useState(120);
   const [showSportMenu, setShowSportMenu] = useState(false);
   const [showDivisionMenu, setShowDivisionMenu] = useState(false);
   const router = useRouter();
@@ -175,28 +174,10 @@ export default function BoardScreen() {
   return (
     <View style={styles.container}>
 
-      <View style={styles.headerBlock} onLayout={e => setHeaderHeight(e.nativeEvent.layout.height)}>
-        <Svg style={StyleSheet.absoluteFill} width="100%" height={headerHeight} viewBox="0 0 390 130" preserveAspectRatio="xMidYMid slice">
-          <Polygon points="0,0 80,30 40,80" fill="white" opacity={0.04} />
-          <Polygon points="80,30 160,10 120,70" fill="white" opacity={0.07} />
-          <Polygon points="40,80 120,70 80,130" fill="white" opacity={0.05} />
-          <Polygon points="160,10 260,50 180,90" fill="white" opacity={0.06} />
-          <Polygon points="120,70 180,90 100,130" fill="white" opacity={0.08} />
-          <Polygon points="260,50 330,20 310,80" fill="white" opacity={0.05} />
-          <Polygon points="180,90 310,80 240,130" fill="white" opacity={0.07} />
-          <Polygon points="330,20 390,0 390,60" fill="white" opacity={0.04} />
-          <Polygon points="310,80 390,60 390,130" fill="white" opacity={0.06} />
-          <Polygon points="0,60 40,80 0,130" fill="white" opacity={0.05} />
-          <Polygon points="0,0 40,0 80,30" fill="white" opacity={0.08} />
-          <Polygon points="160,10 260,0 260,50" fill="white" opacity={0.04} />
-          <Polygon points="260,0 330,20 390,0" fill="white" opacity={0.06} />
-          <Polygon points="240,130 310,80 390,130" fill="white" opacity={0.05} />
-          <Polygon points="80,130 180,90 240,130" fill="white" opacity={0.04} />
-          <Polygon points="0,0 0,60 40,80 0,130 80,130 40,80" fill="white" opacity={0.03} />
-          <Polygon points="0,60 0,0 40,0 80,30 40,80" fill="white" opacity={0.03} />
-        </Svg>
-        <Text style={[styles.header, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>SPORTS BOARD</Text>
-        <Text style={[styles.sub, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>Find players or teams near you</Text>
+      {/* ── Plain beige header ── */}
+      <View style={styles.header}>
+        <Text style={[styles.headerTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>SPORTS BOARD</Text>
+        <Text style={styles.headerSub}>Find players or teams near you</Text>
       </View>
 
       <View style={styles.searchRow}>
@@ -327,9 +308,11 @@ export default function BoardScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f5ede0' },
-  headerBlock: { backgroundColor: '#008080', paddingTop: 60, paddingBottom: 16, paddingHorizontal: 0, marginBottom: 0 },
-  header: { fontSize: 28, fontWeight: '900', color: '#fff', textAlign: 'center', letterSpacing: 3 },
-  sub: { fontSize: 14, color: 'rgba(255,255,255,0.8)', textAlign: 'center', marginTop: 2 },
+
+  // ── Plain beige header ──
+  header: { paddingTop: 60, paddingBottom: 16, paddingHorizontal: 20, backgroundColor: '#f5ede0' },
+ headerTitle: { fontSize: 28, fontWeight: '900', color: '#003333', letterSpacing: 3, textAlign: 'center' },
+headerSub: { fontSize: 14, color: '#a0b8b8', marginTop: 2, textAlign: 'center' },
   searchRow: { flexDirection: 'row', marginHorizontal: 16, gap: 8, marginTop: 14, marginBottom: 10 },
   search: { flex: 1, backgroundColor: '#fff', borderRadius: 14, paddingHorizontal: 16, paddingVertical: 10, fontSize: 15, color: '#003333', borderWidth: 1, borderColor: '#e8e8e8', shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 4, elevation: 1 },
   filtersRow: { flexDirection: 'row', gap: 8, marginHorizontal: 16, marginBottom: 8, zIndex: 999 },
@@ -363,4 +346,7 @@ const styles = StyleSheet.create({
   emptyContainer: { alignItems: 'center', marginTop: 60, gap: 10 },
   emptyTitle: { fontSize: 18, fontWeight: 'bold', color: '#a0b8b8', marginTop: 8 },
   emptySub: { fontSize: 15, color: '#a0b8b8', textAlign: 'center' },
+
+  // legacy keys kept so nothing else breaks
+  headerBlock: { backgroundColor: '#008080', paddingTop: 60, paddingBottom: 16, paddingHorizontal: 0, marginBottom: 0 },
 });

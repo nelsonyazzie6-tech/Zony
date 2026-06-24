@@ -3,7 +3,7 @@ import { useRouter } from 'expo-router';
 import { collection, deleteDoc, doc, onSnapshot, query, updateDoc, where } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, Image, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import Svg, { Circle, Line, Path, Polygon, Rect } from 'react-native-svg';
+import Svg, { Circle, Line, Path, Rect } from 'react-native-svg';
 import { auth, db } from '../../firebaseConfig';
 
 const sportOptions = [
@@ -105,18 +105,6 @@ function LocationIcon({ size = 14, color = '#5a5a5a' }: { size?: number; color?:
   );
 }
 
-function TrophyIcon({ size = 13, color = '#008080' }: { size?: number; color?: string }) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <Path d="M8 21h8" />
-      <Path d="M12 17v4" />
-      <Path d="M7 4h10v5a5 5 0 0 1-10 0z" />
-      <Path d="M17 5h3a2 2 0 0 1-2 4h-1" />
-      <Path d="M7 5H4a2 2 0 0 0 2 4h1" />
-    </Svg>
-  );
-}
-
 function PersonIcon({ size = 13, color = '#008080' }: { size?: number; color?: string }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -155,7 +143,6 @@ export default function HomeScreen() {
   const [loading, setLoading] = useState(true);
   const [hasNewNotifications, setHasNewNotifications] = useState(false);
   const [hasUnreadMessages, setHasUnreadMessages] = useState(false);
-  const [headerHeight, setHeaderHeight] = useState(140);
   const [showNotifications, setShowNotifications] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [canceledNotiModal, setCanceledNotiModal] = useState<{ visible: boolean; tournamentName: string; organizerName: string; organizerPhone: string }>({
@@ -170,9 +157,7 @@ export default function HomeScreen() {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setTournaments(data);
       setLoading(false);
-    }, () => {
-      setLoading(false);
-    });
+    }, () => { setLoading(false); });
     return () => unsub();
   }, []);
 
@@ -212,24 +197,18 @@ export default function HomeScreen() {
   };
 
   const handleDeleteNotification = async (id: string) => {
-    try {
-      await deleteDoc(doc(db, 'notifications', id));
-    } catch (_) {}
+    try { await deleteDoc(doc(db, 'notifications', id)); } catch (_) {}
   };
 
   const handleClearAllNotifications = async () => {
     try {
-      await Promise.all(
-        notifications.map((n: any) => deleteDoc(doc(db, 'notifications', n.id)))
-      );
+      await Promise.all(notifications.map((n: any) => deleteDoc(doc(db, 'notifications', n.id))));
     } catch (_) {}
   };
 
   const handleNotificationPress = async (n: any) => {
     try {
-      if (!n.read) {
-        await updateDoc(doc(db, 'notifications', n.id), { read: true });
-      }
+      if (!n.read) await updateDoc(doc(db, 'notifications', n.id), { read: true });
     } catch (_) {}
 
     const isCanceled = n.message?.includes('canceled by the organizer');
@@ -237,21 +216,11 @@ export default function HomeScreen() {
       const match = n.message?.match(/^[^\w]*(.+?) has been canceled by the organizer/);
       const tournamentName = match?.[1] || 'This tournament';
       setShowNotifications(false);
-      setCanceledNotiModal({
-        visible: true,
-        tournamentName,
-        organizerName: n.organizerName || '',
-        organizerPhone: n.organizerPhone || '',
-      });
+      setCanceledNotiModal({ visible: true, tournamentName, organizerName: n.organizerName || '', organizerPhone: n.organizerPhone || '' });
       return;
     }
-
     setShowNotifications(false);
-    if (n.link) {
-      router.push(n.link as any);
-    } else {
-      router.push('/');
-    }
+    if (n.link) { router.push(n.link as any); } else { router.push('/'); }
   };
 
   const sportLabel = sportOptions.find(o => o.value === sport)?.label || 'All Sports';
@@ -275,33 +244,16 @@ export default function HomeScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.headerBlock} onLayout={e => setHeaderHeight(e.nativeEvent.layout.height)}>
-        <Svg style={StyleSheet.absoluteFill} width="100%" height={headerHeight} viewBox="0 0 390 130" preserveAspectRatio="xMidYMid slice">
-          <Polygon points="0,0 80,30 40,80" fill="white" opacity={0.04} />
-          <Polygon points="80,30 160,10 120,70" fill="white" opacity={0.07} />
-          <Polygon points="40,80 120,70 80,130" fill="white" opacity={0.05} />
-          <Polygon points="160,10 260,50 180,90" fill="white" opacity={0.06} />
-          <Polygon points="120,70 180,90 100,130" fill="white" opacity={0.08} />
-          <Polygon points="260,50 330,20 310,80" fill="white" opacity={0.05} />
-          <Polygon points="180,90 310,80 240,130" fill="white" opacity={0.07} />
-          <Polygon points="330,20 390,0 390,60" fill="white" opacity={0.04} />
-          <Polygon points="310,80 390,60 390,130" fill="white" opacity={0.06} />
-          <Polygon points="0,60 40,80 0,130" fill="white" opacity={0.05} />
-          <Polygon points="0,0 40,0 80,30" fill="white" opacity={0.08} />
-          <Polygon points="160,10 260,0 260,50" fill="white" opacity={0.04} />
-          <Polygon points="260,0 330,20 390,0" fill="white" opacity={0.06} />
-          <Polygon points="240,130 310,80 390,130" fill="white" opacity={0.05} />
-          <Polygon points="80,130 180,90 240,130" fill="white" opacity={0.04} />
-          <Polygon points="0,0 0,60 40,80 0,130 80,130 40,80" fill="white" opacity={0.03} />
-          <Polygon points="0,60 0,0 40,0 80,30 40,80" fill="white" opacity={0.03} />
-        </Svg>
+
+      {/* Plain beige header — no color block */}
+      <View style={styles.headerBlock}>
         <View style={styles.headerRow}>
           <TouchableOpacity style={styles.bellBtn} onPress={() => setShowNotifications(true)}>
-            <BellIcon color="#f5ede0" hasNew={hasNewNotifications} />
+            <BellIcon color="#008080" hasNew={hasNewNotifications} />
           </TouchableOpacity>
           <Text style={[styles.header, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>ZONY</Text>
           <TouchableOpacity style={styles.msgBtn} onPress={() => router.push('/messages')}>
-            <MessageIcon color="#f5ede0" hasNew={hasUnreadMessages} />
+            <MessageIcon color="#008080" hasNew={hasUnreadMessages} />
           </TouchableOpacity>
         </View>
         <Text style={[styles.sub, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>Tournaments near you</Text>
@@ -318,10 +270,10 @@ export default function HomeScreen() {
         <TouchableOpacity style={styles.stateBtn} onPress={() => setShowStatePicker(true)}>
           {stateFilter === 'All States' ? (
             <Svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-              <Path d="M12 2a10 10 0 100 20A10 10 0 0012 2z" stroke="#f5ede0" strokeWidth="1.5" />
-              <Path d="M2 12h20" stroke="#f5ede0" strokeWidth="1.5" />
-              <Path d="M12 2a15 15 0 010 20M12 2a15 15 0 000 20" stroke="#f5ede0" strokeWidth="1.5" />
-              <Path d="M4.5 7h15M4.5 17h15" stroke="#f5ede0" strokeWidth="1" opacity={0.6} />
+              <Path d="M12 2a10 10 0 100 20A10 10 0 0012 2z" stroke="#008080" strokeWidth="1.5" />
+              <Path d="M2 12h20" stroke="#008080" strokeWidth="1.5" />
+              <Path d="M12 2a15 15 0 010 20M12 2a15 15 0 000 20" stroke="#008080" strokeWidth="1.5" />
+              <Path d="M4.5 7h15M4.5 17h15" stroke="#008080" strokeWidth="1" opacity={0.6} />
             </Svg>
           ) : <Text style={styles.stateBtnText}>{stateFilter}</Text>}
         </TouchableOpacity>
@@ -507,9 +459,7 @@ export default function HomeScreen() {
                           </Text>
                           <Text style={styles.notiTime}>{n.createdAt?.toDate?.()?.toLocaleDateString()}</Text>
                         </View>
-                        {isCanceled && (
-                          <Text style={styles.notiCanceledHint}>Tap for next steps</Text>
-                        )}
+                        {isCanceled && <Text style={styles.notiCanceledHint}>Tap for next steps</Text>}
                       </View>
                       {!isRead && <View style={styles.notiDot} />}
                       <TouchableOpacity onPress={() => handleDeleteNotification(n.id)} style={styles.notiDelete}>
@@ -540,12 +490,8 @@ export default function HomeScreen() {
             </Text>
             <View style={styles.canceledModalSteps}>
               <Text style={styles.canceledModalStepTitle}>Contact Organizer for Details</Text>
-              {canceledNotiModal.organizerName ? (
-                <Text style={styles.canceledModalContactLine}>{canceledNotiModal.organizerName}</Text>
-              ) : null}
-              {canceledNotiModal.organizerPhone ? (
-                <Text style={styles.canceledModalContactLine}>{canceledNotiModal.organizerPhone}</Text>
-              ) : null}
+              {canceledNotiModal.organizerName ? <Text style={styles.canceledModalContactLine}>{canceledNotiModal.organizerName}</Text> : null}
+              {canceledNotiModal.organizerPhone ? <Text style={styles.canceledModalContactLine}>{canceledNotiModal.organizerPhone}</Text> : null}
               {!canceledNotiModal.organizerName && !canceledNotiModal.organizerPhone ? (
                 <Text style={styles.canceledModalContactLine}>No contact info available. Try the Messages tab.</Text>
               ) : null}
@@ -565,17 +511,17 @@ export default function HomeScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f5ede0' },
-  headerBlock: { backgroundColor: '#008080', paddingTop: 60, paddingBottom: 16, paddingHorizontal: 0 },
-  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4, paddingHorizontal: 16 },
-  header: { fontSize: 42, fontWeight: '900', color: '#f5ede0', textAlign: 'center', letterSpacing: 6 },
+  headerBlock: { paddingTop: 60, paddingBottom: 12, paddingHorizontal: 16 },
+  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 },
+  header: { fontSize: 42, fontWeight: '900', color: '#003333', textAlign: 'center', letterSpacing: 6 },
   bellBtn: { padding: 4 },
   msgBtn: { padding: 4 },
   bellDot: { position: 'absolute', top: 0, right: 0, width: 10, height: 10, borderRadius: 5, backgroundColor: '#FF4444', borderWidth: 1.5, borderColor: '#fff' },
-  sub: { fontSize: 14, color: 'rgba(255,255,255,0.8)', textAlign: 'center', letterSpacing: 2 },
+  sub: { fontSize: 14, color: '#a0b8b8', textAlign: 'center', letterSpacing: 2 },
   searchRow: { flexDirection: 'row', marginHorizontal: 20, gap: 8, marginBottom: 10, marginTop: 14 },
   search: { flex: 1, backgroundColor: '#fff', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 10, fontSize: 15, color: '#003333', borderWidth: 1, borderColor: '#e0d8c8' },
-  stateBtn: { backgroundColor: '#008080', borderRadius: 12, paddingHorizontal: 14, justifyContent: 'center', alignItems: 'center', minWidth: 44 },
-  stateBtnText: { fontSize: 14, color: '#f5ede0', fontWeight: '600' },
+  stateBtn: { backgroundColor: '#fff', borderRadius: 12, paddingHorizontal: 14, justifyContent: 'center', alignItems: 'center', minWidth: 44, borderWidth: 1, borderColor: '#e0d8c8' },
+  stateBtnText: { fontSize: 14, color: '#008080', fontWeight: '600' },
   filterRow: { paddingHorizontal: 20, paddingTop: 4, paddingBottom: 8, zIndex: 999 },
   dropdownWrapper: { zIndex: 999 },
   dropdownSelect: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#fff', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 10, borderWidth: 1, borderColor: '#e0d8c8', shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 4, elevation: 1 },

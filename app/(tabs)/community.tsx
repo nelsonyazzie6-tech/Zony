@@ -3,7 +3,7 @@ import { useRouter } from 'expo-router';
 import { collection, doc, getDoc, onSnapshot, orderBy, query } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, Image, Keyboard, StyleSheet, Text, TextInput, TouchableOpacity, TouchableWithoutFeedback, useWindowDimensions, View } from 'react-native';
-import Svg, { Path, Polygon } from 'react-native-svg';
+import Svg, { Path } from 'react-native-svg';
 import { auth, db } from '../../firebaseConfig';
 
 function SadFace() {
@@ -66,7 +66,6 @@ const filterOptions = [
 ];
 
 export default function CommunityScreen() {
-  const [headerHeight, setHeaderHeight] = useState(120);
   const [fontsLoaded] = useFonts({ Rajdhani_700Bold });
   const [filter, setFilter] = useState('All');
   const [showFilter, setShowFilter] = useState(false);
@@ -111,28 +110,10 @@ export default function CommunityScreen() {
     <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
       <View style={styles.container}>
 
-        <View style={styles.headerBlock} onLayout={e => setHeaderHeight(e.nativeEvent.layout.height)}>
-          <Svg style={StyleSheet.absoluteFill} width="100%" height={headerHeight} viewBox="0 0 390 130" preserveAspectRatio="xMidYMid slice">
-            <Polygon points="0,0 80,30 40,80" fill="white" opacity={0.04} />
-            <Polygon points="80,30 160,10 120,70" fill="white" opacity={0.07} />
-            <Polygon points="40,80 120,70 80,130" fill="white" opacity={0.05} />
-            <Polygon points="160,10 260,50 180,90" fill="white" opacity={0.06} />
-            <Polygon points="120,70 180,90 100,130" fill="white" opacity={0.08} />
-            <Polygon points="260,50 330,20 310,80" fill="white" opacity={0.05} />
-            <Polygon points="180,90 310,80 240,130" fill="white" opacity={0.07} />
-            <Polygon points="330,20 390,0 390,60" fill="white" opacity={0.04} />
-            <Polygon points="310,80 390,60 390,130" fill="white" opacity={0.06} />
-            <Polygon points="0,60 40,80 0,130" fill="white" opacity={0.05} />
-            <Polygon points="0,0 40,0 80,30" fill="white" opacity={0.08} />
-            <Polygon points="160,10 260,0 260,50" fill="white" opacity={0.04} />
-            <Polygon points="260,0 330,20 390,0" fill="white" opacity={0.06} />
-            <Polygon points="240,130 310,80 390,130" fill="white" opacity={0.05} />
-            <Polygon points="80,130 180,90 240,130" fill="white" opacity={0.04} />
-            <Polygon points="0,0 0,60 40,80 0,130 80,130 40,80" fill="white" opacity={0.03} />
-            <Polygon points="0,60 0,0 40,0 80,30 40,80" fill="white" opacity={0.03} />
-          </Svg>
-          <Text style={[styles.header, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>COMMUNITY</Text>
-          <Text style={[styles.sub, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>Connect beyond the game</Text>
+        {/* ── Plain beige header ── */}
+        <View style={styles.header}>
+          <Text style={[styles.headerTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>COMMUNITY</Text>
+          <Text style={styles.headerSub}>Connect beyond the game</Text>
         </View>
 
         <TouchableOpacity style={styles.composer} onPress={() => router.push('/new-post')} activeOpacity={0.8}>
@@ -257,9 +238,12 @@ export default function CommunityScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F5F0E8' },
-  headerBlock: { backgroundColor: '#008080', paddingTop: 60, paddingBottom: 16, paddingHorizontal: 0 },
-  header: { fontSize: 28, fontWeight: '900', color: '#fff', textAlign: 'center', letterSpacing: 3 },
-  sub: { fontSize: 14, color: 'rgba(255,255,255,0.8)', textAlign: 'center', marginTop: 2 },
+
+  // ── Plain beige header ──
+  header: { paddingTop: 60, paddingBottom: 16, paddingHorizontal: 20, backgroundColor: '#F5F0E8' },
+  headerTitle: { fontSize: 28, fontWeight: '900', color: '#003333', letterSpacing: 3, textAlign: 'center' },
+  headerSub: { fontSize: 14, color: '#a0b8b8', marginTop: 2, textAlign: 'center' },
+
   composer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#f0f0f0', paddingHorizontal: 16, paddingVertical: 12, gap: 10 },
   composerAvatar: { width: 38, height: 38, borderRadius: 10, backgroundColor: '#008080', alignItems: 'center', justifyContent: 'center' },
   composerAvatarImg: { width: 38, height: 38, borderRadius: 10 },
@@ -298,4 +282,7 @@ const styles = StyleSheet.create({
   emptyContainer: { alignItems: 'center', marginTop: 60, gap: 10 },
   emptyTitle: { fontSize: 18, fontWeight: 'bold', color: '#a0b8b8', marginTop: 8 },
   emptySub: { fontSize: 14, color: '#a0b8b8', textAlign: 'center', paddingHorizontal: 40 },
+
+  // legacy keys kept so nothing else breaks
+  headerBlock: { backgroundColor: '#008080', paddingTop: 60, paddingBottom: 16, paddingHorizontal: 0 },
 });

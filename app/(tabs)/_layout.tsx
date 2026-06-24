@@ -73,7 +73,7 @@ export default function TabLayout() {
         name="index"
         options={{
           tabBarIcon: ({ focused }) => (
-            <TabItem icon={<TournamentsIcon color={focused ? '#8B1A1A' : '#999'} />} />
+            <TabItem icon={<TournamentsIcon color={focused ? '#008080' : '#999'} />} />
           ),
         }}
       />
@@ -81,7 +81,7 @@ export default function TabLayout() {
         name="board"
         options={{
           tabBarIcon: ({ focused }) => (
-            <TabItem icon={<BoardIcon color={focused ? '#8B1A1A' : '#999'} />} />
+            <TabItem icon={<BoardIcon color={focused ? '#008080' : '#999'} />} />
           ),
         }}
       />
@@ -89,7 +89,7 @@ export default function TabLayout() {
         name="post"
         options={{
           tabBarIcon: ({ focused }) => (
-            <TabItem icon={<PostIcon color={focused ? '#8B1A1A' : '#999'} />} />
+            <TabItem icon={<PostIcon color={focused ? '#008080' : '#999'} />} />
           ),
         }}
       />
@@ -97,7 +97,7 @@ export default function TabLayout() {
         name="community"
         options={{
           tabBarIcon: ({ focused }) => (
-            <TabItem icon={<CommunityIcon color={focused ? '#8B1A1A' : '#999'} />} />
+            <TabItem icon={<CommunityIcon color={focused ? '#008080' : '#999'} />} />
           ),
         }}
       />
@@ -109,7 +109,7 @@ export default function TabLayout() {
         name="profile"
         options={{
           tabBarIcon: ({ focused }) => (
-            <TabItem icon={<ProfileIcon color={focused ? '#8B1A1A' : '#999'} />} />
+            <TabItem icon={<ProfileIcon color={focused ? '#008080' : '#999'} />} />
           ),
         }}
       />

@@ -23,6 +23,7 @@
       "supportsTablet": false,
       "bundleIdentifier": "com.nelzony.zony",
       "buildNumber": "1",
+      "googleServicesFile": "./GoogleService-Info.plist",
       "infoPlist": {
         "CFBundleURLTypes": [
           {

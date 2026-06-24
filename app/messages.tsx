@@ -4,7 +4,7 @@ import { collection, deleteDoc, doc, onSnapshot, orderBy, query, where } from 'f
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Swipeable } from 'react-native-gesture-handler';
-import Svg, { Path, Polygon } from 'react-native-svg';
+import Svg, { Path } from 'react-native-svg';
 import { auth, db } from '../firebaseConfig';
 
 function timeAgo(seconds: number) {
@@ -21,7 +21,6 @@ export default function MessagesScreen() {
   const [fontsLoaded] = useFonts({ Rajdhani_700Bold });
   const [threads, setThreads] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [headerHeight, setHeaderHeight] = useState(120);
   const router = useRouter();
   const user = auth.currentUser;
   const swipeRefs = useRef<{ [key: string]: Swipeable | null }>({});
@@ -36,31 +35,21 @@ export default function MessagesScreen() {
     const unsub = onSnapshot(q, (snap) => {
       setThreads(snap.docs.map(d => ({ id: d.id, ...d.data() })));
       setLoading(false);
-    }, () => {
-      setLoading(false);
-    });
+    }, () => { setLoading(false); });
     return () => unsub();
   }, []);
 
   const handleDelete = async (threadId: string) => {
-    try {
-      await deleteDoc(doc(db, 'messages', threadId));
-    } catch (_) {}
+    try { await deleteDoc(doc(db, 'messages', threadId)); } catch (_) {}
   };
 
   const renderRightActions = (progress: Animated.AnimatedInterpolation<number>, threadId: string) => {
-    const translateX = progress.interpolate({
-      inputRange: [0, 1],
-      outputRange: [80, 0],
-    });
+    const translateX = progress.interpolate({ inputRange: [0, 1], outputRange: [80, 0] });
     return (
       <Animated.View style={[styles.deleteAction, { transform: [{ translateX }] }]}>
         <TouchableOpacity
           style={styles.deleteActionBtn}
-          onPress={() => {
-            swipeRefs.current[threadId]?.close();
-            handleDelete(threadId);
-          }}
+          onPress={() => { swipeRefs.current[threadId]?.close(); handleDelete(threadId); }}
         >
           <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
             <Path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
@@ -73,26 +62,7 @@ export default function MessagesScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.headerBlock} onLayout={e => setHeaderHeight(e.nativeEvent.layout.height)}>
-        <Svg style={StyleSheet.absoluteFill} width="125%" height={headerHeight} viewBox="0 0 390 130" preserveAspectRatio="xMidYMid slice">
-          <Polygon points="0,0 80,30 40,80" fill="white" opacity={0.04} />
-          <Polygon points="80,30 160,10 120,70" fill="white" opacity={0.07} />
-          <Polygon points="40,80 120,70 80,130" fill="white" opacity={0.05} />
-          <Polygon points="160,10 260,50 180,90" fill="white" opacity={0.06} />
-          <Polygon points="120,70 180,90 100,130" fill="white" opacity={0.08} />
-          <Polygon points="260,50 330,20 310,80" fill="white" opacity={0.05} />
-          <Polygon points="180,90 310,80 240,130" fill="white" opacity={0.07} />
-          <Polygon points="330,20 450,0 450,60" fill="white" opacity={0.04} />
-          <Polygon points="310,80 450,60 450,130" fill="white" opacity={0.06} />
-          <Polygon points="0,60 40,80 0,130" fill="white" opacity={0.05} />
-          <Polygon points="0,0 40,0 80,30" fill="white" opacity={0.08} />
-          <Polygon points="160,10 260,0 260,50" fill="white" opacity={0.04} />
-          <Polygon points="260,0 330,20 450,0" fill="white" opacity={0.06} />
-          <Polygon points="240,130 310,80 450,130" fill="white" opacity={0.05} />
-          <Polygon points="80,130 180,90 240,130" fill="white" opacity={0.04} />
-          <Polygon points="0,0 0,60 40,80 0,130 80,130 40,80" fill="white" opacity={0.03} />
-          <Polygon points="0,60 0,0 40,0 80,30 40,80" fill="white" opacity={0.03} />
-        </Svg>
+      <View style={styles.headerBlock}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
           <Text style={styles.backText}>← Back</Text>
         </TouchableOpacity>
@@ -160,11 +130,11 @@ export default function MessagesScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f5ede0' },
-  headerBlock: { backgroundColor: '#003333', paddingTop: 60, paddingBottom: 16, paddingHorizontal: 20 },
+  headerBlock: { paddingTop: 60, paddingBottom: 12, paddingHorizontal: 20 },
   backBtn: { marginBottom: 10 },
-  backText: { color: 'rgba(255,255,255,0.8)', fontSize: 15, fontWeight: '600' },
-  header: { fontSize: 28, fontWeight: '900', color: '#fff', letterSpacing: 3 },
-  sub: { fontSize: 14, color: 'rgba(255,255,255,0.6)', marginTop: 2 },
+  backText: { color: '#008080', fontSize: 15, fontWeight: '600' },
+  header: { fontSize: 28, fontWeight: '900', color: '#003333', letterSpacing: 3, textAlign: 'center' },
+  sub: { fontSize: 14, color: '#a0b8b8', marginTop: 2, textAlign: 'center' },
   list: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 80 },
   threadCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 16, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: '#e8e8e8', shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 4, elevation: 1 },
   threadAvatar: { width: 46, height: 46, borderRadius: 12, backgroundColor: '#008080', alignItems: 'center', justifyContent: 'center', marginRight: 12 },

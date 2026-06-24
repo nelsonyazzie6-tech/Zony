@@ -3,7 +3,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { addDoc, collection, deleteDoc, doc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Image, Linking, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import Svg, { Circle, Path, Polygon, Rect } from 'react-native-svg';
+import Svg, { Circle, Path, Rect } from 'react-native-svg';
 import { auth, db } from '../firebaseConfig';
 
 function getSportColor(sport: string) {
@@ -100,7 +100,6 @@ export default function BoardDetailScreen() {
   const [poster, setPoster] = useState<{ username: string; photoURL: string } | null>(null);
   const [hideContactInfo, setHideContactInfo] = useState<boolean | null>(null);
   const [fontsLoaded] = useFonts({ Rajdhani_700Bold });
-  const [headerHeight, setHeaderHeight] = useState(160);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -218,26 +217,8 @@ export default function BoardDetailScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={[styles.headerBlock, { backgroundColor: sportColor }]} onLayout={e => setHeaderHeight(e.nativeEvent.layout.height)}>
-        <Svg style={StyleSheet.absoluteFill} width="100%" height={headerHeight} viewBox="0 0 390 130" preserveAspectRatio="xMidYMid slice">
-          <Polygon points="0,0 80,30 40,80" fill="white" opacity={0.04} />
-          <Polygon points="80,30 160,10 120,70" fill="white" opacity={0.07} />
-          <Polygon points="40,80 120,70 80,130" fill="white" opacity={0.05} />
-          <Polygon points="160,10 260,50 180,90" fill="white" opacity={0.06} />
-          <Polygon points="120,70 180,90 100,130" fill="white" opacity={0.08} />
-          <Polygon points="260,50 330,20 310,80" fill="white" opacity={0.05} />
-          <Polygon points="180,90 310,80 240,130" fill="white" opacity={0.07} />
-          <Polygon points="330,20 390,0 390,60" fill="white" opacity={0.04} />
-          <Polygon points="310,80 390,60 390,130" fill="white" opacity={0.06} />
-          <Polygon points="0,60 40,80 0,130" fill="white" opacity={0.05} />
-          <Polygon points="0,0 40,0 80,30" fill="white" opacity={0.08} />
-          <Polygon points="160,10 260,0 260,50" fill="white" opacity={0.04} />
-          <Polygon points="260,0 330,20 390,0" fill="white" opacity={0.06} />
-          <Polygon points="240,130 310,80 390,130" fill="white" opacity={0.05} />
-          <Polygon points="80,130 180,90 240,130" fill="white" opacity={0.04} />
-          <Polygon points="0,0 0,60 40,80 0,130 80,130 40,80" fill="white" opacity={0.03} />
-          <Polygon points="0,60 0,0 40,0 80,30 40,80" fill="white" opacity={0.03} />
-        </Svg>
+      {/* ── Plain beige header (matches HubScreen style) ── */}
+      <View style={styles.header}>
         <View style={styles.topRow}>
           <TouchableOpacity onPress={() => router.back()} style={styles.back}>
             <Text style={styles.backText}>‹ Sports Board</Text>
@@ -248,9 +229,10 @@ export default function BoardDetailScreen() {
             </TouchableOpacity>
           )}
         </View>
+
         <View style={styles.heroInner}>
-          <View style={styles.avatarLarge}>
-            <Text style={[styles.avatarLargeText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>{initials}</Text>
+          <View style={[styles.avatarLarge, { backgroundColor: `${sportColor}22`, borderColor: `${sportColor}44` }]}>
+            <Text style={[styles.avatarLargeText, { color: sportColor }, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>{initials}</Text>
           </View>
           <View style={styles.heroInfo}>
             <Text style={[styles.heroName, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>
@@ -258,21 +240,21 @@ export default function BoardDetailScreen() {
             </Text>
             <View style={styles.badgeRow}>
               {post.sport ? (
-                <View style={styles.badgeRow2}>
-                  <SportIcon sport={post.sport} size={12} color="#fff" />
-                  <Text style={styles.badgeText}>{post.sport}</Text>
+                <View style={[styles.badgeRow2, { backgroundColor: `${sportColor}18` }]}>
+                  <SportIcon sport={post.sport} size={12} color={sportColor} />
+                  <Text style={[styles.badgeText, { color: sportColor }]}>{post.sport}</Text>
                 </View>
               ) : null}
               {post.division ? (
-                <View style={styles.badgeRow2}>
-                  <PersonIcon size={12} color="#fff" />
-                  <Text style={styles.badgeText}>{post.division}</Text>
+                <View style={[styles.badgeRow2, { backgroundColor: `${sportColor}18` }]}>
+                  <PersonIcon size={12} color={sportColor} />
+                  <Text style={[styles.badgeText, { color: sportColor }]}>{post.division}</Text>
                 </View>
               ) : null}
               {post.forTournament ? (
-                <View style={styles.badgeRow2}>
-                  <TrophyIcon size={12} color="#fff" />
-                  <Text style={styles.badgeText}>{post.forTournament}</Text>
+                <View style={[styles.badgeRow2, { backgroundColor: `${sportColor}18` }]}>
+                  <TrophyIcon size={12} color={sportColor} />
+                  <Text style={[styles.badgeText, { color: sportColor }]}>{post.forTournament}</Text>
                 </View>
               ) : null}
             </View>
@@ -455,22 +437,24 @@ export default function BoardDetailScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f5ede0' },
   loadingContainer: { justifyContent: 'center', alignItems: 'center' },
-  headerBlock: { paddingTop: 60, paddingBottom: 24, paddingHorizontal: 0 },
-  topRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, paddingHorizontal: 20 },
+
+  // ── New plain beige header ──
+  header: { paddingTop: 60, paddingBottom: 20, paddingHorizontal: 20, backgroundColor: '#f5ede0' },
+  topRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
   back: {},
-  backText: { fontSize: 16, color: 'rgba(255,255,255,0.9)', fontWeight: '600' },
-  reportBtn: { backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 20, paddingHorizontal: 14, paddingVertical: 6, borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' },
-  reportBtnText: { color: 'rgba(255,255,255,0.9)', fontSize: 13, fontWeight: '600' },
-  heroInner: { flexDirection: 'row', alignItems: 'center', gap: 16, paddingHorizontal: 20 },
-  avatarLarge: { width: 72, height: 72, borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.2)', borderWidth: 2, borderColor: 'rgba(255,255,255,0.4)', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  avatarLargeText: { color: '#fff', fontSize: 24, fontWeight: '900' },
+  backText: { fontSize: 16, color: '#008080', fontWeight: '600' },
+  reportBtn: { backgroundColor: 'rgba(0,0,0,0.06)', borderRadius: 20, paddingHorizontal: 14, paddingVertical: 6, borderWidth: 1, borderColor: 'rgba(0,0,0,0.08)' },
+  reportBtnText: { color: '#555', fontSize: 13, fontWeight: '600' },
+  heroInner: { flexDirection: 'row', alignItems: 'center', gap: 16 },
+  avatarLarge: { width: 64, height: 64, borderRadius: 16, borderWidth: 2, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  avatarLargeText: { fontSize: 22, fontWeight: '900' },
   heroInfo: { flex: 1 },
-  heroName: { color: '#fff', fontSize: 22, fontWeight: '900', letterSpacing: 1, marginBottom: 8 },
+  heroName: { color: '#003333', fontSize: 22, fontWeight: '900', letterSpacing: 1, marginBottom: 8 },
   badgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  badgeRow2: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4 },
-  badge: { backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4 },
-  badgeText: { color: '#fff', fontSize: 10, fontWeight: '600' },
-  scroll: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 48 },
+  badgeRow2: { flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4 },
+  badgeText: { fontSize: 10, fontWeight: '600' },
+
+  scroll: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 48 },
   section: { backgroundColor: '#fff', borderRadius: 16, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: '#e8e8e8', shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 4, elevation: 1 },
   sectionLabel: { fontSize: 10, fontWeight: '700', color: '#a0b8b8', letterSpacing: 2, marginBottom: 8 },
   descriptionText: { fontSize: 14, color: '#555', lineHeight: 22 },
@@ -509,4 +493,8 @@ const styles = StyleSheet.create({
   reportReasonText: { fontSize: 15, color: '#003333', letterSpacing: 0.5 },
   modalOkBtn: { width: '100%', backgroundColor: '#008080', borderRadius: 14, paddingVertical: 14, alignItems: 'center' },
   modalOkText: { fontSize: 15, color: '#fff', letterSpacing: 1 },
+
+  // unused legacy keys kept so nothing else breaks
+  badge: { backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4 },
+  headerBlock: { paddingTop: 60, paddingBottom: 24, paddingHorizontal: 0 },
 });

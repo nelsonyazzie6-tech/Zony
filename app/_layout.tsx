@@ -97,7 +97,7 @@ export default Sentry.wrap(function RootLayout() {
   const [splashDone, setSplashDone] = useState(false);
 
   useEffect(() => {
-    const t = setTimeout(() => setForceShow(false), 1200);
+    const t = setTimeout(() => setForceShow(false), 400);
     return () => clearTimeout(t);
   }, []);
 
@@ -113,6 +113,8 @@ export default Sentry.wrap(function RootLayout() {
   useEffect(() => {
     if (!ready) return;
     const inAuth = segments[0] === 'login';
+    const inOnboarding = segments[0] === 'onboarding';
+    if (inOnboarding) return; // never redirect away from onboarding
     if (!user && !inAuth) {
       router.replace('/login');
     } else if (user && inAuth) {

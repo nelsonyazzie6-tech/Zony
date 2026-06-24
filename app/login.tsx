@@ -190,8 +190,8 @@ export default function LoginScreen() {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-        <View style={{ flex: 1 }}>
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+  <View style={{ flex: 1 }}>
           <View style={styles.top}>
             <Image source={require('../assets/images/icon.png')} style={styles.logoBox} resizeMode="cover" />
             <Text style={[styles.appName, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>ZONY</Text>
@@ -298,7 +298,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F5F0E8', justifyContent: 'center', paddingVertical: 60, paddingHorizontal: 32 },
   top: { alignItems: 'center', marginBottom: 28 },
   logoBox: { width: 96, height: 96, borderRadius: 24, shadowColor: '#8B1A1A', shadowOpacity: 0.4, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 8, marginBottom: 16, overflow: 'hidden' },
-  appName: { fontSize: 48, fontWeight: '900', color: '#111', letterSpacing: 4, marginBottom: 6 },
+  appName: { fontSize: 48, fontWeight: '900', color: '#003333', letterSpacing: 4, marginBottom: 6 },
   slogan: { fontSize: 14, color: '#999' },
   form: { width: '100%', gap: 8 },
   nameRow: { flexDirection: 'row', gap: 10 },
