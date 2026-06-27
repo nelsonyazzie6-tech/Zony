@@ -97,7 +97,7 @@ export default Sentry.wrap(function RootLayout() {
   const [splashDone, setSplashDone] = useState(false);
 
   useEffect(() => {
-    const t = setTimeout(() => setForceShow(false), 400);
+    const t = setTimeout(() => setForceShow(false), 1000);
     return () => clearTimeout(t);
   }, []);
 

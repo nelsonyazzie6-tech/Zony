@@ -3,7 +3,7 @@ import { useRouter } from 'expo-router';
 import { collection, deleteDoc, doc, onSnapshot, query, updateDoc, where } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, Image, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import Svg, { Circle, Line, Path, Rect } from 'react-native-svg';
+import Svg, { Circle, Line, Path, Polygon, Rect } from 'react-native-svg';
 import { auth, db } from '../../firebaseConfig';
 
 const sportOptions = [
@@ -145,6 +145,7 @@ export default function HomeScreen() {
   const [hasUnreadMessages, setHasUnreadMessages] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [notifications, setNotifications] = useState([]);
+  const [headerHeight, setHeaderHeight] = useState(120);
   const [canceledNotiModal, setCanceledNotiModal] = useState<{ visible: boolean; tournamentName: string; organizerName: string; organizerPhone: string }>({
     visible: false, tournamentName: '', organizerName: '', organizerPhone: '',
   });
@@ -245,15 +246,35 @@ export default function HomeScreen() {
   return (
     <View style={styles.container}>
 
-      {/* Plain beige header — no color block */}
-      <View style={styles.headerBlock}>
+      {/* ── Teal header with polygon background ── */}
+      <View
+        style={styles.headerBlock}
+        onLayout={e => setHeaderHeight(e.nativeEvent.layout.height)}
+      >
+        <Svg style={StyleSheet.absoluteFill} width="125%" height={headerHeight} viewBox="0 0 390 130" preserveAspectRatio="xMidYMid slice">
+          <Polygon points="0,0 80,30 40,80" fill="white" opacity="0.04" />
+          <Polygon points="80,30 160,10 120,70" fill="white" opacity="0.07" />
+          <Polygon points="40,80 120,70 80,130" fill="white" opacity="0.05" />
+          <Polygon points="160,10 260,50 180,90" fill="white" opacity="0.06" />
+          <Polygon points="120,70 180,90 100,130" fill="white" opacity="0.08" />
+          <Polygon points="260,50 330,20 310,80" fill="white" opacity="0.05" />
+          <Polygon points="180,90 310,80 240,130" fill="white" opacity="0.07" />
+          <Polygon points="330,20 450,0 450,60" fill="white" opacity="0.04" />
+          <Polygon points="310,80 450,60 450,130" fill="white" opacity="0.06" />
+          <Polygon points="0,60 40,80 0,130" fill="white" opacity="0.05" />
+          <Polygon points="0,0 40,0 80,30" fill="white" opacity="0.08" />
+          <Polygon points="160,10 260,0 260,50" fill="white" opacity="0.04" />
+          <Polygon points="260,0 330,20 450,0" fill="white" opacity="0.06" />
+          <Polygon points="240,130 310,80 450,130" fill="white" opacity="0.05" />
+          <Polygon points="80,130 180,90 240,130" fill="white" opacity="0.04" />
+        </Svg>
         <View style={styles.headerRow}>
           <TouchableOpacity style={styles.bellBtn} onPress={() => setShowNotifications(true)}>
-            <BellIcon color="#008080" hasNew={hasNewNotifications} />
+            <BellIcon color="#f5ede0" hasNew={hasNewNotifications} />
           </TouchableOpacity>
           <Text style={[styles.header, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>ZONY</Text>
           <TouchableOpacity style={styles.msgBtn} onPress={() => router.push('/messages')}>
-            <MessageIcon color="#008080" hasNew={hasUnreadMessages} />
+            <MessageIcon color="#f5ede0" hasNew={hasUnreadMessages} />
           </TouchableOpacity>
         </View>
         <Text style={[styles.sub, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>Tournaments near you</Text>
@@ -511,13 +532,13 @@ export default function HomeScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f5ede0' },
-  headerBlock: { paddingTop: 60, paddingBottom: 12, paddingHorizontal: 16 },
+  headerBlock: { backgroundColor: '#008080', paddingTop: 60, paddingBottom: 12, paddingHorizontal: 16 },
   headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 },
-  header: { fontSize: 42, fontWeight: '900', color: '#003333', textAlign: 'center', letterSpacing: 6 },
+  header: { fontSize: 42, fontWeight: '900', color: '#f5ede0', textAlign: 'center', letterSpacing: 6 },
   bellBtn: { padding: 4 },
   msgBtn: { padding: 4 },
   bellDot: { position: 'absolute', top: 0, right: 0, width: 10, height: 10, borderRadius: 5, backgroundColor: '#FF4444', borderWidth: 1.5, borderColor: '#fff' },
-  sub: { fontSize: 14, color: '#a0b8b8', textAlign: 'center', letterSpacing: 2 },
+  sub: { fontSize: 14, color: 'rgba(245,237,224,0.75)', textAlign: 'center', letterSpacing: 2 },
   searchRow: { flexDirection: 'row', marginHorizontal: 20, gap: 8, marginBottom: 10, marginTop: 14 },
   search: { flex: 1, backgroundColor: '#fff', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 10, fontSize: 15, color: '#003333', borderWidth: 1, borderColor: '#e0d8c8' },
   stateBtn: { backgroundColor: '#fff', borderRadius: 12, paddingHorizontal: 14, justifyContent: 'center', alignItems: 'center', minWidth: 44, borderWidth: 1, borderColor: '#e0d8c8' },

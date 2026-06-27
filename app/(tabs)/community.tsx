@@ -3,7 +3,7 @@ import { useRouter } from 'expo-router';
 import { collection, doc, getDoc, onSnapshot, orderBy, query } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, Image, Keyboard, StyleSheet, Text, TextInput, TouchableOpacity, TouchableWithoutFeedback, useWindowDimensions, View } from 'react-native';
-import Svg, { Path } from 'react-native-svg';
+import Svg, { Path, Polygon } from 'react-native-svg';
 import { auth, db } from '../../firebaseConfig';
 
 function SadFace() {
@@ -73,6 +73,7 @@ export default function CommunityScreen() {
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [myPhotoURL, setMyPhotoURL] = useState<string | null>(null);
+  const [headerHeight, setHeaderHeight] = useState(120);
   const router = useRouter();
   const user = auth.currentUser;
   const initials = user?.email?.slice(0, 2).toUpperCase() || 'ME';
@@ -110,10 +111,30 @@ export default function CommunityScreen() {
     <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
       <View style={styles.container}>
 
-        {/* ── Plain beige header ── */}
-        <View style={styles.header}>
+        {/* ── Teal header with polygon background ── */}
+        <View
+          style={styles.headerBlock}
+          onLayout={e => setHeaderHeight(e.nativeEvent.layout.height)}
+        >
+          <Svg style={StyleSheet.absoluteFill} width="125%" height={headerHeight} viewBox="0 0 390 130" preserveAspectRatio="xMidYMid slice">
+            <Polygon points="0,0 80,30 40,80" fill="white" opacity="0.04" />
+            <Polygon points="80,30 160,10 120,70" fill="white" opacity="0.07" />
+            <Polygon points="40,80 120,70 80,130" fill="white" opacity="0.05" />
+            <Polygon points="160,10 260,50 180,90" fill="white" opacity="0.06" />
+            <Polygon points="120,70 180,90 100,130" fill="white" opacity="0.08" />
+            <Polygon points="260,50 330,20 310,80" fill="white" opacity="0.05" />
+            <Polygon points="180,90 310,80 240,130" fill="white" opacity="0.07" />
+            <Polygon points="330,20 450,0 450,60" fill="white" opacity="0.04" />
+            <Polygon points="310,80 450,60 450,130" fill="white" opacity="0.06" />
+            <Polygon points="0,60 40,80 0,130" fill="white" opacity="0.05" />
+            <Polygon points="0,0 40,0 80,30" fill="white" opacity="0.08" />
+            <Polygon points="160,10 260,0 260,50" fill="white" opacity="0.04" />
+            <Polygon points="260,0 330,20 450,0" fill="white" opacity="0.06" />
+            <Polygon points="240,130 310,80 450,130" fill="white" opacity="0.05" />
+            <Polygon points="80,130 180,90 240,130" fill="white" opacity="0.04" />
+          </Svg>
           <Text style={[styles.headerTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>COMMUNITY</Text>
-          <Text style={styles.headerSub}>Connect beyond the game</Text>
+          <Text style={[styles.headerSub, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>Connect beyond the game</Text>
         </View>
 
         <TouchableOpacity style={styles.composer} onPress={() => router.push('/new-post')} activeOpacity={0.8}>
@@ -237,32 +258,29 @@ export default function CommunityScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F5F0E8' },
-
-  // ── Plain beige header ──
-  header: { paddingTop: 60, paddingBottom: 16, paddingHorizontal: 20, backgroundColor: '#F5F0E8' },
-  headerTitle: { fontSize: 28, fontWeight: '900', color: '#003333', letterSpacing: 3, textAlign: 'center' },
-  headerSub: { fontSize: 14, color: '#a0b8b8', marginTop: 2, textAlign: 'center' },
-
+  container: { flex: 1, backgroundColor: '#f5ede0' },
+  headerBlock: { backgroundColor: '#008080', paddingTop: 60, paddingBottom: 25, paddingHorizontal: 16, alignItems: 'center' },
+  headerTitle: { fontSize: 32, fontWeight: '900', color: '#f5ede0', letterSpacing: 6, textAlign: 'center' },
+  headerSub: { fontSize: 14, color: 'rgba(245,237,224,0.75)', marginTop: 4, textAlign: 'center', letterSpacing: 2 },
   composer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#f0f0f0', paddingHorizontal: 16, paddingVertical: 12, gap: 10 },
   composerAvatar: { width: 38, height: 38, borderRadius: 10, backgroundColor: '#008080', alignItems: 'center', justifyContent: 'center' },
   composerAvatarImg: { width: 38, height: 38, borderRadius: 10 },
   composerAvatarText: { color: '#fff', fontSize: 13, fontWeight: 'bold' },
-  composerInput: { flex: 1, backgroundColor: '#F5F0E8', borderRadius: 20, paddingHorizontal: 14, paddingVertical: 8 },
+  composerInput: { flex: 1, backgroundColor: '#f5ede0', borderRadius: 20, paddingHorizontal: 14, paddingVertical: 8 },
   composerPlaceholder: { fontSize: 13, color: '#aaa' },
   searchRow: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 4 },
-  search: { backgroundColor: '#fff', borderRadius: 14, paddingHorizontal: 16, paddingVertical: 10, fontSize: 15, color: '#003333', borderWidth: 1, borderColor: '#e8e8e8', shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 4, elevation: 1 },
+  search: { backgroundColor: '#fff', borderRadius: 14, paddingHorizontal: 16, paddingVertical: 10, fontSize: 15, color: '#003333', borderWidth: 1, borderColor: '#e0d8c8', shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 4, elevation: 1 },
   filterRow: { paddingHorizontal: 16, paddingTop: 6, paddingBottom: 4, zIndex: 999 },
   dropdownWrapper: { zIndex: 999 },
-  dropdownSelect: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#fff', borderRadius: 14, paddingHorizontal: 12, paddingVertical: 10, borderWidth: 1, borderColor: '#e8e8e8', shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 4, elevation: 1 },
+  dropdownSelect: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#fff', borderRadius: 14, paddingHorizontal: 12, paddingVertical: 10, borderWidth: 1, borderColor: '#e0d8c8', shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 4, elevation: 1 },
   dropdownSelectText: { fontSize: 13, color: '#555', fontWeight: '500' },
-  inlineMenu: { position: 'absolute', top: 44, left: 0, right: 0, backgroundColor: '#fff', borderRadius: 14, borderWidth: 1, borderColor: '#e8e8e8', shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 8, elevation: 10, zIndex: 1000 },
+  inlineMenu: { position: 'absolute', top: 44, left: 0, right: 0, backgroundColor: '#fff', borderRadius: 14, borderWidth: 1, borderColor: '#e0d8c8', shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 8, elevation: 10, zIndex: 1000 },
   dropdownMenuItem: { paddingVertical: 12, paddingHorizontal: 16 },
   dropdownMenuItemActive: { backgroundColor: '#f0fafa' },
   dropdownMenuText: { fontSize: 13, color: '#333' },
   dropdownMenuTextActive: { color: '#008080', fontWeight: '700' },
   list: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 80 },
-  card: { backgroundColor: '#fff', borderRadius: 16, marginBottom: 12, padding: 14, borderWidth: 1, borderColor: '#e8e8e8', shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 4, elevation: 1 },
+  card: { backgroundColor: '#fff', borderRadius: 16, marginBottom: 12, padding: 14, borderWidth: 1, borderColor: '#e0d8c8', shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 4, elevation: 1 },
   cardTop: { flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 8 },
   avatar: { width: 38, height: 38, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   avatarImg: { width: 38, height: 38, borderRadius: 10 },
@@ -282,7 +300,4 @@ const styles = StyleSheet.create({
   emptyContainer: { alignItems: 'center', marginTop: 60, gap: 10 },
   emptyTitle: { fontSize: 18, fontWeight: 'bold', color: '#a0b8b8', marginTop: 8 },
   emptySub: { fontSize: 14, color: '#a0b8b8', textAlign: 'center', paddingHorizontal: 40 },
-
-  // legacy keys kept so nothing else breaks
-  headerBlock: { backgroundColor: '#008080', paddingTop: 60, paddingBottom: 16, paddingHorizontal: 0 },
 });

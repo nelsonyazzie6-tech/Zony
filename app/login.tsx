@@ -191,7 +191,7 @@ export default function LoginScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
-        <View style={{ flex: 1 }}>
+ <View style={{ flex: 1, justifyContent: 'center', paddingBottom: 40 }}>
           <View style={styles.top}>
             <Image source={require('../assets/images/icon.png')} style={styles.logoBox} resizeMode="cover" />
             <Text style={[styles.appName, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>ZONY</Text>
