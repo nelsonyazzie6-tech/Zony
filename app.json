@@ -20,7 +20,7 @@
       "backgroundColor": "#8B1A1A"
     },
     "ios": {
-      "supportsTablet": false,
+      "supportsTablet": true,
       "bundleIdentifier": "com.nelzony.zony",
       "buildNumber": "1",
       "googleServicesFile": "./GoogleService-Info.plist",

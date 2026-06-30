@@ -129,9 +129,9 @@ export default function NewPostScreen() {
           <XIcon size={13} color="#888" />
           <Text style={styles.backText}>Cancel</Text>
         </TouchableOpacity>
-        <Text style={[styles.title, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>NEW POST</Text>
+        <Text style={[styles.title, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]} numberOfLines={1}>NEW POST</Text>
         <TouchableOpacity style={styles.postBtn} onPress={handlePost} disabled={isSubmitting}>
-          <Text style={[styles.postBtnText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>
+          <Text style={[styles.postBtnText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]} numberOfLines={1}>
             {uploadingPhoto ? 'Uploading...' : loading ? 'Posting...' : 'POST'}
           </Text>
         </TouchableOpacity>
@@ -210,11 +210,11 @@ export default function NewPostScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f5ede0', paddingTop: 60 },
-  topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, marginBottom: 20 },
-  cancelRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  topRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, marginBottom: 20 },
+  cancelRow: { flexDirection: 'row', alignItems: 'center', gap: 6, minWidth: 70 },
   backText: { fontSize: 15, color: '#888', fontWeight: '500' },
-  title: { fontSize: 22, color: '#003333', letterSpacing: 2 },
-  postBtn: { backgroundColor: '#008080', borderRadius: 20, paddingHorizontal: 18, paddingVertical: 8 },
+  title: { fontSize: 22, color: '#003333', letterSpacing: 2, flex: 1, textAlign: 'center' },
+  postBtn: { backgroundColor: '#008080', borderRadius: 20, paddingHorizontal: 18, paddingVertical: 8, minWidth: 90, alignItems: 'center' },
   postBtnText: { color: '#fff', fontSize: 15, letterSpacing: 1 },
   form: { paddingHorizontal: 20, paddingBottom: 48 },
   label: { fontSize: 13, fontWeight: '700', color: '#003333', marginBottom: 6, marginTop: 14 },

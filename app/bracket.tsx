@@ -405,7 +405,7 @@ export default function BracketScreen() {
         </View>
         <View style={styles.organizerBadgeWrap}>
           {isOwner && (
-            <Text style={styles.organizerBadge}>Organizer</Text>
+            <Text style={styles.organizerBadge} numberOfLines={1}>Organizer</Text>
           )}
         </View>
       </View>
@@ -669,15 +669,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20, paddingTop: 60, paddingBottom: 16, backgroundColor: '#f5ede0',
     borderBottomWidth: 1, borderBottomColor: '#e0d8c8',
   },
-  backBtn: { width: 80, padding: 4 },
+  backBtn: { width: 96, padding: 4 },
   backText: { color: '#008080', fontSize: 16, fontWeight: '600' },
   headerCenter: { flex: 1, alignItems: 'center' },
   headerTitle: { fontSize: 22, color: '#003333', letterSpacing: 1.5 },
   headerSub: { fontSize: 12, color: '#5a7a7a', marginTop: 2 },
-  organizerBadgeWrap: { width: 80, alignItems: 'flex-end', justifyContent: 'center' },
+  organizerBadgeWrap: { width: 96, alignItems: 'flex-end', justifyContent: 'center' },
   organizerBadge: {
     fontSize: 11, color: '#B8860B', backgroundColor: '#fffbeb',
-    paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, overflow: 'hidden',
+    paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8,
     textAlign: 'center', borderWidth: 1, borderColor: '#fde68a',
   },
   divisionTabsScroll: { backgroundColor: '#f5ede0', maxHeight: 48, borderBottomWidth: 1, borderBottomColor: '#e0d8c8' },

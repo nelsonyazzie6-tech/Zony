@@ -1,10 +1,8 @@
 import { Rajdhani_700Bold, useFonts } from '@expo-google-fonts/rajdhani';
 import { useRouter } from 'expo-router';
 import { useRef, useState } from 'react';
-import { Dimensions, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, useWindowDimensions, View } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
-
-const { width } = Dimensions.get('window');
 
 type IconProps = { size?: number; color?: string };
 
@@ -89,6 +87,7 @@ const slides: Slide[] = [
 
 export default function OnboardingScreen() {
   const router = useRouter();
+  const { width } = useWindowDimensions();
   const [fontsLoaded] = useFonts({ Rajdhani_700Bold });
   const [activeIndex, setActiveIndex] = useState(0);
   const scrollRef = useRef<ScrollView>(null);
@@ -124,6 +123,9 @@ export default function OnboardingScreen() {
         showsHorizontalScrollIndicator={false}
         onMomentumScrollEnd={handleScrollEnd}
         scrollEventThrottle={16}
+        // Re-sync scroll position if the window resizes mid-onboarding
+        // (e.g. Split View resize, Stage Manager, rotation)
+        key={width}
       >
         {slides.map((slide) => (
           <View key={slide.key} style={[styles.slide, { width }]}>

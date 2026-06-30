@@ -5,7 +5,7 @@ import { OAuthProvider, createUserWithEmailAndPassword, sendPasswordResetEmail, 
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { useState } from 'react';
 import {
-  Image, Keyboard, KeyboardAvoidingView, Platform, StyleSheet, Text,
+  Image, Keyboard, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text,
   TextInput, TouchableOpacity, TouchableWithoutFeedback, View
 } from 'react-native';
 import Svg, { Circle, Line, Path } from 'react-native-svg';
@@ -191,7 +191,11 @@ export default function LoginScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
- <View style={{ flex: 1, justifyContent: 'center', paddingBottom: 40 }}>
+        <ScrollView
+          contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', paddingBottom: 40 }}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
           <View style={styles.top}>
             <Image source={require('../assets/images/icon.png')} style={styles.logoBox} resizeMode="cover" />
             <Text style={[styles.appName, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>ZONY</Text>
@@ -288,7 +292,7 @@ export default function LoginScreen() {
               </Text>
             </TouchableOpacity>
           </View>
-        </View>
+        </ScrollView>
       </TouchableWithoutFeedback>
     </KeyboardAvoidingView>
   );
