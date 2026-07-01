@@ -103,9 +103,14 @@ export default function BoardDetailScreen() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [showActionsModal, setShowActionsModal] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
   const [reportSubmitting, setReportSubmitting] = useState(false);
   const [showReportConfirm, setShowReportConfirm] = useState(false);
+  const [showBlockModal, setShowBlockModal] = useState(false);
+  const [blockSubmitting, setBlockSubmitting] = useState(false);
+  const [showBlockConfirm, setShowBlockConfirm] = useState(false);
+  const [postHidden, setPostHidden] = useState(false);
   const [errorModal, setErrorModal] = useState<{ visible: boolean; title: string; message: string }>({
     visible: false, title: '', message: '',
   });
@@ -137,10 +142,25 @@ export default function BoardDetailScreen() {
     load();
   }, []);
 
-  if (loading || !post) {
+  if (loading) {
     return (
       <View style={[styles.container, styles.loadingContainer]}>
         <ActivityIndicator size="large" color="#008080" />
+      </View>
+    );
+  }
+
+  // Post was hidden after report/block
+  if (postHidden || !post) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <View style={styles.topRow}>
+            <TouchableOpacity onPress={() => router.back()} style={styles.back}>
+              <Text style={styles.backText}>‹ Sports Board</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
       </View>
     );
   }
@@ -204,6 +224,8 @@ export default function BoardDetailScreen() {
         status: 'pending',
       });
       setShowReportModal(false);
+      // Immediately hide this post from the reporter's view
+      setPostHidden(true);
       setShowReportConfirm(true);
     } catch (_) {
       setErrorModal({
@@ -215,17 +237,51 @@ export default function BoardDetailScreen() {
     setReportSubmitting(false);
   };
 
+  const handleBlock = async () => {
+    if (!user || !post?.postedBy) return;
+    setBlockSubmitting(true);
+    try {
+      // Write block to Firestore
+      await addDoc(collection(db, 'blocks'), {
+        blockedBy: user.uid,
+        blockedUserId: post.postedBy,
+        blockedUserName: poster?.username || 'Unknown',
+        createdAt: serverTimestamp(),
+      });
+      // Alert developer via adminAlerts collection
+      await addDoc(collection(db, 'adminAlerts'), {
+        type: 'user_blocked',
+        blockedBy: user.uid,
+        blockedUserId: post.postedBy,
+        blockedUserName: poster?.username || 'Unknown',
+        postId: id as string,
+        postType: 'board',
+        createdAt: serverTimestamp(),
+      });
+      setShowBlockModal(false);
+      // Immediately hide this post from view
+      setPostHidden(true);
+      setShowBlockConfirm(true);
+    } catch (_) {
+      setErrorModal({
+        visible: true,
+        title: 'SOMETHING WENT WRONG',
+        message: "We couldn't block this user. Please check your connection and try again.",
+      });
+    }
+    setBlockSubmitting(false);
+  };
+
   return (
     <View style={styles.container}>
-      {/* ── Plain beige header (matches HubScreen style) ── */}
       <View style={styles.header}>
         <View style={styles.topRow}>
           <TouchableOpacity onPress={() => router.back()} style={styles.back}>
             <Text style={styles.backText}>‹ Sports Board</Text>
           </TouchableOpacity>
           {!isOwner && (
-            <TouchableOpacity onPress={() => setShowReportModal(true)} style={styles.reportBtn}>
-              <Text style={styles.reportBtnText}>Report</Text>
+            <TouchableOpacity onPress={() => setShowActionsModal(true)} style={styles.reportBtn}>
+              <Text style={styles.reportBtnText}>Report / Block</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -367,6 +423,7 @@ export default function BoardDetailScreen() {
         <View style={{ height: 20 }} />
       </ScrollView>
 
+      {/* Delete modal */}
       <Modal visible={showDeleteModal} animationType="fade" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalBox}>
@@ -384,6 +441,33 @@ export default function BoardDetailScreen() {
         </View>
       </Modal>
 
+      {/* Actions modal — Report or Block */}
+      <Modal visible={showActionsModal} animationType="fade" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalBox}>
+            <Text style={[styles.modalTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>WHAT WOULD YOU LIKE TO DO?</Text>
+            <TouchableOpacity
+              style={styles.reportReasonBtn}
+              onPress={() => { setShowActionsModal(false); setShowReportModal(true); }}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.reportReasonText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>Report This Post</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.reportReasonBtn, { borderColor: '#fca5a5' }]}
+              onPress={() => { setShowActionsModal(false); setShowBlockModal(true); }}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.reportReasonText, { color: '#cc4444' }, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>Block This User</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.modalCancelBtnFull} onPress={() => setShowActionsModal(false)}>
+              <Text style={[styles.modalCancelText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>CANCEL</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Report modal */}
       <Modal visible={showReportModal} animationType="fade" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalBox}>
@@ -407,18 +491,53 @@ export default function BoardDetailScreen() {
         </View>
       </Modal>
 
+      {/* Report confirm */}
       <Modal visible={showReportConfirm} animationType="fade" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalBox}>
             <Text style={[styles.modalTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>REPORT SUBMITTED</Text>
-            <Text style={styles.modalMsg}>Thanks for letting us know. Our team will review this post.</Text>
-            <TouchableOpacity style={styles.modalOkBtn} onPress={() => setShowReportConfirm(false)}>
+            <Text style={styles.modalMsg}>Thanks for letting us know. Our team will review this post within 24 hours.</Text>
+            <TouchableOpacity style={styles.modalOkBtn} onPress={() => { setShowReportConfirm(false); router.back(); }}>
               <Text style={[styles.modalOkText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>OK</Text>
             </TouchableOpacity>
           </View>
         </View>
       </Modal>
 
+      {/* Block modal */}
+      <Modal visible={showBlockModal} animationType="fade" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalBox}>
+            <Text style={[styles.modalTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>BLOCK USER</Text>
+            <Text style={styles.modalMsg}>
+              Blocking this user will hide their posts from your feed immediately. You can unblock them later from your profile settings.
+            </Text>
+            <View style={styles.modalBtns}>
+              <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setShowBlockModal(false)} disabled={blockSubmitting} activeOpacity={0.85}>
+                <Text style={[styles.modalCancelText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>CANCEL</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.modalBlockBtn} onPress={handleBlock} disabled={blockSubmitting} activeOpacity={0.85}>
+                <Text style={[styles.modalDeleteText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>{blockSubmitting ? 'BLOCKING...' : 'BLOCK'}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Block confirm */}
+      <Modal visible={showBlockConfirm} animationType="fade" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalBox}>
+            <Text style={[styles.modalTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>USER BLOCKED</Text>
+            <Text style={styles.modalMsg}>This user's content has been removed from your feed.</Text>
+            <TouchableOpacity style={styles.modalOkBtn} onPress={() => { setShowBlockConfirm(false); router.back(); }}>
+              <Text style={[styles.modalOkText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>OK</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Error modal */}
       <Modal visible={errorModal.visible} animationType="fade" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalBox}>
@@ -437,8 +556,6 @@ export default function BoardDetailScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f5ede0' },
   loadingContainer: { justifyContent: 'center', alignItems: 'center' },
-
-  // ── New plain beige header ──
   header: { paddingTop: 60, paddingBottom: 20, paddingHorizontal: 20, backgroundColor: '#f5ede0' },
   topRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
   back: {},
@@ -453,7 +570,6 @@ const styles = StyleSheet.create({
   badgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   badgeRow2: { flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4 },
   badgeText: { fontSize: 10, fontWeight: '600' },
-
   scroll: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 48 },
   section: { backgroundColor: '#fff', borderRadius: 16, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: '#e8e8e8', shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 4, elevation: 1 },
   sectionLabel: { fontSize: 10, fontWeight: '700', color: '#a0b8b8', letterSpacing: 2, marginBottom: 8 },
@@ -488,13 +604,12 @@ const styles = StyleSheet.create({
   modalCancelBtnFull: { width: '100%', backgroundColor: '#fff', borderRadius: 14, paddingVertical: 14, alignItems: 'center', borderWidth: 1, borderColor: '#e0d8c8', marginTop: 4 },
   modalCancelText: { fontSize: 16, color: '#555', letterSpacing: 1 },
   modalDeleteBtn: { flex: 1, backgroundColor: '#1a1a2e', borderRadius: 14, paddingVertical: 14, alignItems: 'center' },
+  modalBlockBtn: { flex: 1, backgroundColor: '#cc4444', borderRadius: 14, paddingVertical: 14, alignItems: 'center' },
   modalDeleteText: { color: '#fff', fontSize: 16, letterSpacing: 1 },
   reportReasonBtn: { width: '100%', backgroundColor: '#fff', borderRadius: 14, paddingVertical: 14, alignItems: 'center', borderWidth: 1, borderColor: '#e0d8c8', marginBottom: 8 },
   reportReasonText: { fontSize: 15, color: '#003333', letterSpacing: 0.5 },
   modalOkBtn: { width: '100%', backgroundColor: '#008080', borderRadius: 14, paddingVertical: 14, alignItems: 'center' },
   modalOkText: { fontSize: 15, color: '#fff', letterSpacing: 1 },
-
-  // unused legacy keys kept so nothing else breaks
   badge: { backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4 },
   headerBlock: { paddingTop: 60, paddingBottom: 24, paddingHorizontal: 0 },
 });

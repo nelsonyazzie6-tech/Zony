@@ -67,6 +67,10 @@ export default function CommunityPostScreen() {
   const [showReportModal, setShowReportModal] = useState(false);
   const [reportSubmitting, setReportSubmitting] = useState(false);
   const [showReportConfirm, setShowReportConfirm] = useState(false);
+  const [showBlockModal, setShowBlockModal] = useState(false);
+  const [blockSubmitting, setBlockSubmitting] = useState(false);
+  const [showBlockConfirm, setShowBlockConfirm] = useState(false);
+  const [showActionsModal, setShowActionsModal] = useState(false);
   const [errorModal, setErrorModal] = useState<{ visible: boolean; title: string; message: string }>({
     visible: false, title: '', message: '',
   });
@@ -211,6 +215,8 @@ export default function CommunityPostScreen() {
         status: 'pending',
       });
       setShowReportModal(false);
+      // Immediately hide this post from the reporter's view
+      setPost(null);
       setShowReportConfirm(true);
     } catch (_) {
       setErrorModal({
@@ -222,10 +228,46 @@ export default function CommunityPostScreen() {
     setReportSubmitting(false);
   };
 
-  if (!post) return null;
-  const isSale = post.type === 'Sale';
-  const isOwner = user?.uid === post.authorId;
-  const ago = post.createdAt?.seconds ? timeAgo(Math.floor(Date.now() / 1000) - post.createdAt.seconds) : '';
+  const handleBlock = async () => {
+    if (!user || !post?.authorId) return;
+    setBlockSubmitting(true);
+    try {
+      // Write block to Firestore
+      await addDoc(collection(db, 'blocks'), {
+        blockedBy: user.uid,
+        blockedUserId: post.authorId,
+        blockedUserName: post.authorName || 'Unknown',
+        createdAt: serverTimestamp(),
+      });
+      // Alert developer via adminAlerts collection
+      await addDoc(collection(db, 'adminAlerts'), {
+        type: 'user_blocked',
+        blockedBy: user.uid,
+        blockedUserId: post.authorId,
+        blockedUserName: post.authorName || 'Unknown',
+        postId: id as string,
+        postType: 'community',
+        createdAt: serverTimestamp(),
+      });
+      setShowBlockModal(false);
+      // Immediately remove this post from view
+      setPost(null);
+      setShowBlockConfirm(true);
+    } catch (_) {
+      setErrorModal({
+        visible: true,
+        title: 'SOMETHING WENT WRONG',
+        message: "We couldn't block this user. Please check your connection and try again.",
+      });
+    }
+    setBlockSubmitting(false);
+  };
+
+  if (!post && !showReportConfirm && !showBlockConfirm) return null;
+
+  const isSale = post?.type === 'Sale';
+  const isOwner = user?.uid === post?.authorId;
+  const ago = post?.createdAt?.seconds ? timeAgo(Math.floor(Date.now() / 1000) - post.createdAt.seconds) : '';
   const avatarColor = isSale ? '#7A1E1E' : '#008080';
   const badgeBg = isSale ? 'rgba(122,30,30,0.1)' : 'rgba(0,128,128,0.1)';
   const badgeColor = isSale ? '#7A1E1E' : '#008080';
@@ -233,118 +275,130 @@ export default function CommunityPostScreen() {
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <View style={styles.container}>
-        <View style={styles.topRow}>
-          <TouchableOpacity onPress={() => router.back()}>
-            <Text style={styles.backText}>← Back</Text>
-          </TouchableOpacity>
-          {isOwner ? (
-            <TouchableOpacity onPress={() => setShowDeleteModal(true)} style={styles.deleteBtn}>
-              <Text style={styles.deleteBtnText}>Delete Post</Text>
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity onPress={() => setShowReportModal(true)} style={styles.reportBtn}>
-              <Text style={styles.reportBtnText}>Report</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-
-        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-          <View style={styles.postCard}>
-            <View style={styles.postTop}>
-              <View style={[styles.avatar, { backgroundColor: avatarColor }]}>
-                <Text style={[styles.avatarText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>{post.authorInitials || '??'}</Text>
-              </View>
-              <View style={styles.postMeta}>
-                <Text style={[styles.postAuthor, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>
-                  {post.authorName ? post.authorName.toUpperCase() : 'ANONYMOUS'}
-                </Text>
-                <Text style={styles.postTime}>{ago}</Text>
-              </View>
-              <View style={[styles.typeBadge, { backgroundColor: badgeBg }]}>
-                <Text style={[styles.typeBadgeText, { color: badgeColor }]}>{isSale ? 'For Sale' : 'Question'}</Text>
-              </View>
+        {post ? (
+          <>
+            <View style={styles.topRow}>
+              <TouchableOpacity onPress={() => router.back()}>
+                <Text style={styles.backText}>← Back</Text>
+              </TouchableOpacity>
+              {isOwner ? (
+                <TouchableOpacity onPress={() => setShowDeleteModal(true)} style={styles.deleteBtn}>
+                  <Text style={styles.deleteBtnText}>Delete Post</Text>
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity onPress={() => setShowActionsModal(true)} style={styles.reportBtn}>
+                  <Text style={styles.reportBtnText}>Report / Block</Text>
+                </TouchableOpacity>
+              )}
             </View>
-            {post.title ? <Text style={[styles.postTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>{post.title}</Text> : null}
-            <Text style={styles.postBody}>{post.body}</Text>
-            {post.imageUrl ? (
-              <TouchableOpacity activeOpacity={0.9} onPress={() => setShowImageModal(true)}>
-                <PostImage uri={post.imageUrl} />
-              </TouchableOpacity>
-            ) : null}
-            {isSale && post.price ? <Text style={styles.postPrice}>{post.price}</Text> : null}
-            {isSale && !isOwner && post.authorId ? (
-              <TouchableOpacity style={styles.messageBtn} onPress={handleMessage} activeOpacity={0.85}>
-                <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" style={{ marginRight: 8 }}>
-                  <Path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                </Svg>
-                <Text style={[styles.messageBtnText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>MESSAGE SELLER</Text>
-              </TouchableOpacity>
-            ) : null}
-          </View>
 
-          <Text style={styles.commentsHeader}>{comments.length} {comments.length === 1 ? 'Comment' : 'Comments'}</Text>
-
-          {comments.map((c: any) => {
-            const cAgo = c.createdAt?.seconds ? timeAgo(Math.floor(Date.now() / 1000) - c.createdAt.seconds) : '';
-            return (
-              <View key={c.id} style={styles.commentCard}>
-                <View style={styles.commentTop}>
-                  <View style={styles.commentAvatar}>
-                    <Text style={[styles.commentAvatarText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>{c.authorInitials || '??'}</Text>
+            <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+              <View style={styles.postCard}>
+                <View style={styles.postTop}>
+                  <View style={[styles.avatar, { backgroundColor: avatarColor }]}>
+                    <Text style={[styles.avatarText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>{post.authorInitials || '??'}</Text>
                   </View>
-                  <View style={styles.commentMeta}>
-                    <Text style={[styles.commentAuthor, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>{c.authorName ? c.authorName.toUpperCase() : 'ANONYMOUS'}</Text>
-                    <Text style={styles.commentTime}>{cAgo}</Text>
+                  <View style={styles.postMeta}>
+                    <Text style={[styles.postAuthor, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>
+                      {post.authorName ? post.authorName.toUpperCase() : 'ANONYMOUS'}
+                    </Text>
+                    <Text style={styles.postTime}>{ago}</Text>
+                  </View>
+                  <View style={[styles.typeBadge, { backgroundColor: badgeBg }]}>
+                    <Text style={[styles.typeBadgeText, { color: badgeColor }]}>{isSale ? 'For Sale' : 'Question'}</Text>
                   </View>
                 </View>
-                <Text style={styles.commentBody}>{c.body}</Text>
-                <TouchableOpacity onPress={() => setReplyingTo(replyingTo === c.id ? null : c.id)}>
-                  <Text style={styles.replyBtn}>Reply</Text>
-                </TouchableOpacity>
-                {replyingTo === c.id && (
-                  <View style={styles.replyInput}>
-                    <TextInput
-                      style={styles.replyTextInput}
-                      placeholder="Write a reply..."
-                      placeholderTextColor="#a0b8b8"
-                      value={replyText}
-                      onChangeText={setReplyText}
-                      autoFocus
-                    />
-                    <TouchableOpacity
-                      style={styles.replySendBtn}
-                      onPress={() => handleReply(c.id, c.authorId, c.authorName)}
-                    >
-                      <Text style={styles.replySendText}>Send</Text>
-                    </TouchableOpacity>
-                  </View>
-                )}
+                {post.title ? <Text style={[styles.postTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>{post.title}</Text> : null}
+                <Text style={styles.postBody}>{post.body}</Text>
+                {post.imageUrl ? (
+                  <TouchableOpacity activeOpacity={0.9} onPress={() => setShowImageModal(true)}>
+                    <PostImage uri={post.imageUrl} />
+                  </TouchableOpacity>
+                ) : null}
+                {isSale && post.price ? <Text style={styles.postPrice}>{post.price}</Text> : null}
+                {isSale && !isOwner && post.authorId ? (
+                  <TouchableOpacity style={styles.messageBtn} onPress={handleMessage} activeOpacity={0.85}>
+                    <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" style={{ marginRight: 8 }}>
+                      <Path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                    </Svg>
+                    <Text style={[styles.messageBtnText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>MESSAGE SELLER</Text>
+                  </TouchableOpacity>
+                ) : null}
               </View>
-            );
-          })}
-          <View style={{ height: 20 }} />
-        </ScrollView>
 
-        <View style={styles.commentInputRow}>
-          <TextInput
-            style={styles.commentInput}
-            placeholder="Write a comment..."
-            placeholderTextColor="#a0b8b8"
-            value={commentText}
-            onChangeText={setCommentText}
-          />
-          <TouchableOpacity
-            style={[styles.sendBtn, !commentText.trim() && styles.sendBtnDisabled]}
-            onPress={handleComment}
-            disabled={submitting || !commentText.trim()}
-          >
-            <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
-              <Path d="M22 2L11 13M22 2L15 22l-4-9-9-4 20-7z" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-            </Svg>
-          </TouchableOpacity>
-        </View>
+              <Text style={styles.commentsHeader}>{comments.length} {comments.length === 1 ? 'Comment' : 'Comments'}</Text>
+
+              {comments.map((c: any) => {
+                const cAgo = c.createdAt?.seconds ? timeAgo(Math.floor(Date.now() / 1000) - c.createdAt.seconds) : '';
+                return (
+                  <View key={c.id} style={styles.commentCard}>
+                    <View style={styles.commentTop}>
+                      <View style={styles.commentAvatar}>
+                        <Text style={[styles.commentAvatarText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>{c.authorInitials || '??'}</Text>
+                      </View>
+                      <View style={styles.commentMeta}>
+                        <Text style={[styles.commentAuthor, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>{c.authorName ? c.authorName.toUpperCase() : 'ANONYMOUS'}</Text>
+                        <Text style={styles.commentTime}>{cAgo}</Text>
+                      </View>
+                    </View>
+                    <Text style={styles.commentBody}>{c.body}</Text>
+                    <TouchableOpacity onPress={() => setReplyingTo(replyingTo === c.id ? null : c.id)}>
+                      <Text style={styles.replyBtn}>Reply</Text>
+                    </TouchableOpacity>
+                    {replyingTo === c.id && (
+                      <View style={styles.replyInput}>
+                        <TextInput
+                          style={styles.replyTextInput}
+                          placeholder="Write a reply..."
+                          placeholderTextColor="#a0b8b8"
+                          value={replyText}
+                          onChangeText={setReplyText}
+                          autoFocus
+                        />
+                        <TouchableOpacity
+                          style={styles.replySendBtn}
+                          onPress={() => handleReply(c.id, c.authorId, c.authorName)}
+                        >
+                          <Text style={styles.replySendText}>Send</Text>
+                        </TouchableOpacity>
+                      </View>
+                    )}
+                  </View>
+                );
+              })}
+              <View style={{ height: 20 }} />
+            </ScrollView>
+
+            <View style={styles.commentInputRow}>
+              <TextInput
+                style={styles.commentInput}
+                placeholder="Write a comment..."
+                placeholderTextColor="#a0b8b8"
+                value={commentText}
+                onChangeText={setCommentText}
+              />
+              <TouchableOpacity
+                style={[styles.sendBtn, !commentText.trim() && styles.sendBtnDisabled]}
+                onPress={handleComment}
+                disabled={submitting || !commentText.trim()}
+              >
+                <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
+                  <Path d="M22 2L11 13M22 2L15 22l-4-9-9-4 20-7z" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                </Svg>
+              </TouchableOpacity>
+            </View>
+          </>
+        ) : (
+          // Post was hidden after report/block — show minimal back nav
+          <View style={styles.topRow}>
+            <TouchableOpacity onPress={() => router.back()}>
+              <Text style={styles.backText}>← Back</Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
 
+      {/* Delete modal */}
       <Modal visible={showDeleteModal} animationType="fade" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalBox}>
@@ -362,6 +416,33 @@ export default function CommunityPostScreen() {
         </View>
       </Modal>
 
+      {/* Actions modal — Report or Block */}
+      <Modal visible={showActionsModal} animationType="fade" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalBox}>
+            <Text style={[styles.modalTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>WHAT WOULD YOU LIKE TO DO?</Text>
+            <TouchableOpacity
+              style={styles.reportReasonBtn}
+              onPress={() => { setShowActionsModal(false); setShowReportModal(true); }}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.reportReasonText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>Report This Post</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.reportReasonBtn, { borderColor: '#fca5a5' }]}
+              onPress={() => { setShowActionsModal(false); setShowBlockModal(true); }}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.reportReasonText, { color: '#cc4444' }, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>Block This User</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.modalCancelBtnFull} onPress={() => setShowActionsModal(false)}>
+              <Text style={[styles.modalCancelText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>CANCEL</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Report modal */}
       <Modal visible={showReportModal} animationType="fade" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalBox}>
@@ -385,18 +466,53 @@ export default function CommunityPostScreen() {
         </View>
       </Modal>
 
+      {/* Report confirm */}
       <Modal visible={showReportConfirm} animationType="fade" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalBox}>
             <Text style={[styles.modalTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>REPORT SUBMITTED</Text>
-            <Text style={styles.modalMsg}>Thanks for letting us know. Our team will review this post.</Text>
-            <TouchableOpacity style={styles.modalOkBtn} onPress={() => setShowReportConfirm(false)}>
+            <Text style={styles.modalMsg}>Thanks for letting us know. Our team will review this post within 24 hours.</Text>
+            <TouchableOpacity style={styles.modalOkBtn} onPress={() => { setShowReportConfirm(false); router.back(); }}>
               <Text style={[styles.modalOkText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>OK</Text>
             </TouchableOpacity>
           </View>
         </View>
       </Modal>
 
+      {/* Block modal */}
+      <Modal visible={showBlockModal} animationType="fade" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalBox}>
+            <Text style={[styles.modalTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>BLOCK USER</Text>
+            <Text style={styles.modalMsg}>
+              Blocking this user will hide their posts from your feed immediately. You can unblock them later from your profile settings.
+            </Text>
+            <View style={styles.modalBtns}>
+              <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setShowBlockModal(false)} disabled={blockSubmitting} activeOpacity={0.85}>
+                <Text style={[styles.modalCancelText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>CANCEL</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.modalBlockBtn} onPress={handleBlock} disabled={blockSubmitting} activeOpacity={0.85}>
+                <Text style={[styles.modalDeleteText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>{blockSubmitting ? 'BLOCKING...' : 'BLOCK'}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Block confirm */}
+      <Modal visible={showBlockConfirm} animationType="fade" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalBox}>
+            <Text style={[styles.modalTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>USER BLOCKED</Text>
+            <Text style={styles.modalMsg}>This user's content has been removed from your feed.</Text>
+            <TouchableOpacity style={styles.modalOkBtn} onPress={() => { setShowBlockConfirm(false); router.back(); }}>
+              <Text style={[styles.modalOkText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>OK</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Error modal */}
       <Modal visible={errorModal.visible} animationType="fade" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalBox}>
@@ -409,6 +525,7 @@ export default function CommunityPostScreen() {
         </View>
       </Modal>
 
+      {/* Image modal */}
       <Modal visible={showImageModal} animationType="fade" transparent onRequestClose={() => setShowImageModal(false)}>
         <View style={styles.fullImageOverlay}>
           <TouchableOpacity style={styles.fullImageCloseBtn} onPress={() => setShowImageModal(false)} activeOpacity={0.8}>
@@ -417,7 +534,7 @@ export default function CommunityPostScreen() {
             </Svg>
           </TouchableOpacity>
           <TouchableOpacity style={styles.fullImageBackdrop} activeOpacity={1} onPress={() => setShowImageModal(false)}>
-            {post.imageUrl ? (
+            {post?.imageUrl ? (
               <Image source={{ uri: post.imageUrl }} style={styles.fullImage} resizeMode="contain" />
             ) : null}
           </TouchableOpacity>
@@ -478,6 +595,7 @@ const styles = StyleSheet.create({
   modalCancelBtnFull: { width: '100%', backgroundColor: '#fff', borderRadius: 14, paddingVertical: 14, alignItems: 'center', borderWidth: 1, borderColor: '#e0d8c8', marginTop: 4 },
   modalCancelText: { fontSize: 16, color: '#555', letterSpacing: 1 },
   modalDeleteBtn: { flex: 1, backgroundColor: '#1a1a2e', borderRadius: 14, paddingVertical: 14, alignItems: 'center' },
+  modalBlockBtn: { flex: 1, backgroundColor: '#cc4444', borderRadius: 14, paddingVertical: 14, alignItems: 'center' },
   modalDeleteText: { color: '#fff', fontSize: 16, letterSpacing: 1 },
   reportReasonBtn: { width: '100%', backgroundColor: '#fff', borderRadius: 14, paddingVertical: 14, alignItems: 'center', borderWidth: 1, borderColor: '#e0d8c8', marginBottom: 8 },
   reportReasonText: { fontSize: 15, color: '#003333', letterSpacing: 0.5 },

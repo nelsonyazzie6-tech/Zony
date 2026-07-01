@@ -1,10 +1,10 @@
 import { Rajdhani_700Bold, useFonts } from '@expo-google-fonts/rajdhani';
 import { useRouter } from 'expo-router';
-import { collection, deleteDoc, doc, getDoc, onSnapshot } from 'firebase/firestore';
+import { collection, deleteDoc, doc, getDoc, getDocs, onSnapshot, query, where } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import Svg, { Circle, Path, Polygon } from 'react-native-svg';
-import { db } from '../../firebaseConfig';
+import { auth, db } from '../../firebaseConfig';
 
 function SadFace() {
   return (
@@ -104,9 +104,22 @@ export default function BoardScreen() {
   const [search, setSearch] = useState('');
   const [showSportMenu, setShowSportMenu] = useState(false);
   const [showDivisionMenu, setShowDivisionMenu] = useState(false);
+  const [blockedUserIds, setBlockedUserIds] = useState<Set<string>>(new Set());
   const [headerHeight, setHeaderHeight] = useState(120);
   const router = useRouter();
   const [fontsLoaded] = useFonts({ Rajdhani_700Bold });
+  const user = auth.currentUser;
+
+  // Load blocked user IDs for the current user
+  useEffect(() => {
+    if (!user) return;
+    getDocs(query(collection(db, 'blocks'), where('blockedBy', '==', user.uid)))
+      .then(snap => {
+        const ids = new Set<string>(snap.docs.map(d => d.data().blockedUserId).filter(Boolean));
+        setBlockedUserIds(ids);
+      })
+      .catch(() => {});
+  }, [user?.uid]);
 
   useEffect(() => {
     const unsub = onSnapshot(collection(db, 'board'), async (snapshot) => {
@@ -159,6 +172,8 @@ export default function BoardScreen() {
   }, []);
 
   const filtered = posts
+    // Filter out posts from blocked users
+    .filter((p: any) => !blockedUserIds.has(p.postedBy))
     .filter((p: any) => sportFilter === 'All' || p.sport === sportFilter)
     .filter((p: any) => divisionFilter === 'All' || p.division === divisionFilter)
     .filter((p: any) =>
@@ -175,7 +190,6 @@ export default function BoardScreen() {
   return (
     <View style={styles.container}>
 
-      {/* ── Teal header with polygon background ── */}
       <View
         style={styles.headerBlock}
         onLayout={e => setHeaderHeight(e.nativeEvent.layout.height)}

@@ -1,6 +1,6 @@
 import { Rajdhani_700Bold, useFonts } from '@expo-google-fonts/rajdhani';
 import { useRouter } from 'expo-router';
-import { collection, doc, getDoc, onSnapshot, orderBy, query } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, onSnapshot, orderBy, query, where } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, Image, Keyboard, StyleSheet, Text, TextInput, TouchableOpacity, TouchableWithoutFeedback, useWindowDimensions, View } from 'react-native';
 import Svg, { Path, Polygon } from 'react-native-svg';
@@ -73,10 +73,22 @@ export default function CommunityScreen() {
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [myPhotoURL, setMyPhotoURL] = useState<string | null>(null);
+  const [blockedUserIds, setBlockedUserIds] = useState<Set<string>>(new Set());
   const [headerHeight, setHeaderHeight] = useState(120);
   const router = useRouter();
   const user = auth.currentUser;
   const initials = user?.email?.slice(0, 2).toUpperCase() || 'ME';
+
+  // Load blocked user IDs for the current user
+  useEffect(() => {
+    if (!user) return;
+    getDocs(query(collection(db, 'blocks'), where('blockedBy', '==', user.uid)))
+      .then(snap => {
+        const ids = new Set<string>(snap.docs.map(d => d.data().blockedUserId).filter(Boolean));
+        setBlockedUserIds(ids);
+      })
+      .catch(() => {});
+  }, [user?.uid]);
 
   useEffect(() => {
     const q = query(collection(db, 'community'), orderBy('createdAt', 'desc'));
@@ -99,6 +111,8 @@ export default function CommunityScreen() {
   const filterLabel = filterOptions.find(o => o.value === filter)?.label || 'All';
 
   const filtered = posts
+    // Filter out posts from blocked users
+    .filter((p: any) => !blockedUserIds.has(p.authorId))
     .filter((p: any) => filter === 'All' || p.type === filter)
     .filter((p: any) =>
       search.trim() === '' ||
@@ -111,7 +125,6 @@ export default function CommunityScreen() {
     <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
       <View style={styles.container}>
 
-        {/* ── Teal header with polygon background ── */}
         <View
           style={styles.headerBlock}
           onLayout={e => setHeaderHeight(e.nativeEvent.layout.height)}

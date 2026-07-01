@@ -1,9 +1,9 @@
 import { Rajdhani_700Bold, useFonts } from '@expo-google-fonts/rajdhani';
 import * as AppleAuthentication from 'expo-apple-authentication';
-import { useRouter } from 'expo-router';
-import { OAuthProvider, createUserWithEmailAndPassword, sendPasswordResetEmail, signInWithCredential, signInWithEmailAndPassword } from 'firebase/auth';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { OAuthProvider, sendPasswordResetEmail, signInWithCredential, signInWithEmailAndPassword } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Image, Keyboard, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text,
   TextInput, TouchableOpacity, TouchableWithoutFeedback, View
@@ -62,7 +62,7 @@ function CheckIcon() {
 function getAuthErrorMessage(code: string): string {
   switch (code) {
     case 'auth/invalid-email':
-      return 'That email address doesn\'t look right. Double-check and try again.';
+      return "That email address doesn't look right. Double-check and try again.";
     case 'auth/user-not-found':
     case 'auth/invalid-credential':
       return 'No account found with that email and password.';
@@ -94,6 +94,15 @@ export default function LoginScreen() {
   const router = useRouter();
   const [fontsLoaded] = useFonts({ Rajdhani_700Bold });
 
+  // Handle error passed back from terms.tsx if account creation failed there
+  const params = useLocalSearchParams<{ signupError?: string }>();
+  useEffect(() => {
+    if (params.signupError) {
+      setIsSignUp(true);
+      setErrorMsg(getAuthErrorMessage(params.signupError));
+    }
+  }, [params.signupError]);
+
   const handleSubmit = async () => {
     setErrorMsg('');
     setSuccessMsg('');
@@ -108,16 +117,18 @@ export default function LoginScreen() {
     setLoading(true);
     try {
       if (isSignUp) {
-        const cred = await createUserWithEmailAndPassword(auth, email, password);
-        const fullName = `${firstName.trim()} ${lastName.trim()}`;
-        await setDoc(doc(db, 'users', cred.user.uid), {
-          username: fullName,
-          firstName: firstName.trim(),
-          lastName: lastName.trim(),
-          email: cred.user.email,
-          createdAt: new Date(),
+        // Navigate to terms screen first — account creation happens there after agreement
+        router.push({
+          pathname: '/terms',
+          params: {
+            email: email.trim(),
+            password,
+            firstName: firstName.trim(),
+            lastName: lastName.trim(),
+          },
         });
-        router.replace('/onboarding');
+        setLoading(false);
+        return;
       } else {
         await signInWithEmailAndPassword(auth, email, password);
         router.replace('/');
@@ -175,6 +186,8 @@ export default function LoginScreen() {
         username,
         email: userCred.user.email,
         createdAt: new Date(),
+        agreedToTerms: true,
+        agreedToTermsAt: new Date(),
       }, { merge: true });
 
       router.replace(isNewUser ? '/onboarding' : '/');
@@ -264,7 +277,7 @@ export default function LoginScreen() {
 
             <TouchableOpacity style={styles.signInBtn} onPress={handleSubmit} disabled={loading}>
               <Text style={styles.signInBtnText}>
-                {loading ? 'Please wait...' : isSignUp ? 'Sign Up' : 'Sign In'}
+                {loading ? 'Please wait...' : isSignUp ? 'Review & Sign Up' : 'Sign In'}
               </Text>
             </TouchableOpacity>
 
