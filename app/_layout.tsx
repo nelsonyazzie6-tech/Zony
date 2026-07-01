@@ -114,7 +114,9 @@ export default Sentry.wrap(function RootLayout() {
     if (!ready) return;
     const inAuth = segments[0] === 'login';
     const inOnboarding = segments[0] === 'onboarding';
+    const inTerms = segments[0] === 'terms';
     if (inOnboarding) return; // never redirect away from onboarding
+    if (inTerms) return; // never redirect away from terms screen
     if (!user && !inAuth) {
       router.replace('/login');
     } else if (user && inAuth) {
@@ -141,6 +143,7 @@ export default Sentry.wrap(function RootLayout() {
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen name="login" options={{ headerShown: false }} />
           <Stack.Screen name="onboarding" options={{ headerShown: false }} />
+          <Stack.Screen name="terms" options={{ headerShown: false }} />
           <Stack.Screen name="bracket-generate" options={{ headerShown: false }} />
           <Stack.Screen name="bracket" options={{ headerShown: false }} />
           <Stack.Screen name="tournament" options={{ headerShown: false }} />
