@@ -60,7 +60,7 @@ const slides: Slide[] = [
     Icon: ZonyMarkIcon,
     color: '#008080',
     title: 'WELCOME TO ZONY',
-    body: 'Your home for sports tournaments and community in the Four Corners. Here\'s a quick look at what you can do.',
+    body: 'Your home for sports tournaments and community. Here\'s a quick look at what you can do.',
   },
   {
     key: 'tournaments',

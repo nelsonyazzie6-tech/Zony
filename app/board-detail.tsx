@@ -111,6 +111,9 @@ export default function BoardDetailScreen() {
   const [blockSubmitting, setBlockSubmitting] = useState(false);
   const [showBlockConfirm, setShowBlockConfirm] = useState(false);
   const [postHidden, setPostHidden] = useState(false);
+  // Save poster name before post state is cleared so block modal can use it
+  const [savedPosterName, setSavedPosterName] = useState('Unknown');
+  const [savedPostedBy, setSavedPostedBy] = useState('');
   const [errorModal, setErrorModal] = useState<{ visible: boolean; title: string; message: string }>({
     visible: false, title: '', message: '',
   });
@@ -124,14 +127,14 @@ export default function BoardDetailScreen() {
       if (snap.exists()) {
         const data = { id: snap.id, ...snap.data() };
         setPost(data);
+        setSavedPostedBy((data as any).postedBy || '');
         if ((data as any).postedBy) {
           try {
             const userSnap = await getDoc(doc(db, 'users', (data as any).postedBy));
             if (userSnap.exists()) {
-              setPoster({
-                username: userSnap.data().username || '',
-                photoURL: userSnap.data().photoURL || '',
-              });
+              const username = userSnap.data().username || 'Unknown';
+              setPoster({ username, photoURL: userSnap.data().photoURL || '' });
+              setSavedPosterName(username);
               setHideContactInfo(userSnap.data().hideContactInfo === true);
             }
           } catch (_) {}
@@ -142,58 +145,19 @@ export default function BoardDetailScreen() {
     load();
   }, []);
 
-  if (loading) {
-    return (
-      <View style={[styles.container, styles.loadingContainer]}>
-        <ActivityIndicator size="large" color="#008080" />
-      </View>
-    );
-  }
-
-  // Post was hidden after report/block
-  if (postHidden || !post) {
-    return (
-      <View style={styles.container}>
-        <View style={styles.header}>
-          <View style={styles.topRow}>
-            <TouchableOpacity onPress={() => router.back()} style={styles.back}>
-              <Text style={styles.backText}>‹ Sports Board</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </View>
-    );
-  }
-
-  const isOwner = user?.uid === post.postedBy;
-  const sportColor = getSportColor(post.sport);
-  const initials = post.name
-    ? post.name.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase()
-    : post.type === 'Player' ? 'PL' : 'TM';
-  const postedDate = post.createdAt?.toDate?.()?.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) || '';
-  const posterInitials = poster?.username
-    ? poster.username.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase()
-    : '?';
-
-  const showContact = isOwner || hideContactInfo === false;
-
   const handleDelete = async () => {
     setDeleteLoading(true);
     try {
       await deleteDoc(doc(db, 'board', id as string));
       router.replace('/(tabs)/board');
     } catch (_) {
-      setErrorModal({
-        visible: true,
-        title: 'SOMETHING WENT WRONG',
-        message: "We couldn't delete this post. Please check your connection and try again.",
-      });
+      setErrorModal({ visible: true, title: 'SOMETHING WENT WRONG', message: "We couldn't delete this post. Please check your connection and try again." });
     }
     setDeleteLoading(false);
   };
 
   const handleMessage = () => {
-    if (!post.postedBy) return;
+    if (!post?.postedBy) return;
     router.push({
       pathname: '/start-dm',
       params: {
@@ -224,53 +188,185 @@ export default function BoardDetailScreen() {
         status: 'pending',
       });
       setShowReportModal(false);
-      // Immediately hide this post from the reporter's view
       setPostHidden(true);
       setShowReportConfirm(true);
     } catch (_) {
-      setErrorModal({
-        visible: true,
-        title: 'SOMETHING WENT WRONG',
-        message: "We couldn't submit your report. Please check your connection and try again.",
-      });
+      setErrorModal({ visible: true, title: 'SOMETHING WENT WRONG', message: "We couldn't submit your report. Please check your connection and try again." });
     }
     setReportSubmitting(false);
   };
 
   const handleBlock = async () => {
-    if (!user || !post?.postedBy) return;
+    if (!user || !savedPostedBy) return;
     setBlockSubmitting(true);
     try {
-      // Write block to Firestore
       await addDoc(collection(db, 'blocks'), {
         blockedBy: user.uid,
-        blockedUserId: post.postedBy,
-        blockedUserName: poster?.username || 'Unknown',
+        blockedUserId: savedPostedBy,
+        blockedUserName: savedPosterName,
         createdAt: serverTimestamp(),
       });
-      // Alert developer via adminAlerts collection
       await addDoc(collection(db, 'adminAlerts'), {
         type: 'user_blocked',
         blockedBy: user.uid,
-        blockedUserId: post.postedBy,
-        blockedUserName: poster?.username || 'Unknown',
+        blockedUserId: savedPostedBy,
+        blockedUserName: savedPosterName,
         postId: id as string,
         postType: 'board',
         createdAt: serverTimestamp(),
       });
       setShowBlockModal(false);
-      // Immediately hide this post from view
       setPostHidden(true);
       setShowBlockConfirm(true);
     } catch (_) {
-      setErrorModal({
-        visible: true,
-        title: 'SOMETHING WENT WRONG',
-        message: "We couldn't block this user. Please check your connection and try again.",
-      });
+      setErrorModal({ visible: true, title: 'SOMETHING WENT WRONG', message: "We couldn't block this user. Please check your connection and try again." });
     }
     setBlockSubmitting(false);
   };
+
+  // Always render modals at root level so they survive the postHidden state change
+  const modals = (
+    <>
+      <Modal visible={showDeleteModal} animationType="fade" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalBox}>
+            <Text style={[styles.modalTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>DELETE POST</Text>
+            <Text style={styles.modalMsg}>Are you sure you want to delete this post? This cannot be undone.</Text>
+            <View style={styles.modalBtns}>
+              <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setShowDeleteModal(false)} activeOpacity={0.85}>
+                <Text style={[styles.modalCancelText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>KEEP IT</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.modalDeleteBtn} onPress={handleDelete} disabled={deleteLoading} activeOpacity={0.85}>
+                <Text style={[styles.modalDeleteText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>{deleteLoading ? 'DELETING...' : 'DELETE'}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={showActionsModal} animationType="fade" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalBox}>
+            <Text style={[styles.modalTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>WHAT WOULD YOU LIKE TO DO?</Text>
+            <TouchableOpacity style={styles.reportReasonBtn} onPress={() => { setShowActionsModal(false); setShowReportModal(true); }} activeOpacity={0.8}>
+              <Text style={[styles.reportReasonText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>Report This Post</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.reportReasonBtn, { borderColor: '#fca5a5' }]} onPress={() => { setShowActionsModal(false); setShowBlockModal(true); }} activeOpacity={0.8}>
+              <Text style={[styles.reportReasonText, { color: '#cc4444' }, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>Block This User</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.modalCancelBtnFull} onPress={() => setShowActionsModal(false)}>
+              <Text style={[styles.modalCancelText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>CANCEL</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={showReportModal} animationType="fade" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalBox}>
+            <Text style={[styles.modalTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>REPORT POST</Text>
+            <Text style={styles.modalMsg}>Why are you reporting this post?</Text>
+            {REPORT_REASONS.map(reason => (
+              <TouchableOpacity key={reason} style={styles.reportReasonBtn} onPress={() => handleReport(reason)} disabled={reportSubmitting} activeOpacity={0.8}>
+                <Text style={[styles.reportReasonText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>{reason}</Text>
+              </TouchableOpacity>
+            ))}
+            <TouchableOpacity style={styles.modalCancelBtnFull} onPress={() => setShowReportModal(false)} disabled={reportSubmitting}>
+              <Text style={[styles.modalCancelText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>CANCEL</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={showReportConfirm} animationType="fade" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalBox}>
+            <Text style={[styles.modalTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>REPORT SUBMITTED</Text>
+            <Text style={styles.modalMsg}>Thanks for letting us know. Our team will review this post within 24 hours.</Text>
+            <TouchableOpacity style={styles.modalOkBtn} onPress={() => { setShowReportConfirm(false); router.back(); }}>
+              <Text style={[styles.modalOkText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>OK</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={showBlockModal} animationType="fade" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalBox}>
+            <Text style={[styles.modalTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>BLOCK USER</Text>
+            <Text style={styles.modalMsg}>Blocking this user will hide their posts from your feed immediately.</Text>
+            <View style={styles.modalBtns}>
+              <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setShowBlockModal(false)} disabled={blockSubmitting} activeOpacity={0.85}>
+                <Text style={[styles.modalCancelText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>CANCEL</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.modalBlockBtn} onPress={handleBlock} disabled={blockSubmitting} activeOpacity={0.85}>
+                <Text style={[styles.modalDeleteText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>{blockSubmitting ? 'BLOCKING...' : 'BLOCK'}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={showBlockConfirm} animationType="fade" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalBox}>
+            <Text style={[styles.modalTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>USER BLOCKED</Text>
+            <Text style={styles.modalMsg}>This user's content has been removed from your feed.</Text>
+            <TouchableOpacity style={styles.modalOkBtn} onPress={() => { setShowBlockConfirm(false); router.back(); }}>
+              <Text style={[styles.modalOkText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>OK</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={errorModal.visible} animationType="fade" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalBox}>
+            <Text style={[styles.modalTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>{errorModal.title}</Text>
+            <Text style={styles.modalMsg}>{errorModal.message}</Text>
+            <TouchableOpacity style={styles.modalOkBtn} onPress={() => setErrorModal({ visible: false, title: '', message: '' })}>
+              <Text style={[styles.modalOkText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>OK</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+    </>
+  );
+
+  if (loading) {
+    return (
+      <View style={[styles.container, styles.loadingContainer]}>
+        <ActivityIndicator size="large" color="#008080" />
+      </View>
+    );
+  }
+
+  // Post hidden after report/block — show blank nav but keep modals alive
+  if (postHidden || !post) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <View style={styles.topRow}>
+            <TouchableOpacity onPress={() => router.back()} style={styles.back}>
+              <Text style={styles.backText}>‹ Sports Board</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+        {modals}
+      </View>
+    );
+  }
+
+  const isOwner = user?.uid === post.postedBy;
+  const sportColor = getSportColor(post.sport);
+  const initials = post.name
+    ? post.name.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase()
+    : post.type === 'Player' ? 'PL' : 'TM';
+  const postedDate = post.createdAt?.toDate?.()?.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) || '';
+  const posterInitials = poster?.username
+    ? poster.username.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase()
+    : '?';
+  const showContact = isOwner || hideContactInfo === false;
 
   return (
     <View style={styles.container}>
@@ -345,35 +441,23 @@ export default function BoardDetailScreen() {
               <Text style={styles.infoValue}>{post.forTournament}</Text>
             </View>
           ) : null}
-          {post.contactPhone ? (
-            showContact ? (
-              <TouchableOpacity
-                style={styles.infoRow}
-                onPress={() => Linking.openURL(`tel:${post.contactPhone.replace(/\D/g, '')}`)}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.infoLabel}>Phone</Text>
-                <View style={styles.tappableLinkRow}>
-                  <PhoneMobileIcon size={13} color="#008080" />
-                  <Text style={[styles.infoValue, styles.tappableLink]}>{post.contactPhone}</Text>
-                </View>
-              </TouchableOpacity>
-            ) : null
+          {post.contactPhone && showContact ? (
+            <TouchableOpacity style={styles.infoRow} onPress={() => Linking.openURL(`tel:${post.contactPhone.replace(/\D/g, '')}`)} activeOpacity={0.7}>
+              <Text style={styles.infoLabel}>Phone</Text>
+              <View style={styles.tappableLinkRow}>
+                <PhoneMobileIcon size={13} color="#008080" />
+                <Text style={[styles.infoValue, styles.tappableLink]}>{post.contactPhone}</Text>
+              </View>
+            </TouchableOpacity>
           ) : null}
-          {post.contactEmail ? (
-            showContact ? (
-              <TouchableOpacity
-                style={[styles.infoRow, { borderBottomWidth: 0 }]}
-                onPress={() => Linking.openURL(`mailto:${post.contactEmail}`)}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.infoLabel}>Email</Text>
-                <View style={styles.tappableLinkRow}>
-                  <MailIcon size={13} color="#008080" />
-                  <Text style={[styles.infoValue, styles.tappableLink]}>{post.contactEmail}</Text>
-                </View>
-              </TouchableOpacity>
-            ) : null
+          {post.contactEmail && showContact ? (
+            <TouchableOpacity style={[styles.infoRow, { borderBottomWidth: 0 }]} onPress={() => Linking.openURL(`mailto:${post.contactEmail}`)} activeOpacity={0.7}>
+              <Text style={styles.infoLabel}>Email</Text>
+              <View style={styles.tappableLinkRow}>
+                <MailIcon size={13} color="#008080" />
+                <Text style={[styles.infoValue, styles.tappableLink]}>{post.contactEmail}</Text>
+              </View>
+            </TouchableOpacity>
           ) : null}
           {!showContact && (post.contactPhone || post.contactEmail) ? (
             <View style={[styles.infoRow, { borderBottomWidth: 0 }]}>
@@ -423,132 +507,7 @@ export default function BoardDetailScreen() {
         <View style={{ height: 20 }} />
       </ScrollView>
 
-      {/* Delete modal */}
-      <Modal visible={showDeleteModal} animationType="fade" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalBox}>
-            <Text style={[styles.modalTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>DELETE POST</Text>
-            <Text style={styles.modalMsg}>Are you sure you want to delete this post? This cannot be undone.</Text>
-            <View style={styles.modalBtns}>
-              <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setShowDeleteModal(false)} activeOpacity={0.85}>
-                <Text style={[styles.modalCancelText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>KEEP IT</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.modalDeleteBtn} onPress={handleDelete} disabled={deleteLoading} activeOpacity={0.85}>
-                <Text style={[styles.modalDeleteText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>{deleteLoading ? 'DELETING...' : 'DELETE'}</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Actions modal — Report or Block */}
-      <Modal visible={showActionsModal} animationType="fade" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalBox}>
-            <Text style={[styles.modalTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>WHAT WOULD YOU LIKE TO DO?</Text>
-            <TouchableOpacity
-              style={styles.reportReasonBtn}
-              onPress={() => { setShowActionsModal(false); setShowReportModal(true); }}
-              activeOpacity={0.8}
-            >
-              <Text style={[styles.reportReasonText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>Report This Post</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.reportReasonBtn, { borderColor: '#fca5a5' }]}
-              onPress={() => { setShowActionsModal(false); setShowBlockModal(true); }}
-              activeOpacity={0.8}
-            >
-              <Text style={[styles.reportReasonText, { color: '#cc4444' }, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>Block This User</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.modalCancelBtnFull} onPress={() => setShowActionsModal(false)}>
-              <Text style={[styles.modalCancelText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>CANCEL</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Report modal */}
-      <Modal visible={showReportModal} animationType="fade" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalBox}>
-            <Text style={[styles.modalTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>REPORT POST</Text>
-            <Text style={styles.modalMsg}>Why are you reporting this post?</Text>
-            {REPORT_REASONS.map(reason => (
-              <TouchableOpacity
-                key={reason}
-                style={styles.reportReasonBtn}
-                onPress={() => handleReport(reason)}
-                disabled={reportSubmitting}
-                activeOpacity={0.8}
-              >
-                <Text style={[styles.reportReasonText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>{reason}</Text>
-              </TouchableOpacity>
-            ))}
-            <TouchableOpacity style={styles.modalCancelBtnFull} onPress={() => setShowReportModal(false)} disabled={reportSubmitting}>
-              <Text style={[styles.modalCancelText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>CANCEL</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Report confirm */}
-      <Modal visible={showReportConfirm} animationType="fade" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalBox}>
-            <Text style={[styles.modalTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>REPORT SUBMITTED</Text>
-            <Text style={styles.modalMsg}>Thanks for letting us know. Our team will review this post within 24 hours.</Text>
-            <TouchableOpacity style={styles.modalOkBtn} onPress={() => { setShowReportConfirm(false); router.back(); }}>
-              <Text style={[styles.modalOkText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>OK</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Block modal */}
-      <Modal visible={showBlockModal} animationType="fade" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalBox}>
-            <Text style={[styles.modalTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>BLOCK USER</Text>
-            <Text style={styles.modalMsg}>
-              Blocking this user will hide their posts from your feed immediately. You can unblock them later from your profile settings.
-            </Text>
-            <View style={styles.modalBtns}>
-              <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setShowBlockModal(false)} disabled={blockSubmitting} activeOpacity={0.85}>
-                <Text style={[styles.modalCancelText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>CANCEL</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.modalBlockBtn} onPress={handleBlock} disabled={blockSubmitting} activeOpacity={0.85}>
-                <Text style={[styles.modalDeleteText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>{blockSubmitting ? 'BLOCKING...' : 'BLOCK'}</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Block confirm */}
-      <Modal visible={showBlockConfirm} animationType="fade" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalBox}>
-            <Text style={[styles.modalTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>USER BLOCKED</Text>
-            <Text style={styles.modalMsg}>This user's content has been removed from your feed.</Text>
-            <TouchableOpacity style={styles.modalOkBtn} onPress={() => { setShowBlockConfirm(false); router.back(); }}>
-              <Text style={[styles.modalOkText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>OK</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Error modal */}
-      <Modal visible={errorModal.visible} animationType="fade" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalBox}>
-            <Text style={[styles.modalTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>{errorModal.title}</Text>
-            <Text style={styles.modalMsg}>{errorModal.message}</Text>
-            <TouchableOpacity style={styles.modalOkBtn} onPress={() => setErrorModal({ visible: false, title: '', message: '' })}>
-              <Text style={[styles.modalOkText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>OK</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+      {modals}
     </View>
   );
 }
