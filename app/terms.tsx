@@ -94,7 +94,7 @@ export default function TermsScreen() {
           BEFORE YOU JOIN
         </Text>
         <Text style={styles.introBody}>
-          Zony is built for the Four Corners sports community. To keep it a safe and positive space for everyone, all users must agree to these community rules before creating an account.
+          Zony is a sports tournament and community platform. To keep it a safe and positive space for everyone, all users must agree to these community rules before creating an account.
         </Text>
 
         {RULES.map((rule, i) => (
