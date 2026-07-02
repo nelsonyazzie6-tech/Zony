@@ -189,7 +189,9 @@ export default function BoardDetailScreen() {
       });
       setShowReportModal(false);
       setPostHidden(true);
-      setShowReportConfirm(true);
+      // Show confirm AFTER the report modal has fully dismissed to avoid
+      // two native modals transitioning at once, which locks the UI thread
+      setTimeout(() => setShowReportConfirm(true), 300);
     } catch (_) {
       setErrorModal({ visible: true, title: 'SOMETHING WENT WRONG', message: "We couldn't submit your report. Please check your connection and try again." });
     }
@@ -217,7 +219,9 @@ export default function BoardDetailScreen() {
       });
       setShowBlockModal(false);
       setPostHidden(true);
-      setShowBlockConfirm(true);
+      // Show confirm AFTER the block modal has fully dismissed to avoid
+      // two native modals transitioning at once, which locks the UI thread
+      setTimeout(() => setShowBlockConfirm(true), 300);
     } catch (_) {
       setErrorModal({ visible: true, title: 'SOMETHING WENT WRONG', message: "We couldn't block this user. Please check your connection and try again." });
     }
@@ -283,7 +287,10 @@ export default function BoardDetailScreen() {
           <View style={styles.modalBox}>
             <Text style={[styles.modalTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>REPORT SUBMITTED</Text>
             <Text style={styles.modalMsg}>Thanks for letting us know. Our team will review this post within 24 hours.</Text>
-            <TouchableOpacity style={styles.modalOkBtn} onPress={() => { setShowReportConfirm(false); router.back(); }}>
+            <TouchableOpacity style={styles.modalOkBtn} onPress={() => {
+              setShowReportConfirm(false);
+              setTimeout(() => router.back(), 300);
+            }}>
               <Text style={[styles.modalOkText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>OK</Text>
             </TouchableOpacity>
           </View>
@@ -311,8 +318,11 @@ export default function BoardDetailScreen() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalBox}>
             <Text style={[styles.modalTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>USER BLOCKED</Text>
-            <Text style={styles.modalMsg}>This user's content has been removed from your feed.</Text>
-            <TouchableOpacity style={styles.modalOkBtn} onPress={() => { setShowBlockConfirm(false); router.back(); }}>
+            <Text style={styles.modalMsg}>{savedPosterName && savedPosterName !== 'Unknown' ? `${savedPosterName} has been blocked.` : 'This user has been blocked.'} Their content has been removed from your feed.</Text>
+            <TouchableOpacity style={styles.modalOkBtn} onPress={() => {
+              setShowBlockConfirm(false);
+              setTimeout(() => router.back(), 300);
+            }}>
               <Text style={[styles.modalOkText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>OK</Text>
             </TouchableOpacity>
           </View>

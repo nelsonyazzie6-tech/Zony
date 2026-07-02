@@ -33,20 +33,11 @@ function PostImage({ uri }: { uri: string }) {
 
   useEffect(() => {
     let cancelled = false;
-    Image.getSize(
-      uri,
-      (w, h) => { if (!cancelled && w && h) setAspectRatio(w / h); },
-      () => {}
-    );
+    Image.getSize(uri, (w, h) => { if (!cancelled && w && h) setAspectRatio(w / h); }, () => {});
     return () => { cancelled = true; };
   }, [uri]);
 
-  return (
-    <Image
-      source={{ uri }}
-      style={[styles.postImage, { width: imgWidth, height: imgWidth / aspectRatio }]}
-    />
-  );
+  return <Image source={{ uri }} style={[styles.postImage, { width: imgWidth, height: imgWidth / aspectRatio }]} />;
 }
 
 const REPORT_REASONS = ['Spam', 'Scam or Fraud', 'Offensive Content', 'Harassment', 'Other'];
@@ -71,6 +62,9 @@ export default function CommunityPostScreen() {
   const [blockSubmitting, setBlockSubmitting] = useState(false);
   const [showBlockConfirm, setShowBlockConfirm] = useState(false);
   const [showActionsModal, setShowActionsModal] = useState(false);
+  // Save author info at load time so block/report can use it after post is cleared
+  const [savedAuthorId, setSavedAuthorId] = useState('');
+  const [savedAuthorName, setSavedAuthorName] = useState('');
   const [errorModal, setErrorModal] = useState<{ visible: boolean; title: string; message: string }>({
     visible: false, title: '', message: '',
   });
@@ -81,7 +75,12 @@ export default function CommunityPostScreen() {
     const load = async () => {
       if (!id) return;
       const snap = await getDoc(doc(db, 'community', id as string));
-      if (snap.exists()) setPost({ id: snap.id, ...snap.data() });
+      if (snap.exists()) {
+        const data = { id: snap.id, ...snap.data() };
+        setPost(data);
+        setSavedAuthorId((data as any).authorId || '');
+        setSavedAuthorName((data as any).authorName || '');
+      }
     };
     load();
     const q = query(collection(db, 'community', id as string, 'comments'), orderBy('createdAt', 'asc'));
@@ -98,34 +97,24 @@ export default function CommunityPostScreen() {
       const userSnap = await getDoc(doc(db, 'users', user.uid));
       const username = userSnap.exists() ? (userSnap.data().username || '') : '';
       const initials = username ? username.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase() : '??';
-
       await addDoc(collection(db, 'community', id as string, 'comments'), {
         body: commentText.trim(), authorName: username, authorInitials: initials, authorId: user.uid, createdAt: serverTimestamp(),
       });
       await updateDoc(doc(db, 'community', id as string), { commentCount: increment(1) });
-
       if (post?.authorId && post.authorId !== user.uid) {
         await addDoc(collection(db, 'notifications'), {
-          toUserId: post.authorId,
-          message: `${username} commented on your post`,
-          body: commentText.trim().slice(0, 80),
-          link: `/community-post?id=${id}`,
-          createdAt: serverTimestamp(),
-          read: false,
+          toUserId: post.authorId, message: `${username} commented on your post`,
+          body: commentText.trim().slice(0, 80), link: `/community-post?id=${id}`,
+          createdAt: serverTimestamp(), read: false,
         });
         const authorSnap = await getDoc(doc(db, 'users', post.authorId));
         if (authorSnap.exists() && authorSnap.data().pushToken) {
           await sendPush(authorSnap.data().pushToken, `💬 ${username} commented`, commentText.trim().slice(0, 80));
         }
       }
-
       setCommentText('');
     } catch (_) {
-      setErrorModal({
-        visible: true,
-        title: 'SOMETHING WENT WRONG',
-        message: "We couldn't post your comment. Please check your connection and try again.",
-      });
+      setErrorModal({ visible: true, title: 'SOMETHING WENT WRONG', message: "We couldn't post your comment. Please check your connection and try again." });
     }
     setSubmitting(false);
   };
@@ -136,34 +125,24 @@ export default function CommunityPostScreen() {
       const userSnap = await getDoc(doc(db, 'users', user.uid));
       const username = userSnap.exists() ? (userSnap.data().username || '') : '';
       const initials = username ? username.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase() : '??';
-
       await addDoc(collection(db, 'community', id as string, 'comments', commentId, 'replies'), {
         body: replyText.trim(), authorName: username, authorInitials: initials, authorId: user.uid, createdAt: serverTimestamp(),
       });
-
       if (commentAuthorId && commentAuthorId !== user.uid) {
         await addDoc(collection(db, 'notifications'), {
-          toUserId: commentAuthorId,
-          message: `${username} replied to your comment`,
-          body: replyText.trim().slice(0, 80),
-          link: `/community-post?id=${id}`,
-          createdAt: serverTimestamp(),
-          read: false,
+          toUserId: commentAuthorId, message: `${username} replied to your comment`,
+          body: replyText.trim().slice(0, 80), link: `/community-post?id=${id}`,
+          createdAt: serverTimestamp(), read: false,
         });
         const commenterSnap = await getDoc(doc(db, 'users', commentAuthorId));
         if (commenterSnap.exists() && commenterSnap.data().pushToken) {
           await sendPush(commenterSnap.data().pushToken, `↩️ ${username} replied`, replyText.trim().slice(0, 80));
         }
       }
-
       setReplyText('');
       setReplyingTo(null);
     } catch (_) {
-      setErrorModal({
-        visible: true,
-        title: 'SOMETHING WENT WRONG',
-        message: "We couldn't post your reply. Please check your connection and try again.",
-      });
+      setErrorModal({ visible: true, title: 'SOMETHING WENT WRONG', message: "We couldn't post your reply. Please check your connection and try again." });
     }
   };
 
@@ -173,11 +152,7 @@ export default function CommunityPostScreen() {
       await deleteDoc(doc(db, 'community', id as string));
       router.replace('/(tabs)/community');
     } catch (_) {
-      setErrorModal({
-        visible: true,
-        title: 'SOMETHING WENT WRONG',
-        message: "We couldn't delete this post. Please check your connection and try again.",
-      });
+      setErrorModal({ visible: true, title: 'SOMETHING WENT WRONG', message: "We couldn't delete this post. Please check your connection and try again." });
     }
     setDeleteLoading(false);
   };
@@ -185,80 +160,58 @@ export default function CommunityPostScreen() {
   const handleMessage = () => {
     if (!post?.authorId) return;
     const listingLabel = post.title || post.body?.slice(0, 60) || 'your listing';
-    const prefilledMessage = `Hi, I'm interested in your listing: "${listingLabel}"`;
     router.push({
       pathname: '/start-dm',
-      params: {
-        recipientId: post.authorId,
-        recipientName: post.authorName || 'Seller',
-        prefillMessage: prefilledMessage,
-      },
+      params: { recipientId: post.authorId, recipientName: post.authorName || 'Seller', prefillMessage: `Hi, I'm interested in your listing: "${listingLabel}"` },
     });
   };
 
   const handleReport = async (reason: string) => {
-    if (!user || !post) return;
+    if (!user || !savedAuthorId) return;
     setReportSubmitting(true);
     try {
       await addDoc(collection(db, 'reports'), {
-        postId: id as string,
-        postType: 'community',
-        postAuthorId: post.authorId || null,
-        postSnapshot: {
-          title: post.title || null,
-          body: post.body || null,
-          type: post.type || null,
-        },
-        reason,
-        reportedBy: user.uid,
-        createdAt: serverTimestamp(),
-        status: 'pending',
+        postId: id as string, postType: 'community',
+        postAuthorId: savedAuthorId,
+        postSnapshot: { title: post?.title || null, body: post?.body || null, type: post?.type || null },
+        reason, reportedBy: user.uid, createdAt: serverTimestamp(), status: 'pending',
       });
       setShowReportModal(false);
-      // Immediately hide this post from the reporter's view
+      // Hide post from view, then show confirm AFTER the report modal has
+      // fully dismissed to avoid two native modals transitioning at once
       setPost(null);
-      setShowReportConfirm(true);
+      setTimeout(() => setShowReportConfirm(true), 300);
     } catch (_) {
-      setErrorModal({
-        visible: true,
-        title: 'SOMETHING WENT WRONG',
-        message: "We couldn't submit your report. Please check your connection and try again.",
-      });
+      setErrorModal({ visible: true, title: 'SOMETHING WENT WRONG', message: "We couldn't submit your report. Please check your connection and try again." });
     }
     setReportSubmitting(false);
   };
 
   const handleBlock = async () => {
-    if (!user || !post?.authorId) return;
+    console.log('BLOCK pressed. user:', user?.uid, 'savedAuthorId:', savedAuthorId);
+    if (!user || !savedAuthorId) return;
+    console.log('BLOCK: starting');
     setBlockSubmitting(true);
     try {
-      // Write block to Firestore
+      console.log('BLOCK: writing to blocks collection');
       await addDoc(collection(db, 'blocks'), {
-        blockedBy: user.uid,
-        blockedUserId: post.authorId,
-        blockedUserName: post.authorName || 'Unknown',
-        createdAt: serverTimestamp(),
+        blockedBy: user.uid, blockedUserId: savedAuthorId,
+        blockedUserName: savedAuthorName, createdAt: serverTimestamp(),
       });
-      // Alert developer via adminAlerts collection
+      console.log('BLOCK: blocks write done, writing adminAlerts');
       await addDoc(collection(db, 'adminAlerts'), {
-        type: 'user_blocked',
-        blockedBy: user.uid,
-        blockedUserId: post.authorId,
-        blockedUserName: post.authorName || 'Unknown',
-        postId: id as string,
-        postType: 'community',
-        createdAt: serverTimestamp(),
+        type: 'user_blocked', blockedBy: user.uid,
+        blockedUserId: savedAuthorId, blockedUserName: savedAuthorName,
+        postId: id as string, postType: 'community', createdAt: serverTimestamp(),
       });
+      console.log('BLOCK: adminAlerts write done');
       setShowBlockModal(false);
-      // Immediately remove this post from view
-      setPost(null);
-      setShowBlockConfirm(true);
-    } catch (_) {
-      setErrorModal({
-        visible: true,
-        title: 'SOMETHING WENT WRONG',
-        message: "We couldn't block this user. Please check your connection and try again.",
-      });
+      // Show confirm AFTER the block modal has fully dismissed to avoid
+      // two native modals transitioning at once, which locks the UI thread
+      setTimeout(() => setShowBlockConfirm(true), 300);
+    } catch (e) {
+      console.log('BLOCK: caught error', e);
+      setErrorModal({ visible: true, title: 'SOMETHING WENT WRONG', message: "We couldn't block this user. Please check your connection and try again." });
     }
     setBlockSubmitting(false);
   };
@@ -347,18 +300,8 @@ export default function CommunityPostScreen() {
                     </TouchableOpacity>
                     {replyingTo === c.id && (
                       <View style={styles.replyInput}>
-                        <TextInput
-                          style={styles.replyTextInput}
-                          placeholder="Write a reply..."
-                          placeholderTextColor="#a0b8b8"
-                          value={replyText}
-                          onChangeText={setReplyText}
-                          autoFocus
-                        />
-                        <TouchableOpacity
-                          style={styles.replySendBtn}
-                          onPress={() => handleReply(c.id, c.authorId, c.authorName)}
-                        >
+                        <TextInput style={styles.replyTextInput} placeholder="Write a reply..." placeholderTextColor="#a0b8b8" value={replyText} onChangeText={setReplyText} autoFocus />
+                        <TouchableOpacity style={styles.replySendBtn} onPress={() => handleReply(c.id, c.authorId, c.authorName)}>
                           <Text style={styles.replySendText}>Send</Text>
                         </TouchableOpacity>
                       </View>
@@ -370,18 +313,8 @@ export default function CommunityPostScreen() {
             </ScrollView>
 
             <View style={styles.commentInputRow}>
-              <TextInput
-                style={styles.commentInput}
-                placeholder="Write a comment..."
-                placeholderTextColor="#a0b8b8"
-                value={commentText}
-                onChangeText={setCommentText}
-              />
-              <TouchableOpacity
-                style={[styles.sendBtn, !commentText.trim() && styles.sendBtnDisabled]}
-                onPress={handleComment}
-                disabled={submitting || !commentText.trim()}
-              >
+              <TextInput style={styles.commentInput} placeholder="Write a comment..." placeholderTextColor="#a0b8b8" value={commentText} onChangeText={setCommentText} />
+              <TouchableOpacity style={[styles.sendBtn, !commentText.trim() && styles.sendBtnDisabled]} onPress={handleComment} disabled={submitting || !commentText.trim()}>
                 <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
                   <Path d="M22 2L11 13M22 2L15 22l-4-9-9-4 20-7z" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
                 </Svg>
@@ -389,7 +322,6 @@ export default function CommunityPostScreen() {
             </View>
           </>
         ) : (
-          // Post was hidden after report/block — show minimal back nav
           <View style={styles.topRow}>
             <TouchableOpacity onPress={() => router.back()}>
               <Text style={styles.backText}>← Back</Text>
@@ -398,7 +330,6 @@ export default function CommunityPostScreen() {
         )}
       </View>
 
-      {/* Delete modal */}
       <Modal visible={showDeleteModal} animationType="fade" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalBox}>
@@ -416,23 +347,14 @@ export default function CommunityPostScreen() {
         </View>
       </Modal>
 
-      {/* Actions modal — Report or Block */}
       <Modal visible={showActionsModal} animationType="fade" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalBox}>
             <Text style={[styles.modalTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>WHAT WOULD YOU LIKE TO DO?</Text>
-            <TouchableOpacity
-              style={styles.reportReasonBtn}
-              onPress={() => { setShowActionsModal(false); setShowReportModal(true); }}
-              activeOpacity={0.8}
-            >
+            <TouchableOpacity style={styles.reportReasonBtn} onPress={() => { setShowActionsModal(false); setShowReportModal(true); }} activeOpacity={0.8}>
               <Text style={[styles.reportReasonText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>Report This Post</Text>
             </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.reportReasonBtn, { borderColor: '#fca5a5' }]}
-              onPress={() => { setShowActionsModal(false); setShowBlockModal(true); }}
-              activeOpacity={0.8}
-            >
+            <TouchableOpacity style={[styles.reportReasonBtn, { borderColor: '#fca5a5' }]} onPress={() => { setShowActionsModal(false); setShowBlockModal(true); }} activeOpacity={0.8}>
               <Text style={[styles.reportReasonText, { color: '#cc4444' }, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>Block This User</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.modalCancelBtnFull} onPress={() => setShowActionsModal(false)}>
@@ -442,20 +364,13 @@ export default function CommunityPostScreen() {
         </View>
       </Modal>
 
-      {/* Report modal */}
       <Modal visible={showReportModal} animationType="fade" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalBox}>
             <Text style={[styles.modalTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>REPORT POST</Text>
             <Text style={styles.modalMsg}>Why are you reporting this post?</Text>
             {REPORT_REASONS.map(reason => (
-              <TouchableOpacity
-                key={reason}
-                style={styles.reportReasonBtn}
-                onPress={() => handleReport(reason)}
-                disabled={reportSubmitting}
-                activeOpacity={0.8}
-              >
+              <TouchableOpacity key={reason} style={styles.reportReasonBtn} onPress={() => handleReport(reason)} disabled={reportSubmitting} activeOpacity={0.8}>
                 <Text style={[styles.reportReasonText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>{reason}</Text>
               </TouchableOpacity>
             ))}
@@ -466,26 +381,27 @@ export default function CommunityPostScreen() {
         </View>
       </Modal>
 
-      {/* Report confirm */}
       <Modal visible={showReportConfirm} animationType="fade" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalBox}>
             <Text style={[styles.modalTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>REPORT SUBMITTED</Text>
             <Text style={styles.modalMsg}>Thanks for letting us know. Our team will review this post within 24 hours.</Text>
-            <TouchableOpacity style={styles.modalOkBtn} onPress={() => { setShowReportConfirm(false); router.back(); }}>
+            <TouchableOpacity style={styles.modalOkBtn} onPress={() => {
+              setShowReportConfirm(false);
+              setTimeout(() => router.back(), 300);
+            }}>
               <Text style={[styles.modalOkText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>OK</Text>
             </TouchableOpacity>
           </View>
         </View>
       </Modal>
 
-      {/* Block modal */}
       <Modal visible={showBlockModal} animationType="fade" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalBox}>
             <Text style={[styles.modalTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>BLOCK USER</Text>
             <Text style={styles.modalMsg}>
-              Blocking this user will hide their posts from your feed immediately. You can unblock them later from your profile settings.
+              Blocking {savedAuthorName ? savedAuthorName : 'this user'} will hide their posts from your feed immediately. You can unblock them from your profile settings.
             </Text>
             <View style={styles.modalBtns}>
               <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setShowBlockModal(false)} disabled={blockSubmitting} activeOpacity={0.85}>
@@ -499,20 +415,21 @@ export default function CommunityPostScreen() {
         </View>
       </Modal>
 
-      {/* Block confirm */}
       <Modal visible={showBlockConfirm} animationType="fade" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalBox}>
             <Text style={[styles.modalTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>USER BLOCKED</Text>
-            <Text style={styles.modalMsg}>This user's content has been removed from your feed.</Text>
-            <TouchableOpacity style={styles.modalOkBtn} onPress={() => { setShowBlockConfirm(false); router.back(); }}>
+            <Text style={styles.modalMsg}>{savedAuthorName ? `${savedAuthorName} has been blocked.` : 'This user has been blocked.'} Their content has been removed from your feed.</Text>
+            <TouchableOpacity style={styles.modalOkBtn} onPress={() => {
+              setShowBlockConfirm(false);
+              setTimeout(() => router.back(), 300);
+            }}>
               <Text style={[styles.modalOkText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>OK</Text>
             </TouchableOpacity>
           </View>
         </View>
       </Modal>
 
-      {/* Error modal */}
       <Modal visible={errorModal.visible} animationType="fade" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalBox}>
@@ -525,7 +442,6 @@ export default function CommunityPostScreen() {
         </View>
       </Modal>
 
-      {/* Image modal */}
       <Modal visible={showImageModal} animationType="fade" transparent onRequestClose={() => setShowImageModal(false)}>
         <View style={styles.fullImageOverlay}>
           <TouchableOpacity style={styles.fullImageCloseBtn} onPress={() => setShowImageModal(false)} activeOpacity={0.8}>
@@ -534,9 +450,7 @@ export default function CommunityPostScreen() {
             </Svg>
           </TouchableOpacity>
           <TouchableOpacity style={styles.fullImageBackdrop} activeOpacity={1} onPress={() => setShowImageModal(false)}>
-            {post?.imageUrl ? (
-              <Image source={{ uri: post.imageUrl }} style={styles.fullImage} resizeMode="contain" />
-            ) : null}
+            {post?.imageUrl ? <Image source={{ uri: post.imageUrl }} style={styles.fullImage} resizeMode="contain" /> : null}
           </TouchableOpacity>
         </View>
       </Modal>
