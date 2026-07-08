@@ -3,9 +3,23 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { addDoc, arrayRemove, arrayUnion, collection, deleteDoc, doc, getDoc, getDocs, increment, onSnapshot, orderBy, query, runTransaction, serverTimestamp, updateDoc, where } from 'firebase/firestore';
 import { deleteObject, ref } from 'firebase/storage';
 import { useEffect, useState } from 'react';
-import { Clipboard, Image, Keyboard, KeyboardAvoidingView, Linking, Modal, Platform, ScrollView, Share, StyleSheet, Text, TextInput, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
+import { Clipboard, Image, Keyboard, KeyboardAvoidingView, Linking, Modal, Platform, ScrollView, Share, StyleSheet, Text, TextInput, TouchableOpacity, TouchableWithoutFeedback, useWindowDimensions, View } from 'react-native';
 import Svg, { Circle, Line, Path, Rect } from 'react-native-svg';
 import { auth, db, storage } from '../firebaseConfig';
+
+function FlyerHeroImage({ uri }: { uri: string }) {
+  const { width: screenWidth } = useWindowDimensions();
+  const imgWidth = screenWidth - 80;
+  const [aspectRatio, setAspectRatio] = useState(1);
+
+  useEffect(() => {
+    let cancelled = false;
+    Image.getSize(uri, (w, h) => { if (!cancelled && w && h) setAspectRatio(w / h); }, () => {});
+    return () => { cancelled = true; };
+  }, [uri]);
+
+  return <Image source={{ uri }} style={{ width: imgWidth, height: imgWidth / aspectRatio, borderRadius: 16, marginBottom: 14, backgroundColor: '#e0d8c8' }} />;
+}
 
 function SadFace() {
   return (
@@ -802,8 +816,13 @@ export default function TournamentScreen() {
       if (tournament?.imagePath) {
         try {
           await deleteObject(ref(storage, tournament.imagePath));
-        } catch (imgErr) {
-        }
+        } catch (_) {}
+      }
+
+      if (tournament?.flyerImageUrl) {
+        try {
+          await deleteObject(ref(storage, `tournaments/${tournamentId}/flyer.jpg`));
+        } catch (_) {}
       }
 
       await deleteDoc(doc(db, 'tournaments', tournamentId));
@@ -1014,6 +1033,9 @@ export default function TournamentScreen() {
         ) : (
           <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 40 }}>
             <View style={styles.card}>
+              {tournament.flyerImageUrl ? (
+                <FlyerHeroImage uri={tournament.flyerImageUrl} />
+              ) : null}
               <View style={styles.sportBadgeRow}>
                 <View style={[styles.sportBadge, { backgroundColor: sportColor }]}>
                   <Text style={styles.sportBadgeText}>{tournament.sport}</Text>
@@ -1552,6 +1574,7 @@ const styles = StyleSheet.create({
   waitlistBanner: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, backgroundColor: '#fff8e0', borderRadius: 12, padding: 12, marginTop: 12, borderWidth: 1, borderColor: '#f0d080' },
   waitlistBannerText: { flex: 1, fontSize: 13, color: '#7a5a00', fontWeight: '600', lineHeight: 18 },
   card: { backgroundColor: '#fff', borderRadius: 24, padding: 20, marginBottom: 16, shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 8, elevation: 2 },
+  flyerHeroImage: { width: '100%', height: 200, borderRadius: 16, marginBottom: 14, backgroundColor: '#e0d8c8' },
   sportBadgeRow: { marginBottom: 12 },
   sportBadge: { alignSelf: 'flex-start', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 4 },
   sportBadgeText: { color: '#fff', fontSize: 12, fontWeight: '700' },

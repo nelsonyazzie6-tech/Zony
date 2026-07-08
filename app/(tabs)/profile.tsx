@@ -3,7 +3,7 @@ import * as ImageManipulator from 'expo-image-manipulator';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { deleteUser, signOut } from 'firebase/auth';
-import { addDoc, arrayRemove, collection, deleteDoc, doc, getDoc, getDocs, increment, onSnapshot, query, runTransaction, serverTimestamp, setDoc, updateDoc, where } from 'firebase/firestore';
+import { addDoc, arrayRemove, collection, collectionGroup, deleteDoc, doc, getDoc, getDocs, increment, onSnapshot, query, runTransaction, serverTimestamp, setDoc, updateDoc, where } from 'firebase/firestore';
 import { deleteObject, getStorage, ref } from 'firebase/storage';
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Image, Linking, Modal, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
@@ -85,11 +85,14 @@ function getSportColor(sport: string) {
   return '#008080';
 }
 
+const CAMP_COLOR = '#3D4A7A';
+
 export default function ProfileScreen() {
   const router = useRouter();
   const user = auth.currentUser;
   const [myPosted, setMyPosted] = useState<any[]>([]);
   const [myRegistered, setMyRegistered] = useState<any[]>([]);
+  const [myRegisteredCamps, setMyRegisteredCamps] = useState<any[]>([]);
   const [photoURL, setPhotoURL] = useState<string | null>(null);
   const [fullName, setFullName] = useState('');
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
@@ -182,7 +185,31 @@ export default function ProfileScreen() {
       setMyRegistered(active);
     }, () => {});
 
-    return () => { unsubPosted(); unsubJoined(); };
+    const campRegsQuery = query(collectionGroup(db, 'registrations'), where('registeredBy', '==', user.uid));
+    const unsubCampRegs = onSnapshot(campRegsQuery, async (snap) => {
+      const now = new Date();
+      const camps = await Promise.all(snap.docs.map(async (regDoc) => {
+        const campId = regDoc.ref.parent.parent?.id;
+        if (!campId) return null;
+        try {
+          const campSnap = await getDoc(doc(db, 'camps', campId));
+          if (!campSnap.exists()) return null;
+          const c: any = { id: campSnap.id, ...campSnap.data() };
+          if (c.status === 'canceled') return null;
+          const endStr = c.endDate || c.startDate;
+          if (endStr) {
+            const endDate = new Date(endStr);
+            if (!isNaN(endDate.getTime()) && endDate < now) return null;
+          }
+          return c;
+        } catch (_) {
+          return null;
+        }
+      }));
+      setMyRegisteredCamps(camps.filter(Boolean));
+    }, () => {});
+
+    return () => { unsubPosted(); unsubJoined(); unsubCampRegs(); };
   }, []);
 
  useEffect(() => {
@@ -536,7 +563,7 @@ export default function ProfileScreen() {
           onPress={() => setProfileTab('registered')}
         >
           <Text style={[styles.tournamentTabText, profileTab === 'registered' && styles.tournamentTabTextActive, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>
-            REGISTERED ({myRegistered.length})
+            REGISTERED ({myRegistered.length + myRegisteredCamps.length})
           </Text>
         </TouchableOpacity>
       </View>
@@ -586,35 +613,43 @@ export default function ProfileScreen() {
         </>
       ) : (
         <>
-          {myRegistered.length === 0 ? (
+          {(myRegistered.length + myRegisteredCamps.length) === 0 ? (
             <View style={styles.emptyTournaments}>
-              <Text style={styles.emptyTournamentsText}>No registered tournaments.</Text>
+              <Text style={styles.emptyTournamentsText}>No registered events.</Text>
             </View>
           ) : (
-            myRegistered.map((t: any) => {
-              const sportColor = getSportColor(t.sport);
+            [
+              ...myRegistered.map((t: any) => ({ ...t, _type: 'tournament' as const })),
+              ...myRegisteredCamps.map((c: any) => ({ ...c, _type: 'camp' as const })),
+            ].map((item: any) => {
+              const isCamp = item._type === 'camp';
+              const accentColor = isCamp ? CAMP_COLOR : getSportColor(item.sport);
+              const dateText = isCamp
+                ? (item.endDate && item.endDate !== item.startDate ? `${item.startDate} – ${item.endDate}` : item.startDate)
+                : item.date;
+              const sportLabel = isCamp ? `${item.sport} Camp` : item.sport;
               return (
                 <TouchableOpacity
-                  key={t.id}
+                  key={`${item._type}-${item.id}`}
                   style={styles.tournamentCard}
                   activeOpacity={0.85}
-                  onPress={() => router.push({ pathname: '/tournament', params: { id: t.id, postedBy: t.postedBy } })}
+                  onPress={() => router.push({ pathname: isCamp ? '/camp' : '/tournament', params: { id: item.id, postedBy: item.postedBy } })}
                 >
                   <View style={styles.tournamentCardInner}>
-                    <View style={[styles.tournamentSportBar, { backgroundColor: sportColor }]} />
+                    <View style={[styles.tournamentSportBar, { backgroundColor: accentColor }]} />
                     <View style={styles.tournamentCardContent}>
-                      <Text style={[styles.tournamentCardName, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]} numberOfLines={1}>{t.name}</Text>
-                      <Text style={styles.tournamentCardDate}>{t.date}</Text>
-                      <Text style={styles.tournamentCardLocation}>{t.city}, {t.state}</Text>
+                      <Text style={[styles.tournamentCardName, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]} numberOfLines={1}>{item.name}</Text>
+                      <Text style={styles.tournamentCardDate}>{dateText}</Text>
+                      <Text style={styles.tournamentCardLocation}>{item.city}, {item.state}</Text>
                     </View>
-                    <View style={[styles.registeredBadge, { backgroundColor: sportColor }]}>
+                    <View style={[styles.registeredBadge, { backgroundColor: accentColor }]}>
                       <View style={styles.registeredBadgeRow}>
                         <CheckIcon size={11} color="#fff" />
                         <Text style={styles.registeredBadgeText}>REGISTERED</Text>
                       </View>
                     </View>
-                    <View style={[styles.tournamentSportBadge, { backgroundColor: `${sportColor}20` }]}>
-                      <Text style={[styles.tournamentSportBadgeText, { color: sportColor }]}>{t.sport}</Text>
+                    <View style={[styles.tournamentSportBadge, { backgroundColor: `${accentColor}20` }]}>
+                      <Text style={[styles.tournamentSportBadgeText, { color: accentColor }]}>{sportLabel}</Text>
                     </View>
                   </View>
                 </TouchableOpacity>

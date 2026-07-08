@@ -146,8 +146,10 @@ export default Sentry.wrap(function RootLayout() {
           <Stack.Screen name="terms" options={{ headerShown: false }} />
           <Stack.Screen name="bracket-generate" options={{ headerShown: false }} />
           <Stack.Screen name="bracket" options={{ headerShown: false }} />
-          <Stack.Screen name="tournament" options={{ headerShown: false }} />
+         <Stack.Screen name="tournament" options={{ headerShown: false }} />
           <Stack.Screen name="edit-tournament" options={{ headerShown: false }} />
+          <Stack.Screen name="camp" options={{ headerShown: false }} />
+          <Stack.Screen name="edit-camp" options={{ headerShown: false }} />
           <Stack.Screen name="map" options={{ headerShown: false }} />
           <Stack.Screen name="board-detail" options={{ headerShown: false }} />
           <Stack.Screen name="edit-board" options={{ headerShown: false }} />

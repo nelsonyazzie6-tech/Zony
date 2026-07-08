@@ -1,12 +1,14 @@
 import { Rajdhani_700Bold, useFonts } from '@expo-google-fonts/rajdhani';
+import * as ImagePicker from 'expo-image-picker';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { addDoc, collection, doc, getDoc, getDocs, serverTimestamp, updateDoc } from 'firebase/firestore';
+import { deleteObject, getDownloadURL, ref as storageRef, uploadBytes } from 'firebase/storage';
 import { useEffect, useRef, useState } from 'react';
-import { Keyboard, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
+import { Image, Keyboard, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
 import { GooglePlacesAutocomplete } from 'react-native-google-places-autocomplete';
 import DateTimePickerModal from 'react-native-modal-datetime-picker';
 import Svg, { Circle, Line, Path, Rect } from 'react-native-svg';
-import { auth, db } from '../firebaseConfig';
+import { auth, db, storage } from '../firebaseConfig';
 
 const GOOGLE_API_KEY = 'AIzaSyC9w_A1-1lPhvtTTuCFdIQejyfm9GOJXRc';
 const sportOptions = ['Basketball', 'Volleyball', 'Softball'];
@@ -101,6 +103,14 @@ async function sendPush(token: string, title: string, body: string) {
   } catch (_) {}
 }
 
+async function uploadFlyerAsync(uri: string, path: string): Promise<string> {
+  const response = await fetch(uri);
+  const blob = await response.blob();
+  const fileRef = storageRef(storage, path);
+  await uploadBytes(fileRef, blob);
+  return await getDownloadURL(fileRef);
+}
+
 function InfoModal({ visible, title, message, onClose }: { visible: boolean; title: string; message: string; onClose: () => void }) {
   const [fontsLoaded] = useFonts({ Rajdhani_700Bold });
   return (
@@ -157,8 +167,11 @@ export default function EditTournamentScreen() {
   const [depositAmount, setDepositAmount] = useState('');
   const [depositDue, setDepositDue] = useState('');
   const [showDepositDuePicker, setShowDepositDuePicker] = useState(false);
-  const [loading, setLoading] = useState(false);
+const [loading, setLoading] = useState(false);
   const [dataLoaded, setDataLoaded] = useState(false);
+  const [flyerImageUrl, setFlyerImageUrl] = useState<string | null>(null);
+  const [flyerUri, setFlyerUri] = useState<string | null>(null);
+  const [flyerRemoved, setFlyerRemoved] = useState(false);
 
   const [bracketEnabled, setBracketEnabled] = useState(true);
   const [tournamentFormat, setTournamentFormat] = useState<'double' | 'single'>('double');
@@ -224,6 +237,7 @@ export default function EditTournamentScreen() {
       const d = snap.data();
       setName(d.name || '');
       setSport(d.sport || '');
+      setFlyerImageUrl(d.flyerImageUrl || null);
       const dates = d.date?.split(' - ') || [];
       setStartDate(dates[0] || '');
       setEndDate(dates[1] || '');
@@ -397,6 +411,27 @@ export default function EditTournamentScreen() {
     scrollRef.current?.scrollTo({ y: 999, animated: true });
   };
 
+  const pickFlyer = async () => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) return;
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [4, 5],
+      quality: 0.8,
+    });
+    if (!result.canceled && result.assets?.[0]?.uri) {
+      setFlyerUri(result.assets[0].uri);
+      setFlyerRemoved(false);
+    }
+  };
+
+  const removeFlyer = () => {
+    setFlyerUri(null);
+    setFlyerImageUrl(null);
+    setFlyerRemoved(true);
+  };
+
   const handlePlaceSelect = (data: any, details: any) => {
     if (!details) return;
     const components = details.address_components;
@@ -476,6 +511,19 @@ export default function EditTournamentScreen() {
         }
       }
 
+    let flyerFieldUpdate: { flyerImageUrl?: string } = {};
+      if (flyerUri) {
+        try {
+          const url = await uploadFlyerAsync(flyerUri, `tournaments/${id}/flyer.jpg`);
+          flyerFieldUpdate.flyerImageUrl = url;
+        } catch (_) {}
+      } else if (flyerRemoved) {
+        try {
+          await deleteObject(storageRef(storage, `tournaments/${id}/flyer.jpg`));
+        } catch (_) {}
+        flyerFieldUpdate.flyerImageUrl = '';
+      }
+
       await updateDoc(doc(db, 'tournaments', id as string), {
         name, sport,
         date: newDate,
@@ -509,6 +557,7 @@ export default function EditTournamentScreen() {
           })),
           championshipFormat,
         } : null,
+        ...flyerFieldUpdate,
       });
 
       const original = originalRef.current;
@@ -573,8 +622,27 @@ export default function EditTournamentScreen() {
           <Text style={styles.sub}>Update the details below</Text>
 
           <View style={styles.form}>
-            <Text style={styles.label}>Tournament Name</Text>
+           <Text style={styles.label}>Tournament Name</Text>
             <TextInput style={styles.input} placeholder="Tournament name" placeholderTextColor="#a0b8b8" value={name} onChangeText={setName} returnKeyType="next" blurOnSubmit={false} onSubmitEditing={() => Keyboard.dismiss()} />
+
+            <Text style={styles.label}>Flyer <Text style={styles.optional}>(optional)</Text></Text>
+            {(flyerUri || flyerImageUrl) ? (
+              <View style={styles.flyerPreviewBlock}>
+                <FlyerPreviewImage uri={flyerUri || flyerImageUrl || ''} />
+                <View style={styles.flyerPreviewActions}>
+                  <TouchableOpacity onPress={pickFlyer} style={styles.flyerActionBtn}>
+                    <Text style={[styles.flyerActionText, { color: '#008080' }]}>Change Flyer</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={removeFlyer} style={styles.flyerActionBtn}>
+                    <Text style={[styles.flyerActionText, { color: '#cc4444' }]}>Remove</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ) : (
+              <TouchableOpacity style={styles.flyerUploadBox} onPress={pickFlyer}>
+                <Text style={styles.flyerUploadText}>+ Add Flyer Image</Text>
+              </TouchableOpacity>
+            )}
 
             <Text style={styles.label}>Sport</Text>
             <TouchableOpacity style={styles.dropdown} onPress={() => { Keyboard.dismiss(); setShowSportPicker(!showSportPicker); setShowDivisionPicker(false); }}>
@@ -993,4 +1061,11 @@ const styles = StyleSheet.create({
   dayWindowRow: { marginBottom: 14 },
   dayWindowLabel: { fontSize: 13, fontWeight: '700', color: '#003333', marginBottom: 6 },
   dayWindowInputs: { flexDirection: 'row', gap: 10 },
+  flyerPreviewBlock: { marginBottom: 8 },
+  flyerPreviewImage: { width: '100%', height: 180, borderRadius: 14, backgroundColor: '#e0d8c8' },
+  flyerPreviewActions: { flexDirection: 'row', gap: 16, marginTop: 8, justifyContent: 'center' },
+  flyerActionBtn: { paddingVertical: 4 },
+  flyerActionText: { fontSize: 13, fontWeight: '600', textDecorationLine: 'underline' },
+  flyerUploadBox: { borderWidth: 1.5, borderStyle: 'dashed', borderColor: '#008080', borderRadius: 14, paddingVertical: 32, alignItems: 'center', justifyContent: 'center', marginBottom: 8, backgroundColor: '#fff' },
+  flyerUploadText: { fontSize: 15, fontWeight: '600', color: '#008080' },
 });

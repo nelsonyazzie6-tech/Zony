@@ -1,15 +1,17 @@
 import { Rajdhani_700Bold, useFonts } from '@expo-google-fonts/rajdhani';
+import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
-import { addDoc, collection, doc, getDoc, getDocs, query, serverTimestamp, Timestamp, where } from 'firebase/firestore';
+import { addDoc, collection, doc, getDoc, getDocs, query, serverTimestamp, Timestamp, updateDoc, where } from 'firebase/firestore';
+import { getDownloadURL, ref as storageRef, uploadBytes } from 'firebase/storage';
 import { useEffect, useRef, useState } from 'react';
 import {
-  Keyboard, KeyboardAvoidingView, Modal, Platform, ScrollView,
-  StyleSheet, Text, TextInput, TouchableOpacity, View,
+  Image, Keyboard, KeyboardAvoidingView, Modal, Platform, ScrollView,
+  StyleSheet, Text, TextInput, TouchableOpacity, useWindowDimensions, View,
 } from 'react-native';
 import { GooglePlacesAutocomplete } from 'react-native-google-places-autocomplete';
 import DateTimePickerModal from 'react-native-modal-datetime-picker';
 import Svg, { Circle, Path, Polygon, Rect } from 'react-native-svg';
-import { auth, db } from '../../firebaseConfig';
+import { auth, db, storage } from '../../firebaseConfig';
 
 const GOOGLE_API_KEY = 'AIzaSyC9w_A1-1lPhvtTTuCFdIQejyfm9GOJXRc';
 const sportOptions = ['Basketball', 'Volleyball', 'Softball'];
@@ -32,6 +34,8 @@ const boardDescriptionPlaceholders = [
   'e.g. "Does anyone need a player for the 16U division this weekend?"',
   'e.g. "Looking for a 14U player to complete our roster for an upcoming event."',
 ];
+
+const CAMP_COLOR = '#3D4A7A';
 
 type PrizeRow = { cash: string; physical: string };
 type DayWindowDisplay = { startDisplay: string; endDisplay: string };
@@ -103,6 +107,15 @@ function CheckIcon({ size = 13, color = '#008080' }: { size?: number; color?: st
   );
 }
 
+function CampIcon({ size = 36, color = '#fff' }: { size?: number; color?: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Circle cx="12" cy="8" r="4" stroke={color} strokeWidth="1.5" />
+      <Path d="M4 21c0-4.5 3.6-8 8-8s8 3.5 8 8" stroke={color} strokeWidth="1.5" strokeLinecap="round" />
+    </Svg>
+  );
+}
+
 function formatPhone(val: string) {
   const digits = val.replace(/\D/g, '').slice(0, 10);
   if (digits.length <= 3) return digits;
@@ -118,6 +131,64 @@ async function sendPush(token: string, title: string, body: string) {
       body: JSON.stringify({ to: token, title, body, sound: 'default' }),
     });
   } catch (_) {}
+}
+
+async function uploadFlyerAsync(uri: string, path: string): Promise<string> {
+  const response = await fetch(uri);
+  const blob = await response.blob();
+  const fileRef = storageRef(storage, path);
+  await uploadBytes(fileRef, blob);
+  return await getDownloadURL(fileRef);
+}
+
+function FlyerPreviewImage({ uri }: { uri: string }) {
+  const { width: screenWidth } = useWindowDimensions();
+  const imgWidth = screenWidth - 40;
+  const [aspectRatio, setAspectRatio] = useState(1);
+
+  useEffect(() => {
+    let cancelled = false;
+    Image.getSize(uri, (w, h) => { if (!cancelled && w && h) setAspectRatio(w / h); }, () => {});
+    return () => { cancelled = true; };
+  }, [uri]);
+
+  return <Image source={{ uri }} style={{ width: imgWidth, height: imgWidth / aspectRatio, borderRadius: 14, backgroundColor: '#e0d8c8' }} />;
+}
+
+function FlyerUpload({ flyerUri, onChange, accentColor = '#008080' }: { flyerUri: string | null; onChange: (uri: string | null) => void; accentColor?: string }) {
+  const pickImage = async () => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) return;
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: false,
+      quality: 1,
+    });
+    if (!result.canceled && result.assets?.[0]?.uri) onChange(result.assets[0].uri);
+  };
+
+  return (
+    <View>
+      <Text style={styles.label}>Flyer <Text style={styles.optional}>(optional)</Text></Text>
+      {flyerUri ? (
+        <View style={styles.flyerPreviewBlock}>
+          <FlyerPreviewImage uri={flyerUri} />
+          <View style={styles.flyerPreviewActions}>
+            <TouchableOpacity onPress={pickImage} style={styles.flyerActionBtn}>
+              <Text style={[styles.flyerActionText, { color: accentColor }]}>Change Flyer</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => onChange(null)} style={styles.flyerActionBtn}>
+              <Text style={[styles.flyerActionText, { color: '#cc4444' }]}>Remove</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      ) : (
+        <TouchableOpacity style={[styles.flyerUploadBox, { borderColor: accentColor }]} onPress={pickImage}>
+          <Text style={[styles.flyerUploadText, { color: accentColor }]}>+ Add Flyer Image</Text>
+        </TouchableOpacity>
+      )}
+    </View>
+  );
 }
 
 function InfoModal({ visible, title, message, onClose }: { visible: boolean; title: string; message: string; onClose: () => void }) {
@@ -137,8 +208,14 @@ function InfoModal({ visible, title, message, onClose }: { visible: boolean; tit
   );
 }
 
-function SuccessModal({ type, onBack }: { type: 'tournament' | 'board'; onBack: () => void }) {
+function SuccessModal({ type, onBack }: { type: 'tournament' | 'board' | 'camp'; onBack: () => void }) {
   const [fontsLoaded] = useFonts({ Rajdhani_700Bold });
+  const title = type === 'tournament' ? 'TOURNAMENT POSTED!' : type === 'camp' ? 'CAMP POSTED!' : 'BOARD POST LIVE!';
+  const sub = type === 'tournament'
+    ? 'Your tournament is now live on Zony.'
+    : type === 'camp'
+    ? 'Your camp is now live on Zony.'
+    : 'Your post is now visible on the Sports Board.';
   return (
     <View style={styles.successContainer}>
       <Svg width={80} height={80} viewBox="0 0 24 24" fill="none">
@@ -146,12 +223,8 @@ function SuccessModal({ type, onBack }: { type: 'tournament' | 'board'; onBack: 
         <Path d="M8 6H5a2 2 0 0 0 0 4h3M16 6h3a2 2 0 0 1 0 4h-3" stroke="#008080" strokeWidth="1.5" strokeLinecap="round" />
         <Path d="M12 15v4M9 21h6" stroke="#008080" strokeWidth="1.5" strokeLinecap="round" />
       </Svg>
-      <Text style={[styles.successTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>
-        {type === 'tournament' ? 'TOURNAMENT POSTED!' : 'BOARD POST LIVE!'}
-      </Text>
-      <Text style={styles.successSub}>
-        {type === 'tournament' ? 'Your tournament is now live on Zony.' : 'Your post is now visible on the Sports Board.'}
-      </Text>
+      <Text style={[styles.successTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>{title}</Text>
+      <Text style={styles.successSub}>{sub}</Text>
       <TouchableOpacity style={styles.backBtn} onPress={onBack}>
         <Text style={[styles.backText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>BACK TO HOME</Text>
       </TouchableOpacity>
@@ -159,7 +232,7 @@ function SuccessModal({ type, onBack }: { type: 'tournament' | 'board'; onBack: 
   );
 }
 
-function HubScreen({ onSelect }: { onSelect: (tab: 'tournament' | 'board') => void }) {
+function HubScreen({ onSelect }: { onSelect: (tab: 'tournament' | 'board' | 'camp') => void }) {
   const [fontsLoaded] = useFonts({ Rajdhani_700Bold });
   return (
     <View style={styles.hubContainer}>
@@ -167,7 +240,7 @@ function HubScreen({ onSelect }: { onSelect: (tab: 'tournament' | 'board') => vo
         <Text style={[styles.hubTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>CREATE</Text>
         <Text style={styles.hubSub}>What would you like to post?</Text>
       </View>
-      <View style={styles.hubCards}>
+      <ScrollView contentContainerStyle={styles.hubCards} showsVerticalScrollIndicator={false}>
         <TouchableOpacity style={styles.hubCard} onPress={() => onSelect('tournament')} activeOpacity={0.85}>
           <View style={[styles.hubCardIcon, { backgroundColor: '#008080' }]}>
             <Svg width={36} height={36} viewBox="0 0 24 24" fill="none">
@@ -179,6 +252,16 @@ function HubScreen({ onSelect }: { onSelect: (tab: 'tournament' | 'board') => vo
           <Text style={[styles.hubCardTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>TOURNAMENT</Text>
           <Text style={styles.hubCardDesc}>Post a tournament for teams to register and compete</Text>
           <View style={[styles.hubCardArrow, { backgroundColor: '#008080' }]}>
+            <Text style={styles.hubCardArrowText}>›</Text>
+          </View>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.hubCard} onPress={() => onSelect('camp')} activeOpacity={0.85}>
+          <View style={[styles.hubCardIcon, { backgroundColor: CAMP_COLOR }]}>
+            <CampIcon size={36} color="#fff" />
+          </View>
+          <Text style={[styles.hubCardTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>CAMP</Text>
+          <Text style={styles.hubCardDesc}>Post a skills camp or clinic for players to sign up</Text>
+          <View style={[styles.hubCardArrow, { backgroundColor: CAMP_COLOR }]}>
             <Text style={styles.hubCardArrowText}>›</Text>
           </View>
         </TouchableOpacity>
@@ -197,7 +280,7 @@ function HubScreen({ onSelect }: { onSelect: (tab: 'tournament' | 'board') => vo
             <Text style={styles.hubCardArrowText}>›</Text>
           </View>
         </TouchableOpacity>
-      </View>
+      </ScrollView>
     </View>
   );
 }
@@ -288,6 +371,7 @@ function TournamentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
   const [fontsLoaded] = useFonts({ Rajdhani_700Bold });
 
   const [name, setName] = useState('');
+  const [flyerUri, setFlyerUri] = useState<string | null>(null);
   const [sport, setSport] = useState('');
   const [showSportPicker, setShowSportPicker] = useState(false);
   const [startDate, setStartDate] = useState('');
@@ -438,7 +522,7 @@ function TournamentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
   };
 
   const resetFields = () => {
-    setName(''); setSport(''); setStartDate(''); setStartDateObj(null); setEndDate('');
+    setName(''); setFlyerUri(null); setSport(''); setStartDate(''); setStartDateObj(null); setEndDate('');
     setTournamentDuration(1); setAddress(''); setCity(''); setState(''); setZip('');
     setDivisionFees({}); setDivisionSpots({}); setSpectatorFee('');
     setIsFreeSpectator(false); setSpectatorPaymentMethods([]); setSpectatorPaymentOther('');
@@ -546,6 +630,7 @@ function TournamentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
 
       const tournamentRef = await addDoc(collection(db, 'tournaments'), {
         name, sport,
+        flyerImageUrl: '',
         date: `${startDate} - ${endDate}`,
         startDateValue: startDateObj ? Timestamp.fromDate(startDateObj) : null,
         tournamentDays: tournamentDayStrings,
@@ -581,6 +666,13 @@ function TournamentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
         bracketStatus: 'registration_open',
       });
 
+      if (flyerUri) {
+        try {
+          const url = await uploadFlyerAsync(flyerUri, `tournaments/${tournamentRef.id}/flyer.jpg`);
+          await updateDoc(tournamentRef, { flyerImageUrl: url });
+        } catch (_) {}
+      }
+
       try {
         const usersSnap = await getDocs(query(collection(db, 'users'), where('preferredSports', 'array-contains', sport)));
         await Promise.all(
@@ -605,6 +697,7 @@ function TournamentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
       resetFields();
       onSuccess();
     } catch (e) {
+      console.error('Tournament post failed:', e);
       setInfoModal({ visible: true, title: 'POST FAILED', message: 'We couldn\'t post your tournament. Check your internet connection and try again.' });
     }
     setLoading(false);
@@ -642,6 +735,8 @@ function TournamentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
         <View style={styles.form}>
           <Text style={styles.label}>Tournament Name</Text>
           <TextInput style={styles.input} placeholder="Tournament name" placeholderTextColor="#a0b8b8" value={name} onChangeText={setName} returnKeyType="next" blurOnSubmit={false} onSubmitEditing={() => { Keyboard.dismiss(); setShowSportPicker(true); }} />
+
+          <FlyerUpload flyerUri={flyerUri} onChange={setFlyerUri} accentColor="#008080" />
 
           <Text style={styles.label}>Sport</Text>
           <TouchableOpacity style={styles.dropdown} onPress={() => { Keyboard.dismiss(); setShowSportPicker(!showSportPicker); setShowStatePicker(false); setShowDivisionPicker(false); }}>
@@ -976,6 +1071,351 @@ function TournamentForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: 
   );
 }
 
+function CampForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: () => void }) {
+  const scrollRef = useRef<ScrollView>(null);
+  const [headerHeight, setHeaderHeight] = useState(120);
+  const [fontsLoaded] = useFonts({ Rajdhani_700Bold });
+
+  const [name, setName] = useState('');
+  const [flyerUri, setFlyerUri] = useState<string | null>(null);
+  const [sport, setSport] = useState('');
+  const [showSportPicker, setShowSportPicker] = useState(false);
+  const [startDate, setStartDate] = useState('');
+  const [startDateObj, setStartDateObj] = useState<Date | null>(null);
+  const [showStartPicker, setShowStartPicker] = useState(false);
+  const [endDate, setEndDate] = useState('');
+  const [endDateObj, setEndDateObj] = useState<Date | null>(null);
+  const [showEndPicker, setShowEndPicker] = useState(false);
+  const [address, setAddress] = useState('');
+  const [city, setCity] = useState('');
+  const [state, setState] = useState('');
+  const [zip, setZip] = useState('');
+  const [useManualLocation, setUseManualLocation] = useState(false);
+  const [manualVenue, setManualVenue] = useState('');
+  const [manualAddress, setManualAddress] = useState('');
+  const [manualCity, setManualCity] = useState('');
+  const [manualState, setManualState] = useState('');
+  const [manualZip, setManualZip] = useState('');
+  const [ageGroups, setAgeGroups] = useState<string[]>([]);
+  const [showAgeGroupPicker, setShowAgeGroupPicker] = useState(false);
+  const [price, setPrice] = useState('');
+  const [isFreeCamp, setIsFreeCamp] = useState(false);
+  const [description, setDescription] = useState('');
+  const [contactName, setContactName] = useState('');
+  const [contactPhone, setContactPhone] = useState('');
+  const [contactEmail, setContactEmail] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [infoModal, setInfoModal] = useState<{ visible: boolean; title: string; message: string }>({ visible: false, title: '', message: '' });
+
+  const contactNameRef = useRef<TextInput>(null);
+  const contactPhoneRef = useRef<TextInput>(null);
+  const contactEmailRef = useRef<TextInput>(null);
+
+  useEffect(() => {
+    const load = async () => {
+      const user = auth.currentUser;
+      if (!user) return;
+      if (user.email) setContactEmail(user.email);
+      try {
+        const snap = await getDoc(doc(db, 'users', user.uid));
+        if (snap.exists() && snap.data().username) setContactName(snap.data().username);
+      } catch (_) {}
+    };
+    load();
+  }, []);
+
+  const toggleAgeGroup = (d: string) => {
+    setAgeGroups(prev => prev.includes(d) ? prev.filter(x => x !== d) : [...prev, d]);
+  };
+
+  const handlePlaceSelect = (data: any, details: any) => {
+    if (!details) return;
+    const components = details.address_components;
+    let streetNumber = '', streetName = '', cityVal = '', stateVal = '', zipVal = '';
+    components.forEach((c: any) => {
+      if (c.types.includes('street_number')) streetNumber = c.long_name;
+      if (c.types.includes('route')) streetName = c.long_name;
+      if (c.types.includes('locality')) cityVal = c.long_name;
+      if (c.types.includes('administrative_area_level_1')) stateVal = c.short_name;
+      if (c.types.includes('postal_code')) zipVal = c.long_name;
+    });
+    setAddress(streetNumber ? `${streetNumber} ${streetName}` : streetName);
+    setCity(cityVal); setState(stateVal); setZip(zipVal);
+  };
+
+  const handleStartConfirm = (date: Date) => {
+    setStartDate(date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }));
+    setStartDateObj(date); setShowStartPicker(false);
+  };
+  const handleEndConfirm = (date: Date) => {
+    setEndDate(date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }));
+    setEndDateObj(date); setShowEndPicker(false);
+  };
+
+  const resetFields = () => {
+    setName(''); setFlyerUri(null); setSport(''); setStartDate(''); setStartDateObj(null);
+    setEndDate(''); setEndDateObj(null); setAddress(''); setCity(''); setState(''); setZip('');
+    setUseManualLocation(false); setManualVenue(''); setManualAddress(''); setManualCity(''); setManualState(''); setManualZip('');
+    setAgeGroups([]); setPrice(''); setIsFreeCamp(false); setDescription('');
+    setContactName(''); setContactPhone(''); setContactEmail('');
+  };
+
+  const handleSubmit = async () => {
+    const finalCity = useManualLocation ? manualCity : city;
+    const finalState = useManualLocation ? manualState : state;
+    const finalAddress = useManualLocation
+      ? (manualVenue ? `${manualVenue}${manualAddress ? ', ' + manualAddress : ''}` : manualAddress)
+      : address;
+    const finalZip = useManualLocation ? manualZip : zip;
+
+    const missing: string[] = [];
+    if (!name) missing.push('Camp Name');
+    if (!sport) missing.push('Sport');
+    if (!startDate) missing.push('Start Date');
+    if (!finalCity || !finalState) missing.push('Venue / Address (city & state)');
+
+    if (missing.length > 0) {
+      setInfoModal({ visible: true, title: 'MISSING INFORMATION', message: `Please fill in:\n\n${missing.join('\n')}` });
+      return;
+    }
+
+    const user = auth.currentUser;
+    if (!user) return;
+    setLoading(true);
+
+    try {
+      const userSnap = await getDoc(doc(db, 'users', user.uid));
+      const organizerName = userSnap.exists() ? (userSnap.data().username || '') : '';
+      const organizerPhoto = userSnap.exists() ? (userSnap.data().photoURL || '') : '';
+
+      const campRef = await addDoc(collection(db, 'camps'), {
+        name, sport,
+        flyerImageUrl: '',
+        startDate, endDate: endDate || startDate,
+        startDateValue: startDateObj ? Timestamp.fromDate(startDateObj) : null,
+        endDateValue: endDateObj ? Timestamp.fromDate(endDateObj) : (startDateObj ? Timestamp.fromDate(startDateObj) : null),
+        address: finalAddress, city: finalCity, state: finalState, zip: finalZip,
+        location: `${finalCity}, ${finalState}`,
+        ageGroups,
+        price: isFreeCamp ? 'Free' : (price ? `$${price}` : ''),
+        description,
+        contactName, contactPhone, contactEmail,
+        status: 'active', createdAt: serverTimestamp(), postedBy: user.uid,
+        organizerName, organizerPhoto,
+      });
+
+      if (flyerUri) {
+        try {
+          const url = await uploadFlyerAsync(flyerUri, `camps/${campRef.id}/flyer.jpg`);
+          await updateDoc(campRef, { flyerImageUrl: url });
+        } catch (flyerErr) {
+          console.error('Camp flyer upload failed:', flyerErr);
+        }
+      }
+
+      try {
+        const usersSnap = await getDocs(query(collection(db, 'users'), where('preferredSports', 'array-contains', sport)));
+        await Promise.all(
+          usersSnap.docs
+            .filter(d => d.id !== user.uid && d.data().notificationsEnabled !== false)
+            .map(async (d) => {
+              await addDoc(collection(db, 'notifications'), {
+                toUserId: d.id,
+                message: `New ${sport} camp: ${name}`,
+                body: `${finalCity}, ${finalState} • ${startDate}`,
+                link: `/camp?id=${campRef.id}&postedBy=${user.uid}`,
+                createdAt: serverTimestamp(),
+                read: false,
+              });
+              if (d.data().pushToken) {
+                await sendPush(d.data().pushToken, `⛺ New ${sport} Camp`, `${name} — ${finalCity}, ${finalState}`);
+              }
+            })
+        );
+      } catch (_) {}
+
+      resetFields();
+      onSuccess();
+    } catch (e) {
+      console.error('Camp post failed:', e);
+      setInfoModal({ visible: true, title: 'POST FAILED', message: 'We couldn\'t post your camp. Check your internet connection and try again. (Details logged to console for debugging.)' });
+    }
+    setLoading(false);
+  };
+
+  return (
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <ScrollView ref={scrollRef} style={styles.container} keyboardShouldPersistTaps="handled">
+
+        <View style={[styles.headerBlock, { backgroundColor: CAMP_COLOR }]} onLayout={e => setHeaderHeight(e.nativeEvent.layout.height)}>
+          <Svg style={StyleSheet.absoluteFill} width="100%" height={headerHeight} viewBox="0 0 390 130" preserveAspectRatio="xMidYMid slice">
+            <Polygon points="0,0 80,30 40,80" fill="white" opacity={0.04} />
+            <Polygon points="80,30 160,10 120,70" fill="white" opacity={0.07} />
+            <Polygon points="40,80 120,70 80,130" fill="white" opacity={0.05} />
+            <Polygon points="160,10 260,50 180,90" fill="white" opacity={0.06} />
+            <Polygon points="120,70 180,90 100,130" fill="white" opacity={0.08} />
+            <Polygon points="260,50 330,20 310,80" fill="white" opacity={0.05} />
+            <Polygon points="180,90 310,80 240,130" fill="white" opacity={0.07} />
+            <Polygon points="330,20 390,0 390,60" fill="white" opacity={0.04} />
+            <Polygon points="310,80 390,60 390,130" fill="white" opacity={0.06} />
+            <Polygon points="0,60 40,80 0,130" fill="white" opacity={0.05} />
+            <Polygon points="0,0 40,0 80,30" fill="white" opacity={0.08} />
+            <Polygon points="160,10 260,0 260,50" fill="white" opacity={0.04} />
+            <Polygon points="260,0 330,20 390,0" fill="white" opacity={0.06} />
+            <Polygon points="240,130 310,80 390,130" fill="white" opacity={0.05} />
+            <Polygon points="80,130 180,90 240,130" fill="white" opacity={0.04} />
+          </Svg>
+          <TouchableOpacity onPress={onBack} style={styles.formBackBtn}>
+            <Text style={styles.formBackText}>‹ Back</Text>
+          </TouchableOpacity>
+          <Text style={[styles.header, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>CREATE CAMP</Text>
+          <Text style={[styles.sub, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>Fill out the details below</Text>
+        </View>
+
+        <View style={styles.form}>
+          <Text style={styles.label}>Camp Name</Text>
+          <TextInput style={styles.input} placeholder="e.g. Summer Skills Camp" placeholderTextColor="#a0b8b8" value={name} onChangeText={setName} returnKeyType="next" blurOnSubmit={false} onSubmitEditing={() => { Keyboard.dismiss(); setShowSportPicker(true); }} />
+
+          <FlyerUpload flyerUri={flyerUri} onChange={setFlyerUri} accentColor={CAMP_COLOR} />
+
+          <Text style={styles.label}>Sport</Text>
+          <TouchableOpacity style={styles.dropdown} onPress={() => { Keyboard.dismiss(); setShowSportPicker(!showSportPicker); }}>
+            <Text style={sport ? styles.dropdownSelected : styles.dropdownPlaceholder}>{sport || 'Select a sport...'}</Text>
+            <Text style={styles.dropdownArrow}>{showSportPicker ? '▲' : '▼'}</Text>
+          </TouchableOpacity>
+          {showSportPicker && (
+            <View style={styles.dropdownList}>
+              {sportOptions.map((s) => (
+                <TouchableOpacity key={s} style={styles.dropdownItem} onPress={() => { setSport(s); setShowSportPicker(false); setShowStartPicker(true); }}>
+                  <Text style={[styles.dropdownItemText, sport === s && styles.dropdownItemActive]}>{s}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+
+          <Text style={styles.label}>Start Date</Text>
+          <TouchableOpacity style={styles.dropdown} onPress={() => { Keyboard.dismiss(); setShowStartPicker(true); }}>
+            <Text style={startDate ? styles.dropdownSelected : styles.dropdownPlaceholder}>{startDate || 'Select start date...'}</Text>
+          </TouchableOpacity>
+          <DateTimePickerModal isVisible={showStartPicker} mode="date" onConfirm={handleStartConfirm} onCancel={() => setShowStartPicker(false)} />
+
+          <Text style={styles.label}>End Date <Text style={styles.optional}>(optional, for multi-day camps)</Text></Text>
+          <TouchableOpacity style={styles.dropdown} onPress={() => { Keyboard.dismiss(); setShowEndPicker(true); }}>
+            <Text style={endDate ? styles.dropdownSelected : styles.dropdownPlaceholder}>{endDate || 'Same as start date'}</Text>
+          </TouchableOpacity>
+          <DateTimePickerModal isVisible={showEndPicker} mode="date" onConfirm={handleEndConfirm} onCancel={() => setShowEndPicker(false)} />
+
+          <Text style={styles.label}>Venue / Address</Text>
+          {!useManualLocation ? (
+            <>
+              <View style={styles.placesWrapper}>
+                <GooglePlacesAutocomplete
+                  placeholder="Search gym, school, or address..."
+                  onPress={handlePlaceSelect}
+                  fetchDetails={true}
+                  minLength={2}
+                  listViewDisplayed="auto"
+                  textInputProps={{ placeholderTextColor: '#a0b8b8' }}
+                  query={{ key: GOOGLE_API_KEY, language: 'en', components: 'country:us' }}
+                  styles={{
+                    textInputContainer: { backgroundColor: 'transparent' },
+                    textInput: { backgroundColor: '#fff', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 12, fontSize: 15, color: '#003333', borderWidth: 1, borderColor: '#e0d8c8', height: 48 },
+                    listView: { backgroundColor: '#fff', borderRadius: 12, borderWidth: 1, borderColor: '#e0d8c8', marginTop: 4 },
+                    row: { paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#fff' },
+                    description: { fontSize: 14, color: '#003333' },
+                    separator: { backgroundColor: '#f0fafa' },
+                    predefinedPlacesDescription: { color: '#003333' },
+                  }}
+                  enablePoweredByContainer={false}
+                />
+              </View>
+              {(address || city || state) ? (
+                <View style={styles.autoFilledBox}>
+                  <View style={styles.autoFilledTextRow}>
+                    <LocationIcon size={13} color="#003333" />
+                    <Text style={styles.autoFilledText}>{[address, city, state, zip].filter(Boolean).join(', ')}</Text>
+                  </View>
+                  <TouchableOpacity onPress={() => { setAddress(''); setCity(''); setState(''); setZip(''); }}>
+                    <Text style={styles.clearText}>Clear</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : null}
+              <TouchableOpacity style={styles.manualToggleBtn} onPress={() => setUseManualLocation(true)}>
+                <Text style={styles.manualToggleText}>Can't find your venue? Enter manually</Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <View style={styles.manualLocationBlock}>
+              <View style={styles.manualLocationHeader}>
+                <Text style={styles.manualLocationTitle}>Manual Location Entry</Text>
+                <TouchableOpacity onPress={() => { setUseManualLocation(false); setManualVenue(''); setManualAddress(''); setManualCity(''); setManualState(''); setManualZip(''); }}>
+                  <Text style={styles.manualLocationSwitch}>Use Search Instead</Text>
+                </TouchableOpacity>
+              </View>
+              <TextInput style={styles.input} placeholder="Venue name (e.g. Gallup High School Gym)" placeholderTextColor="#a0b8b8" value={manualVenue} onChangeText={setManualVenue} returnKeyType="next" />
+              <TextInput style={styles.input} placeholder="Street address (optional)" placeholderTextColor="#a0b8b8" value={manualAddress} onChangeText={setManualAddress} returnKeyType="next" />
+              <View style={styles.manualCityRow}>
+                <TextInput style={[styles.input, { flex: 2 }]} placeholder="City" placeholderTextColor="#a0b8b8" value={manualCity} onChangeText={setManualCity} returnKeyType="next" />
+                <TextInput style={[styles.input, { flex: 1 }]} placeholder="State" placeholderTextColor="#a0b8b8" value={manualState} onChangeText={t => setManualState(t.toUpperCase().slice(0, 2))} autoCapitalize="characters" maxLength={2} returnKeyType="next" />
+                <TextInput style={[styles.input, { flex: 1 }]} placeholder="ZIP" placeholderTextColor="#a0b8b8" value={manualZip} onChangeText={setManualZip} keyboardType="numeric" maxLength={5} returnKeyType="next" />
+              </View>
+            </View>
+          )}
+
+          <Text style={styles.label}>Age Groups / Divisions <Text style={styles.optional}>(optional)</Text></Text>
+          <TouchableOpacity style={styles.dropdown} onPress={() => { Keyboard.dismiss(); setShowAgeGroupPicker(!showAgeGroupPicker); }}>
+            <Text style={ageGroups.length > 0 ? styles.dropdownSelected : styles.dropdownPlaceholder}>{ageGroups.length > 0 ? ageGroups.join(', ') : 'Select age groups...'}</Text>
+            <Text style={styles.dropdownArrow}>{showAgeGroupPicker ? '▲' : '▼'}</Text>
+          </TouchableOpacity>
+          {showAgeGroupPicker && (
+            <ScrollView style={[styles.dropdownList, { maxHeight: 240 }]} nestedScrollEnabled>
+              {divisionOptions.map((d) => (
+                <TouchableOpacity key={d} style={styles.dropdownItemRow} onPress={() => toggleAgeGroup(d)}>
+                  {ageGroups.includes(d) ? <CheckIcon size={13} color={CAMP_COLOR} /> : null}
+                  <Text style={[styles.dropdownItemText, ageGroups.includes(d) && { color: CAMP_COLOR, fontWeight: 'bold' }]}>{d}</Text>
+                </TouchableOpacity>
+              ))}
+              <TouchableOpacity style={[styles.dropdownItem, { backgroundColor: '#eceff5' }]} onPress={() => setShowAgeGroupPicker(false)}>
+                <Text style={{ color: CAMP_COLOR, fontWeight: 'bold', textAlign: 'center' }}>Done</Text>
+              </TouchableOpacity>
+            </ScrollView>
+          )}
+
+          <Text style={styles.label}>Camp Fee</Text>
+          <TouchableOpacity style={styles.freeSpectatorToggle} onPress={() => { const next = !isFreeCamp; setIsFreeCamp(next); if (next) setPrice(''); }}>
+            <View style={[styles.checkbox, isFreeCamp && { backgroundColor: CAMP_COLOR, borderColor: CAMP_COLOR }]}>
+              {isFreeCamp ? <CheckIcon size={12} color="#fff" /> : null}
+            </View>
+            <Text style={styles.freeSpectatorText}>Free Camp</Text>
+          </TouchableOpacity>
+          {!isFreeCamp && (
+            <TextInput style={styles.input} placeholder="Amount in dollars" placeholderTextColor="#a0b8b8" value={price} onChangeText={v => setPrice(v.replace(/[^0-9]/g, ''))} keyboardType="numeric" returnKeyType="next" />
+          )}
+
+          <Text style={styles.label}>Description <Text style={styles.optional}>(optional)</Text></Text>
+          <TextInput style={[styles.input, styles.textArea]} placeholder="What players will work on, what to bring, schedule details, etc." placeholderTextColor="#a0b8b8" value={description} onChangeText={setDescription} multiline numberOfLines={5} />
+
+          <Text style={styles.label}>Contact Name</Text>
+          <TextInput ref={contactNameRef} style={styles.input} placeholder="Contact name" placeholderTextColor="#a0b8b8" value={contactName} onChangeText={setContactName} returnKeyType="next" blurOnSubmit={false} onSubmitEditing={() => contactPhoneRef.current?.focus()} />
+
+          <Text style={styles.label}>Contact Phone <Text style={styles.optional}>(optional)</Text></Text>
+          <TextInput ref={contactPhoneRef} style={styles.input} placeholder="Phone number" placeholderTextColor="#a0b8b8" value={contactPhone} onChangeText={v => setContactPhone(formatPhone(v))} keyboardType="phone-pad" maxLength={12} returnKeyType="next" blurOnSubmit={false} onSubmitEditing={() => contactEmailRef.current?.focus()} />
+
+          <Text style={styles.label}>Contact Email <Text style={styles.optional}>(optional)</Text></Text>
+          <TextInput ref={contactEmailRef} style={styles.input} placeholder="Email address" placeholderTextColor="#a0b8b8" value={contactEmail} onChangeText={setContactEmail} keyboardType="email-address" autoCapitalize="none" returnKeyType="next" blurOnSubmit={false} onSubmitEditing={() => Keyboard.dismiss()} />
+
+          <TouchableOpacity style={[styles.submitBtn, { backgroundColor: CAMP_COLOR }]} onPress={handleSubmit} disabled={loading}>
+            <Text style={[styles.submitText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>
+              {loading ? 'Posting...' : 'POST CAMP'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
+      <InfoModal visible={infoModal.visible} title={infoModal.title} message={infoModal.message} onClose={() => setInfoModal({ visible: false, title: '', message: '' })} />
+    </KeyboardAvoidingView>
+  );
+}
+
 function BoardForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: () => void }) {
   const [fontsLoaded] = useFonts({ Rajdhani_700Bold });
   const [headerHeight, setHeaderHeight] = useState(120);
@@ -1157,14 +1597,17 @@ function BoardForm({ onBack, onSuccess }: { onBack: () => void; onSuccess: () =>
 
 export default function PostScreen() {
   const router = useRouter();
-  const [view, setView] = useState<'hub' | 'tournament' | 'board'>('hub');
-  const [successType, setSuccessType] = useState<'tournament' | 'board' | null>(null);
+  const [view, setView] = useState<'hub' | 'tournament' | 'board' | 'camp'>('hub');
+  const [successType, setSuccessType] = useState<'tournament' | 'board' | 'camp' | null>(null);
 
   if (successType) {
     return <SuccessModal type={successType} onBack={() => { setSuccessType(null); setView('hub'); router.push('/'); }} />;
   }
   if (view === 'tournament') {
     return <TournamentForm onBack={() => setView('hub')} onSuccess={() => setSuccessType('tournament')} />;
+  }
+  if (view === 'camp') {
+    return <CampForm onBack={() => setView('hub')} onSuccess={() => setSuccessType('camp')} />;
   }
   if (view === 'board') {
     return <BoardForm onBack={() => setView('hub')} onSuccess={() => setSuccessType('board')} />;
@@ -1178,7 +1621,7 @@ const styles = StyleSheet.create({
   hubHeader: { paddingHorizontal: 24, paddingBottom: 24, alignItems: 'center' },
   hubTitle: { fontSize: 36, color: '#003333', letterSpacing: 3 },
   hubSub: { fontSize: 14, color: '#a0b8b8', marginTop: 4 },
-  hubCards: { paddingHorizontal: 20, gap: 16 },
+  hubCards: { paddingHorizontal: 20, gap: 16, paddingBottom: 40 },
   hubCard: { backgroundColor: '#fff', borderRadius: 20, padding: 24, shadowColor: '#000', shadowOpacity: 0.07, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 3, position: 'relative' },
   hubCardIcon: { width: 64, height: 64, borderRadius: 16, alignItems: 'center', justifyContent: 'center', marginBottom: 14 },
   hubCardTitle: { fontSize: 22, color: '#003333', letterSpacing: 1, marginBottom: 6 },
@@ -1298,4 +1741,11 @@ const styles = StyleSheet.create({
   samePrizesLabel: { fontSize: 14, color: '#003333', fontWeight: '600' },
   divPrizeBlock: { backgroundColor: '#f0fafa', borderRadius: 12, padding: 14, marginBottom: 12, borderWidth: 1, borderColor: '#e0f0f0' },
   divPrizeLabel: { fontSize: 13, fontWeight: '700', color: '#008080', marginBottom: 10 },
+  flyerPreviewBlock: { marginBottom: 8 },
+  flyerPreviewImage: { width: '100%', height: 220, borderRadius: 14, backgroundColor: '#e0d8c8' },
+  flyerPreviewActions: { flexDirection: 'row', gap: 16, marginTop: 8, justifyContent: 'center' },
+  flyerActionBtn: { paddingVertical: 4 },
+  flyerActionText: { fontSize: 13, fontWeight: '600', textDecorationLine: 'underline' },
+  flyerUploadBox: { borderWidth: 1.5, borderStyle: 'dashed', borderRadius: 14, paddingVertical: 32, alignItems: 'center', justifyContent: 'center', marginBottom: 8, backgroundColor: '#fff' },
+  flyerUploadText: { fontSize: 15, fontWeight: '600' },
 });

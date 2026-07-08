@@ -15,6 +15,8 @@ const sportOptions = [
 
 const states = ['All States', 'AZ', 'NM', 'CO', 'UT', 'TX', 'CA', 'NV', 'OK', 'AL', 'AK', 'AR', 'CT', 'DE', 'FL', 'GA', 'HI', 'ID', 'IL', 'IN', 'IA', 'KS', 'KY', 'LA', 'ME', 'MD', 'MA', 'MI', 'MN', 'MS', 'MO', 'MT', 'NE', 'NH', 'NJ', 'NY', 'NC', 'ND', 'OH', 'OR', 'PA', 'RI', 'SC', 'SD', 'TN', 'VT', 'VA', 'WA', 'WV', 'WI', 'WY'];
 
+const CAMP_COLOR = '#3D4A7A';
+
 function getSportColor(sport: string) {
   if (sport === 'Basketball') return '#008080';
   if (sport === 'Volleyball') return '#7A1E1E';
@@ -140,6 +142,7 @@ export default function HomeScreen() {
   const [showStatePicker, setShowStatePicker] = useState(false);
   const [search, setSearch] = useState('');
   const [tournaments, setTournaments] = useState([]);
+  const [camps, setCamps] = useState([]);
   const [loading, setLoading] = useState(true);
   const [hasNewNotifications, setHasNewNotifications] = useState(false);
   const [hasUnreadMessages, setHasUnreadMessages] = useState(false);
@@ -155,10 +158,18 @@ export default function HomeScreen() {
 
   useEffect(() => {
     const unsub = onSnapshot(collection(db, 'tournaments'), (snapshot) => {
-      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), _type: 'tournament' }));
       setTournaments(data);
       setLoading(false);
     }, () => { setLoading(false); });
+    return () => unsub();
+  }, []);
+
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db, 'camps'), (snapshot) => {
+      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), _type: 'camp' }));
+      setCamps(data);
+    }, () => {});
     return () => unsub();
   }, []);
 
@@ -226,7 +237,13 @@ export default function HomeScreen() {
 
   const sportLabel = sportOptions.find(o => o.value === sport)?.label || 'All Sports';
 
-  const filtered = tournaments
+  const getSortMillis = (item: any) => {
+    if (item.startDateValue?.toMillis) return item.startDateValue.toMillis();
+    const raw = item._type === 'camp' ? item.startDate : item.date?.split(' - ')[0];
+    return new Date(raw || 0).getTime();
+  };
+
+  const filtered = [...tournaments, ...camps]
     .filter((t: any) => t.status !== 'canceled')
     .filter((t: any) => sport === 'All' || t.sport === sport)
     .filter((t: any) => stateFilter === 'All States' || t.state === stateFilter)
@@ -235,11 +252,7 @@ export default function HomeScreen() {
       t.city?.toLowerCase().includes(search.toLowerCase()) ||
       t.state?.toLowerCase().includes(search.toLowerCase())
     )
-    .sort((a: any, b: any) => {
-      const dateA = a.startDateValue?.toMillis?.() ?? new Date(a.date?.split(' - ')[0] || 0).getTime();
-      const dateB = b.startDateValue?.toMillis?.() ?? new Date(b.date?.split(' - ')[0] || 0).getTime();
-      return dateA - dateB;
-    });
+    .sort((a: any, b: any) => getSortMillis(a) - getSortMillis(b));
 
   const hasActiveFilters = sport !== 'All' || stateFilter !== 'All States' || search.trim() !== '';
 
@@ -277,7 +290,7 @@ export default function HomeScreen() {
             <MessageIcon color="#f5ede0" hasNew={hasUnreadMessages} />
           </TouchableOpacity>
         </View>
-        <Text style={[styles.sub, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>Tournaments near you</Text>
+        <Text style={[styles.sub, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>Tournaments & camps near you</Text>
       </View>
 
       <View style={styles.searchRow}>
@@ -330,7 +343,7 @@ export default function HomeScreen() {
         <View style={styles.emptyContainer}>
           <SadFace />
           <Text style={styles.emptyTitle}>
-            {hasActiveFilters ? 'No tournaments match your filters' : 'No tournaments yet'}
+            {hasActiveFilters ? 'No events match your filters' : 'No tournaments or camps yet'}
           </Text>
           <Text style={styles.emptySub}>
             {hasActiveFilters ? 'Try adjusting your search or filters.' : 'Be the first to post one in your area.'}
@@ -344,14 +357,74 @@ export default function HomeScreen() {
       ) : (
         <FlatList
           data={filtered}
-          keyExtractor={(t: any) => t.id}
+          keyExtractor={(t: any) => `${t._type}-${t.id}`}
           contentContainerStyle={styles.list}
           renderItem={({ item: t }: any) => {
-            const sportColor = getSportColor(t.sport);
+            const isCamp = t._type === 'camp';
+            const sportColor = isCamp ? CAMP_COLOR : getSportColor(t.sport);
             const organizerInitials = t.organizerName
               ? t.organizerName.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase()
               : '?';
-            const hasDivisions = t.divisions?.length > 0;
+            const hasDivisions = !isCamp && t.divisions?.length > 0;
+
+            if (isCamp) {
+              const dateDisplay = t.endDate && t.endDate !== t.startDate ? `${t.startDate} – ${t.endDate}` : t.startDate;
+              return (
+                <TouchableOpacity
+                  style={styles.card}
+                  onPress={() => router.push({ pathname: '/camp', params: { id: t.id, postedBy: t.postedBy } })}
+                >
+                  <View style={[styles.cardHeader, { backgroundColor: CAMP_COLOR }]}>
+                    <Text style={[styles.name, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>{t.name}</Text>
+                    <Text style={[styles.sportBadge, { color: CAMP_COLOR }]}>{t.sport} Camp</Text>
+                  </View>
+                  <View style={styles.cardBody}>
+                    <View style={{ flexDirection: 'row', gap: 12 }}>
+                      {t.flyerImageUrl ? (
+                        <Image source={{ uri: t.flyerImageUrl }} style={styles.campThumbnail} />
+                      ) : null}
+                      <View style={{ flex: 1 }}>
+                        <View style={styles.detailRow}>
+                          <CalendarIcon size={14} color={CAMP_COLOR} />
+                          <Text style={[styles.dateText, { color: CAMP_COLOR }]}>{dateDisplay}</Text>
+                        </View>
+                        <View style={styles.detailRow}>
+                          <LocationIcon size={14} color="#5a5a5a" />
+                          <Text style={styles.detail}>{t.city}, {t.state}</Text>
+                        </View>
+                        {t.ageGroups?.length > 0 ? (
+                          <View style={styles.detailRow}>
+                            <PersonIcon size={14} color="#5a5a5a" />
+                            <Text style={styles.divisionsText}>{simplifyDivisions(t.ageGroups)}</Text>
+                          </View>
+                        ) : null}
+                        {t.price ? (
+                          <View style={styles.spotsRow}>
+                            <View style={[styles.spotsBadge, { backgroundColor: `${CAMP_COLOR}1A`, borderColor: CAMP_COLOR }]}>
+                              <Text style={[styles.spots, { color: CAMP_COLOR }]}>{t.price === 'Free' ? 'Free' : t.price}</Text>
+                            </View>
+                          </View>
+                        ) : null}
+                      </View>
+                    </View>
+                    {t.organizerName ? (
+                      <View style={styles.organizerRow}>
+                        {t.organizerPhoto ? (
+                          <Image source={{ uri: t.organizerPhoto }} style={styles.organizerPhoto} />
+                        ) : (
+                          <View style={[styles.organizerAvatar, { backgroundColor: CAMP_COLOR }]}>
+                            <Text style={styles.organizerAvatarText}>{organizerInitials}</Text>
+                          </View>
+                        )}
+                        <Text style={styles.organizerName}>by {t.organizerName}</Text>
+                      </View>
+                    ) : null}
+                    <Text style={styles.viewMoreHint}>View card for more details</Text>
+                  </View>
+                </TouchableOpacity>
+              );
+            }
+
             return (
               <TouchableOpacity
                 style={styles.card}
@@ -556,6 +629,7 @@ const styles = StyleSheet.create({
   card: { backgroundColor: '#fff', borderRadius: 12, marginBottom: 14, overflow: 'hidden', borderWidth: 1, borderColor: '#e0d8c8', elevation: 3, shadowColor: '#003333', shadowOpacity: 0.1, shadowRadius: 8 },
   cardCanceled: { opacity: 0.5 },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 10 },
+  campThumbnail: { width: 56, height: 56, borderRadius: 10, backgroundColor: '#e0d8c8' },
   cardBody: { paddingHorizontal: 14, paddingTop: 10, paddingBottom: 12 },
   name: { fontSize: 17, fontWeight: 'bold', color: '#f5ede0', flex: 1, marginRight: 8, textTransform: 'uppercase', letterSpacing: 1.2 },
   sportBadge: { fontSize: 11, backgroundColor: '#f5ede0', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, overflow: 'hidden', fontWeight: 'bold' },
