@@ -2,8 +2,8 @@ import { Rajdhani_700Bold, useFonts } from '@expo-google-fonts/rajdhani';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, onSnapshot, orderBy, query, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { deleteObject, ref } from 'firebase/storage';
-import { useEffect, useState } from 'react';
-import { Clipboard, Image, Keyboard, KeyboardAvoidingView, Linking, Modal, Platform, ScrollView, Share, StyleSheet, Text, TextInput, TouchableOpacity, TouchableWithoutFeedback, useWindowDimensions, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { Animated, Clipboard, Image, Keyboard, KeyboardAvoidingView, Linking, Modal, Platform, ScrollView, Share, StyleSheet, Text, TextInput, TouchableOpacity, TouchableWithoutFeedback, useWindowDimensions, View } from 'react-native';
 import Svg, { Circle, Line, Path, Rect } from 'react-native-svg';
 import { auth, db, storage } from '../firebaseConfig';
 
@@ -155,6 +155,8 @@ function formatPhone(val: string) {
   return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}`;
 }
 
+const REPORT_REASONS = ['Spam', 'Scam or Fraud', 'Offensive Content', 'Harassment', 'Other'];
+
 function InfoModal({ visible, title, message, onClose }: { visible: boolean; title: string; message: string; onClose: () => void }) {
   const [fontsLoaded] = useFonts({ Rajdhani_700Bold });
   return (
@@ -206,6 +208,12 @@ export default function CampScreen() {
     visible: false, title: '', message: '',
   });
 
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [reportSubmitting, setReportSubmitting] = useState(false);
+  const [showReportConfirm, setShowReportConfirm] = useState(false);
+  const [savedOrganizerId, setSavedOrganizerId] = useState('');
+  const [savedOrganizerName, setSavedOrganizerName] = useState('');
+
   const user = auth.currentUser;
   const isOwner = user?.uid === (camp?.postedBy || postedBy);
 
@@ -222,7 +230,10 @@ export default function CampScreen() {
     const campRef = doc(db, 'camps', id as string);
     const unsubCamp = onSnapshot(campRef, (snap) => {
       if (!snap.exists()) return;
-      setCamp(snap.data());
+      const data = snap.data();
+      setCamp(data);
+      setSavedOrganizerId(data.postedBy || '');
+      setSavedOrganizerName(data.organizerName || '');
     }, () => {});
 
     const regQuery = query(collection(db, 'camps', id as string, 'registrations'), orderBy('createdAt', 'asc'));
@@ -470,6 +481,24 @@ export default function CampScreen() {
     } catch (e: any) {}
   };
 
+  const handleReport = async (reason: string) => {
+    if (!user || !savedOrganizerId) return;
+    setReportSubmitting(true);
+    try {
+      await addDoc(collection(db, 'reports'), {
+        postId: id as string, postType: 'camp',
+        postAuthorId: savedOrganizerId,
+        postSnapshot: { name: camp?.name || null, sport: camp?.sport || null },
+        reason, reportedBy: user.uid, createdAt: serverTimestamp(), status: 'pending',
+      });
+      setShowReportModal(false);
+      setTimeout(() => setShowReportConfirm(true), 300);
+    } catch (e: any) {
+      setInfoModal({ visible: true, title: 'SOMETHING WENT WRONG', message: "We couldn't submit your report. Please check your connection and try again." });
+    }
+    setReportSubmitting(false);
+  };
+
   const handleMessageOrganizer = () => {
     if (!postedBy || !camp) return;
     router.push({
@@ -500,6 +529,13 @@ export default function CampScreen() {
           <TouchableOpacity onPress={() => router.back()}>
             <Text style={styles.backText}>← Back</Text>
           </TouchableOpacity>
+          {!isOwner && (
+            <View style={styles.reportBtnWrapper} pointerEvents="box-none">
+              <TouchableOpacity onPress={() => setShowReportModal(true)} style={styles.reportBtn}>
+                <Text style={styles.reportBtnText}>Report</Text>
+              </TouchableOpacity>
+            </View>
+          )}
           <TouchableOpacity onPress={handleShare} style={styles.shareBtn}>
             <Text style={styles.shareText}>Share ↗</Text>
           </TouchableOpacity>
@@ -854,6 +890,40 @@ export default function CampScreen() {
         </View>
       </Modal>
 
+      {/* Report Modal */}
+      <Modal visible={showReportModal} animationType="fade" transparent>
+        <View style={styles.successOverlay}>
+          <View style={styles.deleteBox}>
+            <Text style={[styles.deleteModalTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>REPORT CAMP</Text>
+            <Text style={styles.deleteModalMsg}>Why are you reporting this camp?</Text>
+            {REPORT_REASONS.map(reason => (
+              <TouchableOpacity key={reason} style={styles.reportReasonBtn} onPress={() => handleReport(reason)} disabled={reportSubmitting} activeOpacity={0.8}>
+                <Text style={[styles.reportReasonText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>{reason}</Text>
+              </TouchableOpacity>
+            ))}
+            <TouchableOpacity style={styles.deleteModalCancelBtn} onPress={() => setShowReportModal(false)} disabled={reportSubmitting}>
+              <Text style={[styles.deleteModalCancelText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>CANCEL</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Report Confirm Modal */}
+      <Modal visible={showReportConfirm} animationType="fade" transparent>
+        <View style={styles.successOverlay}>
+          <View style={styles.deleteBox}>
+            <Text style={[styles.deleteModalTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>REPORT SUBMITTED</Text>
+            <Text style={styles.deleteModalMsg}>Thanks for letting us know. Our team will review this camp within 24 hours.</Text>
+            <TouchableOpacity style={[styles.successBtn, { backgroundColor: accentColor, alignSelf: 'stretch' }]} onPress={() => {
+              setShowReportConfirm(false);
+              setTimeout(() => router.back(), 300);
+            }}>
+              <Text style={[styles.successBtnText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>OK</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       <InfoModal
         visible={infoModal.visible}
         title={infoModal.title}
@@ -867,10 +937,13 @@ export default function CampScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f5ede0', paddingTop: 60 },
-  topRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, marginBottom: 16 },
+  topRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, marginBottom: 16, position: 'relative' },
+  reportBtnWrapper: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' },
   backText: { fontSize: 16, color: '#3D4A7A', fontWeight: '600' },
   shareBtn: { backgroundColor: '#faf3e0', borderRadius: 20, paddingHorizontal: 14, paddingVertical: 6 },
   shareText: { fontSize: 14, color: '#3D4A7A', fontWeight: '600' },
+  reportBtn: { backgroundColor: '#fff', borderRadius: 20, paddingHorizontal: 14, paddingVertical: 6, borderWidth: 1, borderColor: '#e0d8c8' },
+  reportBtnText: { color: '#999', fontSize: 13, fontWeight: '600' },
   canceledBanner: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#cc4444', marginHorizontal: 20, borderRadius: 10, paddingVertical: 10, paddingHorizontal: 16, marginBottom: 12, justifyContent: 'center' },
   canceledBannerText: { color: '#fff', fontWeight: 'bold', fontSize: 14, textAlign: 'center' },
   tabRow: { flexDirection: 'row', marginHorizontal: 20, marginBottom: 16, backgroundColor: '#faf3e0', borderRadius: 12, padding: 4 },
@@ -967,4 +1040,6 @@ const styles = StyleSheet.create({
   deleteModalConfirmText: { color: '#fff', fontSize: 16, letterSpacing: 1 },
   disclaimerBox: { marginTop: 16, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#f0f0f0' },
   disclaimerText: { fontSize: 11, color: '#b0b0b0', fontStyle: 'italic', lineHeight: 16, textAlign: 'center' },
+  reportReasonBtn: { width: '100%', backgroundColor: '#fff', borderRadius: 14, paddingVertical: 14, alignItems: 'center', borderWidth: 1, borderColor: '#e0d8c8', marginBottom: 8 },
+  reportReasonText: { fontSize: 15, color: '#003333', letterSpacing: 0.5 },
 });

@@ -92,7 +92,11 @@ export default function ProfileScreen() {
   const user = auth.currentUser;
   const [myPosted, setMyPosted] = useState<any[]>([]);
   const [myRegistered, setMyRegistered] = useState<any[]>([]);
-  const [myRegisteredCamps, setMyRegisteredCamps] = useState<any[]>([]);
+const [myRegisteredCamps, setMyRegisteredCamps] = useState<any[]>([]);
+  const [myPostedCamps, setMyPostedCamps] = useState<any[]>([]);
+  const [deletingCampId, setDeletingCampId] = useState<string | null>(null);
+  const [showDeleteCampModal, setShowDeleteCampModal] = useState(false);
+  const [campToDelete, setCampToDelete] = useState<any>(null);
   const [photoURL, setPhotoURL] = useState<string | null>(null);
   const [fullName, setFullName] = useState('');
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
@@ -185,6 +189,23 @@ export default function ProfileScreen() {
       setMyRegistered(active);
     }, () => {});
 
+const postedCampsQuery = query(collection(db, 'camps'), where('postedBy', '==', user.uid));
+    const unsubPostedCamps = onSnapshot(postedCampsQuery, snap => {
+      const now = new Date();
+      const active = snap.docs
+        .map(d => ({ id: d.id, ...d.data() }))
+        .filter((c: any) => {
+          if (c.status === 'canceled') return false;
+          const endStr = c.endDate || c.startDate;
+          if (endStr) {
+            const endDate = new Date(endStr);
+            if (!isNaN(endDate.getTime())) return endDate >= now;
+          }
+          return true;
+        });
+      setMyPostedCamps(active);
+    }, () => {});
+
     const campRegsQuery = query(collectionGroup(db, 'registrations'), where('registeredBy', '==', user.uid));
     const unsubCampRegs = onSnapshot(campRegsQuery, async (snap) => {
       const now = new Date();
@@ -209,7 +230,7 @@ export default function ProfileScreen() {
       setMyRegisteredCamps(camps.filter(Boolean));
     }, () => {});
 
-    return () => { unsubPosted(); unsubJoined(); unsubCampRegs(); };
+    return () => { unsubPosted(); unsubJoined(); unsubCampRegs(); unsubPostedCamps(); };
   }, []);
 
  useEffect(() => {
@@ -325,6 +346,58 @@ export default function ProfileScreen() {
       });
     }
     setUnblockingId(null);
+  };
+
+  const handleDeleteCamp = (camp: any) => {
+    setCampToDelete(camp);
+    setShowDeleteCampModal(true);
+  };
+
+  const confirmDeleteCamp = async () => {
+    if (!campToDelete) return;
+    const campId = campToDelete.id;
+    setDeletingCampId(campId);
+    setShowDeleteCampModal(false);
+    try {
+      const regsSnap = await getDocs(collection(db, 'camps', campId, 'registrations'));
+      await Promise.all(
+        regsSnap.docs.map(async (regDoc) => {
+          const regData = regDoc.data();
+          if (regData.registeredBy) {
+            await addDoc(collection(db, 'notifications'), {
+              toUserId: regData.registeredBy,
+              message: `⚠️ ${campToDelete.name} has been canceled by the organizer.`,
+              link: `/`,
+              organizerName: campToDelete.organizerName || campToDelete.contactName || '',
+              organizerPhone: campToDelete.contactPhone || '',
+              createdAt: serverTimestamp(),
+              read: false,
+            });
+            const userSnap = await getDoc(doc(db, 'users', regData.registeredBy));
+            if (userSnap.exists() && userSnap.data().pushToken) {
+              await fetch('https://exp.host/--/api/v2/push/send', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  to: userSnap.data().pushToken,
+                  title: '⚠️ Camp Canceled',
+                  body: `${campToDelete.name} has been canceled by the organizer.`,
+                }),
+              });
+            }
+          }
+        })
+      );
+      await updateDoc(doc(db, 'camps', campId), { status: 'canceled' });
+    } catch (_) {
+      setErrorModal({
+        visible: true,
+        title: 'SOMETHING WENT WRONG',
+        message: "We couldn't cancel the camp. Please check your connection and try again.",
+      });
+    }
+    setDeletingCampId(null);
+    setCampToDelete(null);
   };
 
   const handleDeleteTournament = (tournament: any) => {
@@ -555,7 +628,7 @@ export default function ProfileScreen() {
           onPress={() => setProfileTab('posted')}
         >
           <Text style={[styles.tournamentTabText, profileTab === 'posted' && styles.tournamentTabTextActive, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>
-            POSTED ({myPosted.length})
+            POSTED ({myPosted.length + myPostedCamps.length})
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
@@ -570,40 +643,48 @@ export default function ProfileScreen() {
 
       {profileTab === 'posted' ? (
         <>
-          {myPosted.length === 0 ? (
+          {(myPosted.length + myPostedCamps.length) === 0 ? (
             <View style={styles.emptyTournaments}>
-              <Text style={styles.emptyTournamentsText}>No active tournaments posted.</Text>
+              <Text style={styles.emptyTournamentsText}>No active events posted.</Text>
             </View>
           ) : (
-            myPosted.map((t: any) => {
-              const sportColor = getSportColor(t.sport);
-              const isDeleting = deletingTournamentId === t.id;
+            [
+              ...myPosted.map((t: any) => ({ ...t, _type: 'tournament' as const })),
+              ...myPostedCamps.map((c: any) => ({ ...c, _type: 'camp' as const })),
+            ].map((item: any) => {
+              const isCamp = item._type === 'camp';
+              const accentColor = isCamp ? CAMP_COLOR : getSportColor(item.sport);
+              const dateText = isCamp
+                ? (item.endDate && item.endDate !== item.startDate ? `${item.startDate} – ${item.endDate}` : item.startDate)
+                : item.date;
+              const sportLabel = isCamp ? `${item.sport} Camp` : item.sport;
+              const isDeleting = isCamp ? deletingCampId === item.id : deletingTournamentId === item.id;
               return (
-                <View key={t.id} style={styles.tournamentCard}>
+                <View key={`${item._type}-${item.id}`} style={styles.tournamentCard}>
                   <TouchableOpacity
                     style={styles.tournamentCardInner}
                     activeOpacity={0.85}
-                    onPress={() => router.push({ pathname: '/tournament', params: { id: t.id, postedBy: t.postedBy } })}
+                    onPress={() => router.push({ pathname: isCamp ? '/camp' : '/tournament', params: { id: item.id, postedBy: item.postedBy } })}
                   >
-                    <View style={[styles.tournamentSportBar, { backgroundColor: sportColor }]} />
+                    <View style={[styles.tournamentSportBar, { backgroundColor: accentColor }]} />
                     <View style={styles.tournamentCardContent}>
-                      <Text style={[styles.tournamentCardName, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]} numberOfLines={1}>{t.name}</Text>
-                      <Text style={styles.tournamentCardDate}>{t.date}</Text>
-                      <Text style={styles.tournamentCardLocation}>{t.city}, {t.state}</Text>
+                      <Text style={[styles.tournamentCardName, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]} numberOfLines={1}>{item.name}</Text>
+                      <Text style={styles.tournamentCardDate}>{dateText}</Text>
+                      <Text style={styles.tournamentCardLocation}>{item.city}, {item.state}</Text>
                     </View>
-                    <View style={[styles.tournamentSportBadge, { backgroundColor: `${sportColor}20` }]}>
-                      <Text style={[styles.tournamentSportBadgeText, { color: sportColor }]}>{t.sport}</Text>
+                    <View style={[styles.tournamentSportBadge, { backgroundColor: `${accentColor}20` }]}>
+                      <Text style={[styles.tournamentSportBadgeText, { color: accentColor }]}>{sportLabel}</Text>
                     </View>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={styles.tournamentDeleteBtn}
-                    onPress={() => handleDeleteTournament(t)}
+                    onPress={() => { if (isCamp) handleDeleteCamp(item); else handleDeleteTournament(item); }}
                     disabled={isDeleting}
                   >
                     {isDeleting ? (
                       <ActivityIndicator size="small" color="#cc4444" />
                     ) : (
-                      <Text style={styles.tournamentDeleteText}>Cancel Event</Text>
+                      <Text style={styles.tournamentDeleteText}>{isCamp ? 'Cancel Camp' : 'Cancel Event'}</Text>
                     )}
                   </TouchableOpacity>
                 </View>
@@ -760,6 +841,25 @@ export default function ProfileScreen() {
               </TouchableOpacity>
               <TouchableOpacity style={styles.modalConfirmBtn} onPress={handleRemovePhoto}>
                 <Text style={[styles.modalConfirmText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>REMOVE</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={showDeleteCampModal} animationType="fade" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalBox}>
+            <Text style={[styles.modalTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>CANCEL CAMP</Text>
+            <Text style={styles.modalSub}>
+              This will notify all registered campers that "{campToDelete?.name}" has been canceled. You'll still be able to view registrations and their contact info so you can follow up about refunds or rescheduling.
+            </Text>
+            <View style={styles.modalBtns}>
+              <TouchableOpacity style={styles.modalCancelBtn} onPress={() => { setShowDeleteCampModal(false); setCampToDelete(null); }}>
+                <Text style={[styles.modalCancelText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>KEEP IT</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.modalConfirmBtn} onPress={confirmDeleteCamp}>
+                <Text style={[styles.modalConfirmText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>CANCEL</Text>
               </TouchableOpacity>
             </View>
           </View>

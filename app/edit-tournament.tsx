@@ -4,7 +4,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { addDoc, collection, doc, getDoc, getDocs, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { deleteObject, getDownloadURL, ref as storageRef, uploadBytes } from 'firebase/storage';
 import { useEffect, useRef, useState } from 'react';
-import { Image, Keyboard, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
+import { Image, Keyboard, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, TouchableWithoutFeedback, useWindowDimensions, View } from 'react-native';
 import { GooglePlacesAutocomplete } from 'react-native-google-places-autocomplete';
 import DateTimePickerModal from 'react-native-modal-datetime-picker';
 import Svg, { Circle, Line, Path, Rect } from 'react-native-svg';
@@ -32,6 +32,20 @@ function defaultWindowForDay(i: number): DayWindowDisplay {
   if (i === 0) return { startDisplay: '6:00 PM', endDisplay: '10:00 PM' };
   if (i === 1) return { startDisplay: '8:00 AM', endDisplay: '10:00 PM' };
   return { startDisplay: '8:00 AM', endDisplay: '2:00 PM' };
+}
+
+function FlyerPreviewImage({ uri }: { uri: string }) {
+  const { width: screenWidth } = useWindowDimensions();
+  const imgWidth = screenWidth - 40;
+  const [aspectRatio, setAspectRatio] = useState(1);
+
+  useEffect(() => {
+    let cancelled = false;
+    Image.getSize(uri, (w, h) => { if (!cancelled && w && h) setAspectRatio(w / h); }, () => {});
+    return () => { cancelled = true; };
+  }, [uri]);
+
+  return <Image source={{ uri }} style={{ width: imgWidth, height: imgWidth / aspectRatio, borderRadius: 14, backgroundColor: '#e0d8c8' }} />;
 }
 
 function CalendarIcon({ size = 16, color = '#008080' }: { size?: number; color?: string }) {

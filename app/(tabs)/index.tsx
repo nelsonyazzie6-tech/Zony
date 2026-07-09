@@ -380,9 +380,6 @@ export default function HomeScreen() {
                   </View>
                   <View style={styles.cardBody}>
                     <View style={{ flexDirection: 'row', gap: 12 }}>
-                      {t.flyerImageUrl ? (
-                        <Image source={{ uri: t.flyerImageUrl }} style={styles.campThumbnail} />
-                      ) : null}
                       <View style={{ flex: 1 }}>
                         <View style={styles.detailRow}>
                           <CalendarIcon size={14} color={CAMP_COLOR} />
@@ -406,6 +403,9 @@ export default function HomeScreen() {
                           </View>
                         ) : null}
                       </View>
+                      {t.flyerImageUrl ? (
+                        <Image source={{ uri: t.flyerImageUrl }} style={styles.campThumbnail} />
+                      ) : null}
                     </View>
                     {t.organizerName ? (
                       <View style={styles.organizerRow}>
@@ -435,28 +435,35 @@ export default function HomeScreen() {
                   <Text style={[styles.sportBadge, { color: sportColor }]}>{t.sport}</Text>
                 </View>
                 <View style={styles.cardBody}>
-                  <View style={styles.detailRow}>
-                    <CalendarIcon size={14} color={sportColor} />
-                    <Text style={[styles.dateText, { color: sportColor }]}>{t.date}</Text>
-                  </View>
-                  <View style={styles.detailRow}>
-                    <LocationIcon size={14} color="#5a5a5a" />
-                    <Text style={styles.detail}>{t.city}, {t.state}</Text>
-                  </View>
-                  {hasDivisions ? (
-                    <View style={styles.divisionsRow}>
+                  <View style={{ flexDirection: 'row', gap: 12 }}>
+                    <View style={{ flex: 1 }}>
                       <View style={styles.detailRow}>
-                        <PersonIcon size={14} color="#5a5a5a" />
-                        <Text style={styles.divisionsText}>{simplifyDivisions(t.divisions)}</Text>
+                        <CalendarIcon size={14} color={sportColor} />
+                        <Text style={[styles.dateText, { color: sportColor }]}>{t.date}</Text>
                       </View>
-                    </View>
-                  ) : (
-                    <View style={styles.spotsRow}>
-                      <View style={[styles.spotsBadge, { backgroundColor: `${sportColor}1A`, borderColor: sportColor }]}>
-                        <Text style={[styles.spots, { color: sportColor }]}>{t.spots} spots left</Text>
+                      <View style={styles.detailRow}>
+                        <LocationIcon size={14} color="#5a5a5a" />
+                        <Text style={styles.detail}>{t.city}, {t.state}</Text>
                       </View>
+                      {hasDivisions ? (
+                        <View style={styles.divisionsRow}>
+                          <View style={styles.detailRow}>
+                            <PersonIcon size={14} color="#5a5a5a" />
+                            <Text style={styles.divisionsText}>{simplifyDivisions(t.divisions)}</Text>
+                          </View>
+                        </View>
+                      ) : (
+                        <View style={styles.spotsRow}>
+                          <View style={[styles.spotsBadge, { backgroundColor: `${sportColor}1A`, borderColor: sportColor }]}>
+                            <Text style={[styles.spots, { color: sportColor }]}>{t.spots} spots left</Text>
+                          </View>
+                        </View>
+                      )}
                     </View>
-                  )}
+                    {t.flyerImageUrl ? (
+                      <Image source={{ uri: t.flyerImageUrl }} style={styles.campThumbnail} />
+                    ) : null}
+                  </View>
                   {t.tournamentFormat && (
                     <View style={[styles.formatBadge, { backgroundColor: `${sportColor}18` }]}>
                       <Text style={[styles.formatBadgeText, { color: sportColor }]}>
@@ -629,7 +636,7 @@ const styles = StyleSheet.create({
   card: { backgroundColor: '#fff', borderRadius: 12, marginBottom: 14, overflow: 'hidden', borderWidth: 1, borderColor: '#e0d8c8', elevation: 3, shadowColor: '#003333', shadowOpacity: 0.1, shadowRadius: 8 },
   cardCanceled: { opacity: 0.5 },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 10 },
-  campThumbnail: { width: 56, height: 56, borderRadius: 10, backgroundColor: '#e0d8c8' },
+  campThumbnail: { width: 90, height: 90, borderRadius: 10, backgroundColor: '#e0d8c8' },
   cardBody: { paddingHorizontal: 14, paddingTop: 10, paddingBottom: 12 },
   name: { fontSize: 17, fontWeight: 'bold', color: '#f5ede0', flex: 1, marginRight: 8, textTransform: 'uppercase', letterSpacing: 1.2 },
   sportBadge: { fontSize: 11, backgroundColor: '#f5ede0', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, overflow: 'hidden', fontWeight: 'bold' },
