@@ -1,0 +1,46 @@
+{
+  "project_info": {
+    "project_number": "295900317104",
+    "project_id": "zony-a1d8b",
+    "storage_bucket": "zony-a1d8b.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:295900317104:android:6da292ba608b561dff4275",
+        "android_client_info": {
+          "package_name": "com.nelzony.com"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "295900317104-qlps5q7u09458gip12eigbn7hm1ruktl.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCUy2zq4Nu8AuEq4I9ExleC3Dw44GoXCDU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "295900317104-6issabib0tcbp5ktf3tdpegi5mifs6or.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "295900317104-dk7n2cq2obdc9a2v37p1p6ih61pj9fha.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.nelzony.zony"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
