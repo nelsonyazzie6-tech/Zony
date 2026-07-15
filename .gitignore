@@ -43,3 +43,6 @@ app-example
 /android
 
 .env.local
+
+google-services-key.json
+google-services.json

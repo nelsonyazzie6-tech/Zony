@@ -7,9 +7,9 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:295900317104:android:6da292ba608b561dff4275",
+        "mobilesdk_app_id": "1:295900317104:android:c1fbf2052fa44bafff4275",
         "android_client_info": {
-          "package_name": "com.nelzony.com"
+          "package_name": "com.nelzony.zony"
         }
       },
       "oauth_client": [
