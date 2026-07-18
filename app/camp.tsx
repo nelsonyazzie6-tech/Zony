@@ -174,10 +174,25 @@ function InfoModal({ visible, title, message, onClose }: { visible: boolean; tit
   );
 }
 
+function CampNotFound({ onBack }: { onBack: () => void }) {
+  const [fontsLoaded] = useFonts({ Rajdhani_700Bold });
+  return (
+    <View style={styles.notFoundContainer}>
+      <SadFace />
+      <Text style={[styles.notFoundTitle, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>CAMP NOT FOUND</Text>
+      <Text style={styles.notFoundSub}>This camp may have been removed or is no longer available.</Text>
+      <TouchableOpacity style={styles.notFoundBtn} onPress={onBack}>
+        <Text style={[styles.notFoundBtnText, fontsLoaded && { fontFamily: 'Rajdhani_700Bold' }]}>BACK TO HOME</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
 export default function CampScreen() {
   const { id, postedBy } = useLocalSearchParams();
   const router = useRouter();
   const [camp, setCamp] = useState<any>(null);
+  const [campNotFound, setCampNotFound] = useState(false);
   const [registered, setRegistered] = useState(false);
   const [myRegistrationId, setMyRegistrationId] = useState<string | null>(null);
   const [myPlayerName, setMyPlayerName] = useState<string | null>(null);
@@ -229,12 +244,17 @@ export default function CampScreen() {
 
     const campRef = doc(db, 'camps', id as string);
     const unsubCamp = onSnapshot(campRef, (snap) => {
-      if (!snap.exists()) return;
+      if (!snap.exists()) {
+        setCampNotFound(true);
+        return;
+      }
       const data = snap.data();
       setCamp(data);
       setSavedOrganizerId(data.postedBy || '');
       setSavedOrganizerName(data.organizerName || '');
-    }, () => {});
+    }, () => {
+      setCampNotFound(true);
+    });
 
     const regQuery = query(collection(db, 'camps', id as string, 'registrations'), orderBy('createdAt', 'asc'));
     const unsubRegs = onSnapshot(regQuery, (snap) => {
@@ -510,6 +530,10 @@ export default function CampScreen() {
       },
     });
   };
+
+  if (campNotFound) {
+    return <CampNotFound onBack={() => router.replace('/')} />;
+  }
 
   if (!camp) return null;
   const isCanceled = camp.status === 'canceled';
@@ -937,6 +961,11 @@ export default function CampScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f5ede0', paddingTop: 60 },
+  notFoundContainer: { flex: 1, backgroundColor: '#f5ede0', alignItems: 'center', justifyContent: 'center', padding: 40, gap: 12 },
+  notFoundTitle: { fontSize: 24, color: '#003333', letterSpacing: 2, marginTop: 8, textAlign: 'center' },
+  notFoundSub: { fontSize: 15, color: '#5a7a7a', textAlign: 'center', marginBottom: 12 },
+  notFoundBtn: { backgroundColor: '#3D4A7A', borderRadius: 12, paddingVertical: 16, paddingHorizontal: 32, marginTop: 8 },
+  notFoundBtnText: { color: '#fff', fontSize: 16, letterSpacing: 1 },
   topRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, marginBottom: 16, position: 'relative' },
   reportBtnWrapper: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' },
   backText: { fontSize: 16, color: '#3D4A7A', fontWeight: '600' },

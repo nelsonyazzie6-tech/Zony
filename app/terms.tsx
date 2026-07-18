@@ -8,6 +8,8 @@ import {
 } from 'react-native';
 import { auth, db } from '../firebaseConfig';
 
+const ALL_SPORTS = ['Basketball', 'Volleyball', 'Softball'];
+
 const RULES = [
   {
     title: 'No Objectionable Content',
@@ -60,6 +62,11 @@ export default function TermsScreen() {
         createdAt: new Date(),
         agreedToTerms: true,
         agreedToTermsAt: new Date(),
+        // Notifications on by default for all sports/activity — users can
+        // narrow this down in Settings later. Explicit rather than relying
+        // on the "missing field = notify all" fallback in post.tsx.
+        notificationsEnabled: true,
+        preferredSports: ALL_SPORTS,
       });
       router.replace('/onboarding');
     } catch (e: any) {

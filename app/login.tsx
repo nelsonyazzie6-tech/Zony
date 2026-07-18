@@ -188,6 +188,14 @@ export default function LoginScreen() {
         createdAt: new Date(),
         agreedToTerms: true,
         agreedToTermsAt: new Date(),
+        // Only set notification/sport defaults for brand-new accounts —
+        // merge:true runs on every login, so setting these unconditionally
+        // would silently reset an existing user's saved preferences every
+        // time they signed back in with Apple.
+        ...(isNewUser ? {
+          notificationsEnabled: true,
+          preferredSports: ['Basketball', 'Volleyball', 'Softball'],
+        } : {}),
       }, { merge: true });
 
       router.replace(isNewUser ? '/onboarding' : '/');
